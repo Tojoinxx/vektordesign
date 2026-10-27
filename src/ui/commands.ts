@@ -1,0 +1,244 @@
+import type { ConstraintKind } from '../model/types';
+import type { Settings } from '../store/state';
+import { CONSTRAINT_LABELS } from '../solver/analysis';
+import type { AppController } from './controller';
+import { CONSTRAINT_ORDER } from './icons';
+
+export interface KeyBinding {
+  key: string;
+  ctrl?: boolean;
+  shift?: boolean;
+  alt?: boolean;
+}
+
+export interface Command {
+  id: string;
+  label: string;
+  group: string;
+  /** Anzeige in Tooltips und Befehlssuche */
+  shortcut?: string;
+  keys?: KeyBinding[];
+  keywords?: string;
+  run: (app: AppController) => void;
+}
+
+type BoolSetting = { [K in keyof Settings]: Settings[K] extends boolean ? K : never }[keyof Settings];
+const toggle = (app: AppController, key: BoolSetting) => {
+  const s = app.store.getState().settings;
+  app.store.setState({ settings: { ...s, [key]: !s[key] } });
+};
+
+const sel = (app: AppController) => app.editor.s.selection;
+const report = (app: AppController, out: { ok: boolean; message?: string }) => {
+  if (!out.ok && out.message) app.editor.toast(out.message, 'error');
+};
+
+export function buildCommands(): Command[] {
+  const cmds: Command[] = [
+    // Datei
+    { id: 'file.new', label: 'Neue Zeichnung', group: 'Datei', shortcut: 'Strg+N', keys: [{ key: 'n', ctrl: true }], run: (a) => a.newDocument() },
+    { id: 'file.open', label: 'Öffnen …', group: 'Datei', shortcut: 'Strg+O', keys: [{ key: 'o', ctrl: true }], run: (a) => void a.openDocument() },
+    { id: 'file.save', label: 'Speichern', group: 'Datei', shortcut: 'Strg+S', keys: [{ key: 's', ctrl: true }], run: (a) => void a.saveDocument() },
+    { id: 'file.saveAs', label: 'Speichern unter …', group: 'Datei', shortcut: 'Strg+Umschalt+S', keys: [{ key: 's', ctrl: true, shift: true }], run: (a) => void a.saveDocument(true) },
+    { id: 'file.export', label: 'Exportieren …', group: 'Datei', shortcut: 'Strg+E', keys: [{ key: 'e', ctrl: true }], keywords: 'svg png datei', run: (a) => a.openExport('svg') },
+    { id: 'file.exportSvg', label: 'Als SVG exportieren', group: 'Export', keywords: 'cricut silhouette illustrator', run: (a) => a.openExport('svg') },
+    { id: 'file.exportPng', label: 'Als PNG exportieren (300 dpi)', group: 'Export', keywords: 'bild dtf druck', run: (a) => a.openExport('png', 300) },
+
+    // Bearbeiten
+    { id: 'edit.undo', label: 'Rückgängig', group: 'Bearbeiten', shortcut: 'Strg+Z', keys: [{ key: 'z', ctrl: true }], run: (a) => void a.editor.undo() },
+    {
+      id: 'edit.redo',
+      label: 'Wiederholen',
+      group: 'Bearbeiten',
+      shortcut: 'Strg+Y',
+      keys: [
+        { key: 'y', ctrl: true },
+        { key: 'z', ctrl: true, shift: true },
+      ],
+      run: (a) => void a.editor.redo(),
+    },
+    {
+      id: 'edit.delete',
+      label: 'Löschen',
+      group: 'Bearbeiten',
+      shortcut: 'Entf',
+      keys: [{ key: 'Delete' }, { key: 'Backspace' }],
+      run: (a) => {
+        if (sel(a).length) report(a, a.editor.deleteSelection());
+      },
+    },
+    { id: 'edit.selectAll', label: 'Alles auswählen', group: 'Bearbeiten', shortcut: 'Strg+A', keys: [{ key: 'a', ctrl: true }], run: (a) => a.editor.selectAll() },
+    {
+      id: 'edit.copy',
+      label: 'Kopieren',
+      group: 'Bearbeiten',
+      shortcut: 'Strg+C',
+      keys: [{ key: 'c', ctrl: true }],
+      run: (a) => {
+        const n = a.editor.copy();
+        if (n) a.editor.toast(`${n} Objekt${n === 1 ? '' : 'e'} kopiert`, 'info', 1500);
+      },
+    },
+    { id: 'edit.paste', label: 'Einfügen', group: 'Bearbeiten', shortcut: 'Strg+V', keys: [{ key: 'v', ctrl: true }], run: (a) => report(a, a.editor.paste()) },
+    { id: 'edit.duplicate', label: 'Duplizieren', group: 'Bearbeiten', shortcut: 'Strg+D', keys: [{ key: 'd', ctrl: true }], run: (a) => report(a, a.editor.duplicate()) },
+    {
+      id: 'edit.construction',
+      label: 'Auswahl ↔ Konstruktionsgeometrie',
+      group: 'Format',
+      shortcut: 'Q',
+      keys: [{ key: 'q' }],
+      keywords: 'hilfslinie gestrichelt',
+      run: (a) => report(a, a.editor.toggleConstruction(sel(a))),
+    },
+
+    // Zeichnen
+    { id: 'tool.select', label: 'Auswählen', group: 'Zeichnen', shortcut: 'Esc', run: (a) => a.setTool('select') },
+    { id: 'tool.line', label: 'Linie', group: 'Zeichnen', shortcut: 'L', keys: [{ key: 'l' }], run: (a) => a.setTool('line') },
+    { id: 'tool.rect', label: 'Rechteck', group: 'Zeichnen', shortcut: 'R', keys: [{ key: 'r' }], run: (a) => a.setTool('rect') },
+    {
+      id: 'tool.rect.corner',
+      label: 'Rechteck über 2 Punkte',
+      group: 'Zeichnen',
+      run: (a) => {
+        a.store.setState({ rectMode: 'corner' });
+        a.setTool('rect');
+      },
+    },
+    {
+      id: 'tool.rect.center',
+      label: 'Rechteck vom Mittelpunkt',
+      group: 'Zeichnen',
+      run: (a) => {
+        a.store.setState({ rectMode: 'center' });
+        a.setTool('rect');
+      },
+    },
+    { id: 'tool.circle', label: 'Kreis', group: 'Zeichnen', shortcut: 'C', keys: [{ key: 'c' }], run: (a) => a.setTool('circle') },
+    { id: 'tool.text', label: 'Text', group: 'Zeichnen', shortcut: 'T', keys: [{ key: 't' }], run: (a) => a.setTool('text') },
+    { id: 'tool.point', label: 'Punkt', group: 'Zeichnen', shortcut: 'P', keys: [{ key: 'p' }], run: (a) => a.setTool('point') },
+    {
+      id: 'draw.constructionMode',
+      label: 'Neue Geometrie als Konstruktion',
+      group: 'Zeichnen',
+      keywords: 'hilfslinien gestrichelt',
+      run: (a) => a.store.setState({ constructionMode: !a.store.getState().constructionMode }),
+    },
+
+    // Bemaßung
+    { id: 'tool.dimension', label: 'Bemaßung', group: 'Bemaßung', shortcut: 'D', keys: [{ key: 'd' }], keywords: 'maß', run: (a) => a.setTool('dimension') },
+    {
+      id: 'view.dimDisplay',
+      label: 'Bemaßungsanzeige: Wert / Name / Ausdruck',
+      group: 'Bemaßung',
+      run: (a) => {
+        const s = a.store.getState().settings;
+        const next = s.dimDisplay === 'value' ? 'name' : s.dimDisplay === 'name' ? 'expr' : 'value';
+        a.store.setState({ settings: { ...s, dimDisplay: next } });
+      },
+    },
+
+    // Format
+    { id: 'tool.gradient', label: 'Farbverlauf ziehen', group: 'Format', shortcut: 'G', keys: [{ key: 'g' }], keywords: 'verlauf verblassen', run: (a) => a.setTool('gradient') },
+    {
+      id: 'design.suggestions',
+      label: 'Stilvorschläge',
+      group: 'Format',
+      keywords: 'design ki vorschlag farbe',
+      run: (a) => {
+        a.ui.setState({ side: 'props', sideOpen: true });
+        a.showTutorialFor('suggestions');
+        document.getElementById('stilvorschlaege')?.scrollIntoView({ behavior: 'smooth' });
+      },
+    },
+
+    // Anordnen
+    { id: 'arrange.front', label: 'Ganz nach vorne', group: 'Anordnen', shortcut: 'Strg+Umschalt+]', keys: [{ key: ']', ctrl: true, shift: true }, { key: '}', ctrl: true, shift: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'front')) },
+    { id: 'arrange.forward', label: 'Nach vorne', group: 'Anordnen', shortcut: 'Strg+]', keys: [{ key: ']', ctrl: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'forward')) },
+    { id: 'arrange.backward', label: 'Nach hinten', group: 'Anordnen', shortcut: 'Strg+[', keys: [{ key: '[', ctrl: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'backward')) },
+    { id: 'arrange.back', label: 'Ganz nach hinten', group: 'Anordnen', shortcut: 'Strg+Umschalt+[', keys: [{ key: '[', ctrl: true, shift: true }, { key: '{', ctrl: true, shift: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'back')) },
+
+    // Ansicht
+    { id: 'view.fit', label: 'Alles anzeigen', group: 'Ansicht', shortcut: 'F', keys: [{ key: 'f' }], keywords: 'zoom', run: (a) => a.editor.zoomToFit() },
+    { id: 'view.zoomIn', label: 'Vergrößern', group: 'Ansicht', shortcut: '+', keys: [{ key: '+' }, { key: '=' }], run: (a) => zoomBy(a, 1.25) },
+    { id: 'view.zoomOut', label: 'Verkleinern', group: 'Ansicht', shortcut: '−', keys: [{ key: '-' }], run: (a) => zoomBy(a, 0.8) },
+    { id: 'view.zoom100', label: 'Originalgröße (100 %)', group: 'Ansicht', keywords: 'echt 1:1', run: (a) => a.editor.setView({ zoom: 96 / 25.4 }) },
+    { id: 'view.grid', label: 'Raster ein/aus', group: 'Ansicht', run: (a) => toggle(a, 'grid') },
+    { id: 'view.gridSnap', label: 'Am Raster fangen', group: 'Ansicht', run: (a) => toggle(a, 'gridSnap') },
+    { id: 'view.dims', label: 'Bemaßungen ein/aus', group: 'Ansicht', run: (a) => toggle(a, 'showDims') },
+    { id: 'view.overlay', label: 'Skizzenlinien ein/aus', group: 'Ansicht', keywords: 'vorschau design', run: (a) => toggle(a, 'showOverlay') },
+    {
+      id: 'view.glyphsOn',
+      label: 'Alle Abhängigkeiten anzeigen',
+      group: 'Abhängigkeiten',
+      shortcut: 'F8',
+      keys: [{ key: 'F8' }],
+      run: (a) => a.store.setState({ settings: { ...a.store.getState().settings, showGlyphs: true } }),
+    },
+    {
+      id: 'view.glyphsOff',
+      label: 'Alle Abhängigkeiten ausblenden',
+      group: 'Abhängigkeiten',
+      shortcut: 'F9',
+      keys: [{ key: 'F9' }],
+      run: (a) => a.store.setState({ settings: { ...a.store.getState().settings, showGlyphs: false } }),
+    },
+    { id: 'palette', label: 'Befehlssuche', group: 'Ansicht', shortcut: 'Strg+K', keys: [{ key: 'k', ctrl: true }], run: (a) => a.store.setState({ paletteOpen: true }) },
+
+    // Claude
+    {
+      id: 'claude.open',
+      label: 'Claude-Assistent',
+      group: 'Claude',
+      shortcut: 'Strg+I',
+      keys: [{ key: 'i', ctrl: true }],
+      keywords: 'ki agent chat bild nachbauen',
+      run: (a) => {
+        a.ui.setState({ side: 'claude', sideOpen: true });
+        a.showTutorialFor('claude');
+        setTimeout(() => document.getElementById('claude-eingabe')?.focus(), 50);
+      },
+    },
+    {
+      id: 'claude.reset',
+      label: 'Neues Gespräch mit Claude',
+      group: 'Claude',
+      run: (a) => {
+        a.agent.reset();
+        a.ui.setState({ chat: [] });
+      },
+    },
+
+    // Hilfe
+    { id: 'help.tutorials', label: 'Tutorials', group: 'Hilfe', keywords: 'hilfe lernen anleitung', run: (a) => a.ui.setState({ tutorialList: true }) },
+    { id: 'help.about', label: 'Über Vektordesign', group: 'Hilfe', run: (a) => a.ui.setState({ about: true }) },
+  ];
+
+  for (const kind of CONSTRAINT_ORDER) {
+    cmds.push({
+      id: `constraint.${kind}`,
+      label: `Abhängigkeit: ${CONSTRAINT_LABELS[kind]}`,
+      group: 'Abhängigkeiten',
+      keywords: 'constraint',
+      run: (a) => a.constraintCommand(kind as ConstraintKind),
+    });
+  }
+  return cmds;
+}
+
+function zoomBy(a: AppController, f: number): void {
+  const v = a.store.getState().view;
+  a.editor.setView({ zoom: Math.min(400, Math.max(0.02, v.zoom * f)) });
+}
+
+/** Passt eine Taste zu einer Bindung? Buchstaben ohne Strg/Alt gelten nur ohne Modifikator. */
+export function matchKey(e: KeyboardEvent, b: KeyBinding): boolean {
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (!!b.ctrl !== ctrl) return false;
+  if (!!b.alt !== e.altKey) return false;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (k !== b.key) return false;
+  if (b.shift !== undefined) return !!b.shift === e.shiftKey;
+  // Buchstaben-Kürzel ohne Umschalt
+  if (/^[a-z]$/.test(b.key) && e.shiftKey && !b.ctrl) return false;
+  return true;
+}

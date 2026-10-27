@@ -1,0 +1,124 @@
+import { useEffect } from 'react';
+import { Settings2, Sparkles } from 'lucide-react';
+import type { AppController } from './controller';
+import { AppCtx, useUi } from './hooks';
+import { CanvasView } from './CanvasView';
+import { Ribbon } from './Ribbon';
+import { PropertiesPanel } from './PropertiesPanel';
+import { AssistantPanel } from './AssistantPanel';
+import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
+import { buildCommands, matchKey } from './commands';
+
+function SidePanel({ app }: { app: AppController }) {
+  const side = useUi((s) => s.side);
+  return (
+    <aside className="side" aria-label="Seitenleiste">
+      <div className="side-tabs" role="tablist">
+        <button role="tab" aria-selected={side === 'props'} className={side === 'props' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'props' })} data-testid="tab-props">
+          <Settings2 size={15} /> Eigenschaften
+        </button>
+        <button
+          role="tab"
+          aria-selected={side === 'claude'}
+          className={side === 'claude' ? 'on' : ''}
+          onClick={() => {
+            app.ui.setState({ side: 'claude' });
+            app.showTutorialFor('claude');
+          }}
+          data-testid="tab-claude"
+        >
+          <Sparkles size={15} /> Claude
+        </button>
+      </div>
+      <div className="side-body">{side === 'props' ? <PropertiesPanel /> : <AssistantPanel />}</div>
+    </aside>
+  );
+}
+
+function Shell({ app }: { app: AppController }) {
+  const sideOpen = useUi((s) => s.sideOpen);
+
+  // Tastatur: Kürzel wie in Inventor, Zahlen starten die direkte Werteingabe
+  useEffect(() => {
+    const cmds = buildCommands();
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      const s = app.store.getState();
+      if (typing || s.paletteOpen || s.exportOpen || s.confirm) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        app.escape();
+        return;
+      }
+      if (e.key === 'Enter' && app.current.finish) {
+        e.preventDefault();
+        app.current.finish();
+        return;
+      }
+      const ui = app.ui.getState();
+      if (ui.dynamic && !e.ctrlKey && !e.metaKey && !e.altKey && /^[0-9.,\-+*/()]$/.test(e.key)) {
+        e.preventDefault();
+        app.ui.setState({ dynFocus: { key: ui.dynamic.fields[0].key, n: Date.now(), char: e.key } });
+        return;
+      }
+      if (app.current.keyDown?.(e)) {
+        e.preventDefault();
+        return;
+      }
+      for (const c of cmds) {
+        for (const b of c.keys ?? []) {
+          if (matchKey(e, b)) {
+            e.preventDefault();
+            c.run(app);
+            return;
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [app]);
+
+  // Fenstertitel
+  useEffect(() => {
+    const update = () => {
+      const s = app.store.getState();
+      document.title = `${s.fileName ?? 'Unbenannt'}${s.dirty ? ' •' : ''} – Vektordesign`;
+    };
+    update();
+    return app.store.subscribe(update);
+  }, [app]);
+
+  useEffect(() => {
+    const t = setTimeout(() => app.showTutorialFor('welcome'), 600);
+    return () => clearTimeout(t);
+  }, [app]);
+
+  return (
+    <div className={`app ${sideOpen ? 'with-side' : ''}`}>
+      <TopBar />
+      <Ribbon />
+      <main className="main">
+        <CanvasView />
+        <TutorialCard />
+        <Toasts />
+      </main>
+      {sideOpen && <SidePanel app={app} />}
+      <StatusBar />
+      <ExportDialog />
+      <CommandPalette />
+      <ConfirmDialog />
+      <TutorialList />
+      <AboutDialog />
+    </div>
+  );
+}
+
+export function App({ app }: { app: AppController }) {
+  return (
+    <AppCtx.Provider value={app}>
+      <Shell app={app} />
+    </AppCtx.Provider>
+  );
+}
