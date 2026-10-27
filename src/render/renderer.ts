@@ -1,6 +1,6 @@
 import type { Dimension, Entity, Id, SketchDoc, Vec2 } from '../model/types';
 import { ORIGIN_ID } from '../model/types';
-import { lineOf, pathOfLine, pt } from '../model/doc';
+import { lineOf, pt } from '../model/doc';
 import { measureText } from '../model/textMetrics';
 import type { Analysis } from '../solver/analysis';
 import type { Settings } from '../store/state';
@@ -33,6 +33,16 @@ export interface SceneLayout {
 }
 
 const DIM_FONT = `500 12px ${THEME.uiFont}`;
+const labelWidths = new Map<string, number>();
+function labelWidth(ctx: Ctx, label: string): number {
+  let w = labelWidths.get(label);
+  if (w === undefined) {
+    w = ctx.measureText(label).width;
+    if (labelWidths.size > 5000) labelWidths.clear();
+    labelWidths.set(label, w);
+  }
+  return w;
+}
 
 export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp: Viewport) => void): SceneLayout {
   const { vp, doc, settings } = s;
@@ -69,6 +79,11 @@ export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp
 }
 
 // ---------------------------------------------------------------------------
+
+function offscreen(vp: Viewport, p: Vec2): boolean {
+  const s = toScreen(vp, p);
+  return s.x < -50 || s.y < -50 || s.x > vp.width + 50 || s.y > vp.height + 50;
+}
 
 function problemSet(doc: SketchDoc, a: Analysis): { items: Set<Id>; entities: Set<Id> } {
   const items = new Set<Id>([...a.conflicting, ...a.redundant]);
@@ -170,9 +185,21 @@ function statusColor(s: SceneState, e: Entity, problems: Set<Id>): { color: stri
   return { color: free ? THEME.free : THEME.ink, width: 1.3 };
 }
 
+/** Linie → Pfad, einmal je Bild aufgebaut (statt für jede Linie alle Objekte zu durchsuchen). */
+let lineToPathDoc: SketchDoc | null = null;
+let lineToPath = new Map<Id, Id>();
+function pathIdOfLine(doc: SketchDoc, lineId: Id): Id | undefined {
+  if (lineToPathDoc !== doc) {
+    lineToPath = new Map();
+    for (const e of Object.values(doc.entities)) if (e.kind === 'path') for (const ed of e.edges) lineToPath.set(ed.id, e.id);
+    lineToPathDoc = doc;
+  }
+  return lineToPath.get(lineId);
+}
+
 function pathSelected(s: SceneState, lineId: Id): boolean {
-  const p = pathOfLine(s.doc, lineId);
-  return !!p && (s.selection.has(p.id) || s.hover === p.id);
+  const p = pathIdOfLine(s.doc, lineId);
+  return !!p && (s.selection.has(p) || s.hover === p);
 }
 
 function isFree(s: SceneState, e: Entity): boolean {
@@ -216,45 +243,75 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     ctx.fill();
   }
 
+  // Linien und Kreise nach Stil gebündelt zeichnen (ein Strich-Aufruf je Farbe/Breite/Strichart)
+  const batches = new Map<string, { color: string; width: number; dash: boolean; path: Path2D }>();
+  const batch = (color: string, width: number, dash: boolean) => {
+    const key = `${color}|${width}|${dash}`;
+    let b = batches.get(key);
+    if (!b) {
+      b = { color, width, dash, path: new Path2D() };
+      batches.set(key, b);
+    }
+    return b.path;
+  };
   for (const e of Object.values(doc.entities)) {
     if (e.kind === 'path') continue;
+    if (e.kind === 'text') {
+      const sel = s.selection.has(e.id) || s.hover === e.id;
+      if (!sel) continue;
+      const a = T(pt(doc, e.anchor));
+      const m = measureText(e);
+      const st = statusColor(s, e, problems);
+      ctx.strokeStyle = st.color;
+      ctx.setLineDash([4, 3]);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(a.x + m.left * vp.zoom - 2, a.y - m.ascent * vp.zoom - 2, (m.right - m.left) * vp.zoom + 4, (m.ascent + m.descent) * vp.zoom + 4);
+      ctx.setLineDash([]);
+      continue;
+    }
     const st = statusColor(s, e, problems);
-    ctx.strokeStyle = st.color;
-    ctx.lineWidth = st.width;
-    ctx.setLineDash(e.construction ? [6, 4] : []);
+    const path = batch(st.color, st.width, e.construction);
     if (e.kind === 'line') {
       const a = T(pt(doc, e.p1));
       const b = T(pt(doc, e.p2));
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-    } else if (e.kind === 'circle') {
+      path.moveTo(a.x, a.y);
+      path.lineTo(b.x, b.y);
+    } else {
       const c = T(pt(doc, e.center));
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, Math.max(e.r * vp.zoom, 0.5), 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (e.kind === 'text') {
-      const sel = s.selection.has(e.id) || s.hover === e.id;
-      const a = T(pt(doc, e.anchor));
-      if (sel) {
-        const m = measureText(e);
-        ctx.setLineDash([4, 3]);
-        ctx.lineWidth = 1;
-        ctx.strokeRect(a.x + m.left * vp.zoom - 2, a.y - m.ascent * vp.zoom - 2, (m.right - m.left) * vp.zoom + 4, (m.ascent + m.descent) * vp.zoom + 4);
-      }
+      const r = Math.max(e.r * vp.zoom, 0.5);
+      path.moveTo(c.x + r, c.y);
+      path.arc(c.x, c.y, r, 0, Math.PI * 2);
     }
+  }
+  // Ausgewählte/überfahrene Stile zuletzt, damit sie oben liegen
+  const ordered = [...batches.values()].sort((x, y) => x.width - y.width);
+  for (const b of ordered) {
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = b.width;
+    ctx.setLineDash(b.dash ? [6, 4] : []);
+    ctx.stroke(b.path);
   }
   ctx.setLineDash([]);
 
-  // Punkte: Linienenden, Kreismittelpunkte, Textanker, freie Punkte
-  const drawn = new Set<string>();
+  // Punkte: Linienenden, Kreismittelpunkte, Textanker, freie Punkte – gebündelt je Farbe
+  const drawn = new Set<number>();
   const fp = s.analysis.free?.points;
+  const squares = new Map<string, Path2D>();
+  const crosses = new Map<string, Path2D>();
+  const dots = new Map<string, Path2D>();
+  const get = (m: Map<string, Path2D>, c: string) => {
+    let p = m.get(c);
+    if (!p) {
+      p = new Path2D();
+      m.set(c, p);
+    }
+    return p;
+  };
   for (const p of Object.values(doc.points)) {
     if (p.id === ORIGIN_ID) continue;
     const sp = T(p);
     if (sp.x < -10 || sp.y < -10 || sp.x > vp.width + 10 || sp.y > vp.height + 10) continue;
-    const key = `${Math.round(sp.x)}:${Math.round(sp.y)}`;
+    const key = Math.round(sp.x) * 100003 + Math.round(sp.y);
     const sel = s.selection.has(p.id);
     const hov = s.hover === p.id;
     if (drawn.has(key) && !sel && !hov) continue;
@@ -266,93 +323,121 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     if (hov) color = THEME.hover;
     if (sel) color = THEME.selected;
     const isCenter = owner?.kind === 'circle' || (p.construction && !owner) || owner?.kind === 'path';
-    ctx.fillStyle = color;
-    ctx.strokeStyle = color;
     const r = sel || hov ? 4 : 2.6;
     if (isCenter || p.construction) {
-      ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.moveTo(sp.x - r - 1.5, sp.y);
-      ctx.lineTo(sp.x + r + 1.5, sp.y);
-      ctx.moveTo(sp.x, sp.y - r - 1.5);
-      ctx.lineTo(sp.x, sp.y + r + 1.5);
-      ctx.stroke();
+      const c = get(crosses, color);
+      c.moveTo(sp.x - r - 1.5, sp.y);
+      c.lineTo(sp.x + r + 1.5, sp.y);
+      c.moveTo(sp.x, sp.y - r - 1.5);
+      c.lineTo(sp.x, sp.y + r + 1.5);
     } else if (owner?.kind === 'text') {
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
-      ctx.fill();
+      const d = get(dots, color);
+      d.moveTo(sp.x + r, sp.y);
+      d.arc(sp.x, sp.y, r, 0, Math.PI * 2);
     } else {
-      ctx.fillRect(sp.x - r, sp.y - r, r * 2, r * 2);
+      get(squares, color).rect(sp.x - r, sp.y - r, r * 2, r * 2);
     }
+  }
+  ctx.lineWidth = 1.3;
+  for (const [c, p] of crosses) {
+    ctx.strokeStyle = c;
+    ctx.stroke(p);
+  }
+  for (const [c, p] of squares) {
+    ctx.fillStyle = c;
+    ctx.fill(p);
+  }
+  for (const [c, p] of dots) {
+    ctx.fillStyle = c;
+    ctx.fill(p);
   }
   ctx.restore();
 }
 
-function drawArrow(ctx: Ctx, tip: Vec2, dir: Vec2, size = 9): void {
+function arrowPath(path: Path2D, tip: Vec2, dir: Vec2, size = 9): void {
   // dir zeigt in Bildschirmkoordinaten zur Spitze
   const l = Math.hypot(dir.x, dir.y) || 1;
   const ux = dir.x / l;
   const uy = dir.y / l;
   const bx = tip.x - ux * size;
   const by = tip.y - uy * size;
-  ctx.beginPath();
-  ctx.moveTo(tip.x, tip.y);
-  ctx.lineTo(bx - uy * size * 0.32, by + ux * size * 0.32);
-  ctx.lineTo(bx + uy * size * 0.32, by - ux * size * 0.32);
-  ctx.closePath();
-  ctx.fill();
+  path.moveTo(tip.x, tip.y);
+  path.lineTo(bx - uy * size * 0.32, by + ux * size * 0.32);
+  path.lineTo(bx + uy * size * 0.32, by - ux * size * 0.32);
+  path.closePath();
 }
 
 function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>): SceneLayout['dims'] {
   const { doc, vp } = s;
   const px = 1 / vp.zoom;
   const out: SceneLayout['dims'] = [];
+  // Gebündelt je Farbe: Linien, Pfeile, Textfelder; Texte einzeln
+  const groups = new Map<string, { lines: Path2D; arrows: Path2D; width: number }>();
+  const labels: { x: number; y: number; text: string; color: string; box: { x: number; y: number; w: number; h: number }; sel: boolean; hov: boolean }[] = [];
   ctx.save();
   ctx.font = DIM_FONT;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
   for (const d of Object.values(doc.dims) as Dimension[]) {
     const g = dimGeometry(doc, d, px, s.settings.dimDisplay);
     if (!g) continue;
+    // Außerhalb des Bildes? (Text und Linien grob prüfen)
+    const tps = toScreen(vp, g.text);
+    if ((tps.x < -200 || tps.y < -60 || tps.x > vp.width + 200 || tps.y > vp.height + 60) && g.lines.every(([a, b]) => offscreen(vp, a) && offscreen(vp, b))) continue;
     const sel = s.selection.has(d.id);
     const hov = s.hover === d.id;
     const bad = problems.has(d.id);
     const color = bad ? THEME.conflict : sel ? THEME.selected : hov ? THEME.hover : d.driven ? THEME.dimDriven : THEME.dim;
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = sel || hov ? 1.6 : 1;
-    ctx.beginPath();
+    const key = `${color}|${sel || hov ? 1.6 : 1}`;
+    let grp = groups.get(key);
+    if (!grp) {
+      grp = { lines: new Path2D(), arrows: new Path2D(), width: sel || hov ? 1.6 : 1 };
+      groups.set(key, grp);
+    }
     for (const [a, b] of g.lines) {
       const sa = toScreen(vp, a);
       const sb = toScreen(vp, b);
-      ctx.moveTo(sa.x, sa.y);
-      ctx.lineTo(sb.x, sb.y);
+      grp.lines.moveTo(sa.x, sa.y);
+      grp.lines.lineTo(sb.x, sb.y);
     }
     for (const arc of g.arcs) {
       const c = toScreen(vp, arc.c);
       // Welt-Y nach oben → Bildschirmwinkel negieren
-      ctx.moveTo(c.x + Math.cos(-arc.a0) * arc.r * vp.zoom, c.y + Math.sin(-arc.a0) * arc.r * vp.zoom);
-      ctx.arc(c.x, c.y, arc.r * vp.zoom, -arc.a0, -arc.a1, true);
+      grp.lines.moveTo(c.x + Math.cos(-arc.a0) * arc.r * vp.zoom, c.y + Math.sin(-arc.a0) * arc.r * vp.zoom);
+      grp.lines.arc(c.x, c.y, arc.r * vp.zoom, -arc.a0, -arc.a1, true);
     }
-    ctx.stroke();
-    for (const a of g.arrows) {
-      const tip = toScreen(vp, a.tip);
-      drawArrow(ctx, tip, { x: a.dir.x, y: -a.dir.y });
-    }
-    const tp = toScreen(vp, g.text);
-    const tw = ctx.measureText(g.label).width + 10;
+    for (const a of g.arrows) arrowPath(grp.arrows, toScreen(vp, a.tip), { x: a.dir.x, y: -a.dir.y });
+    const tw = labelWidth(ctx, g.label) + 10;
     const th = 18;
-    const box = { x: tp.x - tw / 2, y: tp.y - th / 2, w: tw, h: th };
-    ctx.fillStyle = sel ? '#fff1e6' : THEME.dimHalo;
-    ctx.fillRect(box.x, box.y, box.w, box.h);
-    if (sel || hov) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
-    }
-    ctx.fillStyle = color;
-    ctx.fillText(g.label, tp.x, tp.y + 0.5);
+    const box = { x: tps.x - tw / 2, y: tps.y - th / 2, w: tw, h: th };
+    labels.push({ x: tps.x, y: tps.y, text: g.label, color, box, sel, hov });
     out.push({ id: d.id, geom: g, textBox: box });
+  }
+  for (const [key, grp] of groups) {
+    const color = key.split('|')[0];
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = grp.width;
+    ctx.stroke(grp.lines);
+    ctx.fill(grp.arrows);
+  }
+  // Textfelder (Hintergrund) in einem Zug, dann Texte
+  const halo = new Path2D();
+  for (const l of labels) if (!l.sel) halo.rect(l.box.x, l.box.y, l.box.w, l.box.h);
+  ctx.fillStyle = THEME.dimHalo;
+  ctx.fill(halo);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const l of labels) {
+    if (l.sel) {
+      ctx.fillStyle = '#fff1e6';
+      ctx.fillRect(l.box.x, l.box.y, l.box.w, l.box.h);
+    }
+    if (l.sel || l.hov) {
+      ctx.strokeStyle = l.color;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(l.box.x + 0.5, l.box.y + 0.5, l.box.w - 1, l.box.h - 1);
+    }
+    ctx.fillStyle = l.color;
+    ctx.fillText(l.text, l.x, l.y + 0.5);
   }
   ctx.restore();
   return out;

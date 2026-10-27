@@ -13,8 +13,8 @@ function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
     const c = ref.current;
     if (!c) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const W = 96;
-    const H = 64;
+    const W = 120;
+    const H = 80;
     c.width = W * dpr;
     c.height = H * dpr;
     const ctx = c.getContext('2d');
@@ -30,11 +30,11 @@ function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
     const oy = (H - h * s) / 2;
     drawDesign({ ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75 }, doc, { only });
   }, [doc, only]);
-  return <canvas ref={ref} className="sugg-thumb" style={{ width: 96, height: 64 }} />;
+  return <canvas ref={ref} className="sugg-thumb" />;
 }
 
 /** Stilvorschläge für Auswahl oder ganzes Motiv. */
-export function StyleSuggestions({ targets }: { targets: Id[] }) {
+export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; whole?: boolean }) {
   const app = useApp();
   const doc = useAppState((s) => s.doc);
   const [ai, setAi] = useState<StyleSuggestion[]>([]);
@@ -90,7 +90,10 @@ export function StyleSuggestions({ targets }: { targets: Id[] }) {
   return (
     <section className="props-section" id="stilvorschlaege">
       <h4>Stilvorschläge</h4>
-      <p className="muted small">{targets.length === 1 ? 'Für die Auswahl' : `Für ${targets.length} Objekte`} · Klick übernimmt, Strg+Z nimmt zurück</p>
+      <p className="muted small">
+        {whole ? `Für das ganze Motiv (${targets.length} Objekt${targets.length === 1 ? '' : 'e'})` : targets.length === 1 ? 'Für die Auswahl' : `Für ${targets.length} ausgewählte Objekte`} · Klick übernimmt, Strg+Z nimmt
+        zurück
+      </p>
       {ai.length > 0 && (
         <>
           <p className="sugg-label">

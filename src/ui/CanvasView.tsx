@@ -66,6 +66,8 @@ export function CanvasView() {
   // Brücke für Werkzeuge und Controller
   useEffect(() => {
     app.canvas = { vp, layout: () => layoutRef.current, requestRender };
+    // Für Leistungsmessungen in Tests: sofort zeichnen
+    (window as unknown as { __vdRenderNow?: () => void }).__vdRenderNow = draw;
     const u1 = app.store.subscribe(requestRender);
     const u2 = app.ui.subscribe((s, p) => {
       if (s.cursorWorld !== p.cursorWorld || s.dynValues !== p.dynValues || s.textEdit !== p.textEdit) requestRender();
@@ -76,7 +78,7 @@ export function CanvasView() {
       u1();
       u2();
     };
-  }, [app, vp, requestRender]);
+  }, [app, vp, requestRender, draw]);
 
   // Größe
   useEffect(() => {

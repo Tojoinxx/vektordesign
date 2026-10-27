@@ -37,6 +37,8 @@ export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>): Glyp
     let dx = b.x - a.x;
     let dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
+    // Sehr kurze Linien (weit herausgezoomt): Symbole würden die Geometrie verdecken
+    if (len < 28 && !only) return null;
     dx /= len;
     dy /= len;
     // Normale auf die „obere/linke“ Seite
@@ -54,6 +56,7 @@ export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>): Glyp
     if (!c) return null;
     const ctr = toScreen(vp, pt(doc, c.center));
     const r = c.r * vp.zoom;
+    if (r < 10 && !only) return null;
     const base = { x: ctr.x + r * 0.7071 + 12, y: ctr.y + r * 0.7071 + 12 };
     return (i) => ({ x: base.x + i * (GLYPH + 3), y: base.y });
   };
@@ -104,7 +107,7 @@ export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>): Glyp
         for (const id of r) push(id);
     }
   }
-  return out;
+  return out.filter((g) => g.pos.x > -20 && g.pos.y > -20 && g.pos.x < vp.width + 20 && g.pos.y < vp.height + 20);
 }
 
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {

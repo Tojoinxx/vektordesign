@@ -82,6 +82,11 @@ export function MarkingMenu() {
 
   if (!at) return null;
   const R = 92;
+  // Menü vollständig in der Zeichenfläche halten
+  const host = document.querySelector('[data-testid="canvas-wrap"]')?.getBoundingClientRect();
+  const W = host?.width ?? 1000;
+  const H = host?.height ?? 800;
+  const pos = { x: Math.min(Math.max(at.x, R + 80), W - R - 80), y: Math.min(Math.max(at.y, R + 26), H - R - 26 - 34 * 4) };
   const run = (it: Item) => {
     app.ui.setState({ marking: null });
     it.run(app);
@@ -89,7 +94,7 @@ export function MarkingMenu() {
   const ctx = contextItems(app);
   return (
     <div className="marking-layer" onPointerDown={() => app.ui.setState({ marking: null })} onContextMenu={(e) => e.preventDefault()}>
-      <div className="marking" style={{ left: at.x, top: at.y }} onPointerDown={(e) => e.stopPropagation()} role="menu" aria-label="Markierungsmenü">
+      <div className="marking" style={{ left: pos.x, top: pos.y }} onPointerDown={(e) => e.stopPropagation()} role="menu" aria-label="Markierungsmenü">
         <div className="marking-center" />
         {RADIAL.map((it, i) => {
           const a = (i * Math.PI) / 4;

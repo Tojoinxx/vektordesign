@@ -96,7 +96,9 @@ export function PropertiesPanel() {
 
       {texts.length === 1 && <TextProps text={texts[0]} />}
 
-      {(targets.length > 0 || (!selection.length && doc.order.length > 0)) && <StyleSuggestions targets={targets.length ? targets : doc.order.filter((id) => !doc.entities[id]?.construction)} />}
+      {(targets.length > 0 || (!selection.length && doc.order.length > 0)) && (
+        <StyleSuggestions targets={targets.length ? targets : doc.order.filter((id) => !doc.entities[id]?.construction)} whole={!targets.length} />
+      )}
 
       <SketchInfo />
     </div>

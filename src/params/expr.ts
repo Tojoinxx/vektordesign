@@ -315,7 +315,10 @@ export function formatNumber(n: number, decimals = 2): string {
   const f = 10 ** decimals;
   let r = Math.round(n * f) / f;
   if (Object.is(r, -0)) r = 0;
-  return r.toLocaleString('de-DE', { maximumFractionDigits: decimals, useGrouping: false });
+  // Schnell statt toLocaleString (wird pro Bild für jede Bemaßung aufgerufen)
+  let s = r.toFixed(decimals);
+  if (decimals > 0) s = s.replace(/\.?0+$/, '');
+  return s.replace('.', ',');
 }
 
 /** Zahl für einen Ausdruck (Eingabefeld): Komma als Dezimaltrenner, bis 4 Stellen. */
