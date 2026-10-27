@@ -82,6 +82,8 @@ export interface AppState {
   view: ViewState;
   tool: ToolId;
   rectMode: 'corner' | 'center';
+  /** Neue Geometrie als Konstruktionsgeometrie zeichnen */
+  constructionMode: boolean;
   settings: Settings;
   currentStyle: Style;
   textDefaults: TextDefaults;
@@ -137,6 +139,7 @@ export function initialState(): AppState {
     view: { cx: 0, cy: 0, zoom: 4 },
     tool: 'select',
     rectMode: 'corner',
+    constructionMode: false,
     settings: { ...DEFAULT_SETTINGS },
     currentStyle: { ...DEFAULT_STYLE },
     textDefaults: { fontFamily: 'Arial', fontSize: 10, fontWeight: 700, italic: false, align: 'left' },

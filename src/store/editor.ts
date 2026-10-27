@@ -234,24 +234,39 @@ export class Editor {
 
   /** Mehrere Änderungen als ein einziger Rückgängig-Schritt. */
   transaction<T>(label: string, fn: () => T): T {
+    this.beginTransaction(label);
+    try {
+      return fn();
+    } finally {
+      this.endTransaction();
+    }
+  }
+
+  /** Beginnt einen Rückgängig-Schritt über mehrere (auch asynchrone) Änderungen. */
+  beginTransaction(label: string): void {
     this.tx.depth++;
     if (this.tx.depth === 1) {
       this.tx.label = label;
       this.tx.startDoc = null;
       this.tx.count = 0;
     }
-    try {
-      return fn();
-    } finally {
-      this.tx.depth--;
-      if (this.tx.depth === 0 && this.tx.startDoc && this.tx.startDoc !== this.s.doc) {
+  }
+
+  /** Beendet den Rückgängig-Schritt. Gibt die Zahl der enthaltenen Änderungen zurück. */
+  endTransaction(label?: string): number {
+    if (this.tx.depth === 0) return 0;
+    this.tx.depth--;
+    const count = this.tx.count;
+    if (this.tx.depth === 0) {
+      if (this.tx.startDoc && this.tx.startDoc !== this.s.doc) {
         this.set({
-          past: [...this.s.past, { doc: this.tx.startDoc, label: this.tx.label }].slice(-HISTORY_LIMIT),
+          past: [...this.s.past, { doc: this.tx.startDoc, label: label ?? this.tx.label }].slice(-HISTORY_LIMIT),
           future: [],
         });
       }
-      if (this.tx.depth === 0) this.tx.startDoc = null;
+      this.tx.startDoc = null;
     }
+    return count;
   }
 
   /** Löst die aktuelle Skizze neu (z. B. nach dem Laden). */
@@ -915,6 +930,20 @@ export class Editor {
           if (!e) continue;
           e.style = { ...e.style, ...patch };
           if (e.kind === 'line') e.style.fill = null;
+        }
+      },
+      { skipSolve: true },
+    );
+  }
+
+  /** Setzt komplette Stile mehrerer Objekte (z. B. Stilvorschlag) als ein Schritt. */
+  setStyles(styles: Record<Id, Style>, label = 'Stilvorschlag'): CommitOutcome {
+    return this.commit(
+      label,
+      (d) => {
+        for (const [id, st] of Object.entries(styles)) {
+          const e = d.entities[id];
+          if (e) e.style = { ...st, fill: e.kind === 'line' ? null : st.fill };
         }
       },
       { skipSolve: true },
