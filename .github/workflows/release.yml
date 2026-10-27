@@ -40,29 +40,24 @@ jobs:
       - name: Unit-Tests
         run: npm test
 
-      - name: Installer bauen und an das Release hängen
-        uses: tauri-apps/tauri-action@v1
+      - name: Installer bauen (NSIS-Setup und MSI)
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Vektordesign ${{ github.ref_name }}
-          releaseBody: |
-            **Installation unter Windows:** `Vektordesign_…_x64-setup.exe` herunterladen und starten. Das Setup braucht keine Administratorrechte und läuft danach komplett offline.
-            Für die Verteilung über die IT gibt es zusätzlich das `.msi`-Paket.
-            Ohne Installation: `Vektordesign.html` herunterladen und doppelklicken – läuft offline im Browser.
+          CARGO_TERM_COLOR: never
+        run: .github/scripts/run-annotated.sh "Desktop-Build fehlgeschlagen" npx tauri build
 
-            Das Programm ist (noch) nicht signiert. Zeigt Windows SmartScreen eine Warnung, auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken.
-          releaseDraft: false
-          prerelease: false
-          generateReleaseNotes: true
-          uploadUpdaterJson: false
+      - name: Einzeldatei bauen (ohne Installation)
+        run: npm run build:single
 
-      - name: Einzeldatei (ohne Installation) an das Release hängen
+      - name: Release veröffentlichen
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          npm run build:single
-          gh release upload "$TAG" dist-single/Vektordesign.html --clobber
+          gh release create "$TAG" \
+            --title "Vektordesign $TAG" \
+            --notes-file .github/release-notes.md \
+            src-tauri/target/release/bundle/nsis/*.exe \
+            src-tauri/target/release/bundle/msi/*.msi \
+            dist-single/Vektordesign.html

@@ -40,7 +40,7 @@ jobs:
         run: npm run build
 
       - name: End-to-End-Test im Browser (inkl. Abnahme Meilenstein 1)
-        run: npm run test:e2e
+        run: .github/scripts/run-annotated.sh "Browser-Test fehlgeschlagen" npm run test:e2e
         env:
           CHROME_PATH: /usr/bin/google-chrome
 
@@ -88,7 +88,10 @@ jobs:
       # Mit dem Feature „selftest“, damit das fertige Programm unten im echten Fenster geprüft werden kann.
       # Veröffentlichte Installer (release.yml) werden ohne dieses Feature gebaut.
       - name: Installer bauen (NSIS-Setup und MSI)
-        run: npx tauri build --features selftest
+        shell: bash
+        env:
+          CARGO_TERM_COLOR: never
+        run: .github/scripts/run-annotated.sh "Desktop-Build fehlgeschlagen" npx tauri build --features selftest
 
       - name: Installer hochladen
         uses: actions/upload-artifact@v7
@@ -102,4 +105,5 @@ jobs:
 
       - name: Selbsttest im echten Fenster (WebView2)
         timeout-minutes: 5
-        run: node tests/desktop/run-desktop-test.mjs --binary src-tauri/target/release/vektordesign.exe
+        shell: bash
+        run: .github/scripts/run-annotated.sh "Desktop-Selbsttest fehlgeschlagen" node tests/desktop/run-desktop-test.mjs --binary src-tauri/target/release/vektordesign.exe
