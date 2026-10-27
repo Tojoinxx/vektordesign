@@ -3,12 +3,15 @@ import { Sparkles } from 'lucide-react';
 import type { Id, SketchDoc } from '../model/types';
 import { docBBox } from '../model/bounds';
 import { drawDesign } from '../render/drawDesign';
+import { THEME } from '../render/theme';
 import { aiSuggestions, localSuggestions, previewDoc, type StyleSuggestion } from '../design/suggestions';
 import { loadApiKey, loadModel } from '../assistant/api';
-import { useApp, useAppState } from './hooks';
+import { useApp, useAppState, useUi } from './hooks';
 
 function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // Neu zeichnen, wenn die Zeichenfläche hell/dunkel umschaltet (Hilfsumriss passt sich an)
+  const appearance = useUi((s) => s.appearance);
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
@@ -28,8 +31,12 @@ function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
     const s = Math.min((W - 12) / w, (H - 12) / h);
     const ox = (W - w * s) / 2;
     const oy = (H - h * s) / 2;
-    drawDesign({ ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75 }, doc, { only });
-  }, [doc, only]);
+    drawDesign(
+      { ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75, contrast: { background: THEME.paper, hint: THEME.contrastHint } },
+      doc,
+      { only },
+    );
+  }, [doc, only, appearance]);
   return <canvas ref={ref} className="sugg-thumb" />;
 }
 

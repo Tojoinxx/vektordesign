@@ -107,7 +107,10 @@ export function rgba(hex: string, alpha: number): string {
 
 /** Relative Leuchtdichte nach WCAG (für Kontrast und Textfarbe auf Farbfeldern). */
 export function luminance(hex: string): number {
-  const { r, g, b } = hexToRgb(hex);
+  return rgbLuminance(hexToRgb(hex));
+}
+
+export function rgbLuminance({ r, g, b }: RGB): number {
   const f = (c: number) => {
     const x = c / 255;
     return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;

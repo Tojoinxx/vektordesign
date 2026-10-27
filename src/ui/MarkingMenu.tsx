@@ -32,6 +32,10 @@ export function markingDirectionCommand(app: AppController, dx: number, dy: numb
   RADIAL[idx].run(app);
 }
 
+function ctxCount(app: AppController): number {
+  return Math.max(2, contextItems(app).length);
+}
+
 function contextItems(app: AppController): Item[] {
   const s = app.store.getState();
   const sel = s.selection;
@@ -81,12 +85,13 @@ export function MarkingMenu() {
   }, [at, app]);
 
   if (!at) return null;
-  const R = 92;
+  // Abstand der Richtungen: so groß, dass sich auch lange Beschriftungen nicht überlappen
+  const R = 116;
   // Menü vollständig in der Zeichenfläche halten
   const host = document.querySelector('[data-testid="canvas-wrap"]')?.getBoundingClientRect();
   const W = host?.width ?? 1000;
   const H = host?.height ?? 800;
-  const pos = { x: Math.min(Math.max(at.x, R + 80), W - R - 80), y: Math.min(Math.max(at.y, R + 26), H - R - 26 - 34 * 4) };
+  const pos = { x: Math.min(Math.max(at.x, R + 80), W - R - 80), y: Math.min(Math.max(at.y, R + 26), H - R - 40 - 34 * ctxCount(app)) };
   const run = (it: Item) => {
     app.ui.setState({ marking: null });
     it.run(app);

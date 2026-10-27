@@ -212,8 +212,8 @@ export function drawGlyphs(ctx: Ctx, items: GlyphItem[], opts: { hover: Id | nul
     const ink = bad ? THEME.conflict : sel ? THEME.selected : hov ? THEME.hover : THEME.glyphInk;
     if (g.small) {
       ctx.save();
-      ctx.fillStyle = sel || hov || bad ? ink : '#fff7d6';
-      ctx.strokeStyle = sel || hov || bad ? ink : THEME.tapeDark;
+      ctx.fillStyle = sel || hov || bad ? ink : THEME.glyphDot;
+      ctx.strokeStyle = sel || hov || bad ? ink : THEME.glyphDotEdge;
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.rect(g.pos.x - 3, g.pos.y - 3, 6, 6);
@@ -226,7 +226,7 @@ export function drawGlyphs(ctx: Ctx, items: GlyphItem[], opts: { hover: Id | nul
     const y = g.pos.y - GLYPH / 2;
     ctx.save();
     roundRect(ctx, x, y, GLYPH, GLYPH, 3);
-    ctx.fillStyle = sel ? '#fff1e6' : hov ? '#fff8e1' : THEME.glyphBg;
+    ctx.fillStyle = sel ? THEME.glyphSelectedBg : hov ? THEME.glyphHoverBg : THEME.glyphBg;
     ctx.fill();
     ctx.lineWidth = 1;
     ctx.strokeStyle = sel || hov || bad ? ink : THEME.glyphBorder;

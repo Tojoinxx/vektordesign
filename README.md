@@ -6,7 +6,7 @@ Maßgenaues 2D-Vektorgrafikprogramm für Textil-Designs. Die Bedienung folgt dem
 
 ![Rechteck mit Farbverlauf und Verblassen, Bemaßungen und Abhängigkeiten](docs/screenshot-verlauf.png)
 
-**Stand: Meilenstein 1 (MVP Desktop)** – Linie, Rechteck, Kreis, Punkt, Text, Bemaßung mit Ausdrücken, zwölf Abhängigkeiten, Statusanzeige (unter-/voll-/überbestimmt), Füllung, Kontur und Farbverläufe, Zoom/Pan, Rückgängig, SVG- und PNG-Export, Windows-Installer über GitHub Actions. Dazu: Claude als Design-Agent in der App (auch mit Bildern), Stilvorschläge und kurze Tutorials beim ersten Benutzen eines Werkzeugs.
+**Stand: Meilenstein 1 (MVP Desktop)** – Linie, Rechteck, Kreis, Punkt, Text, Bemaßung mit Ausdrücken, zwölf Abhängigkeiten, Statusanzeige (unter-/voll-/überbestimmt), Füllung, Kontur und Farbverläufe, Zoom/Pan, Rückgängig, SVG- und PNG-Export, Windows-Installer über GitHub Actions. Dazu: Claude als Design-Agent in der App (auch mit Bildern), Stilvorschläge, kurze Tutorials beim ersten Benutzen eines Werkzeugs und ein dunkles Design (hell umschaltbar).
 
 ## Installation
 
@@ -65,6 +65,10 @@ Inventor-Weg: Rechteck irgendwo grob aufziehen, mit `D` die Breite (80) und Höh
 - **Farbverlauf**: Füllung „Verlauf“ wählen oder mit `G` einen Strich durch die Form ziehen (`Umschalt` rastet auf 45°). Richtungen links→rechts, rechts→links, oben→unten, unten→oben und kreisförmig; „Verblassen“ lässt den Verlauf in Transparenz auslaufen.
 - **Stilvorschläge**: Objekt auswählen – im Bereich *Stilvorschläge* erscheinen zehn Varianten als Vorschau, ein Klick übernimmt (`Strg+Z` nimmt zurück). Mit Claude-Schlüssel gibt es zusätzlich KI-Vorschläge zu einem Stichwort („Vintage“, „Neon“, „Vereinsfarben Blau-Weiß“).
 - **Konstruktionslinien** (`Q`) sind gestrichelt und werden nie exportiert; Bemaßungen und Glyphen ebenso nicht.
+
+### Darstellung
+
+Standard ist das dunkle Design. Über das Mond-Symbol oben rechts lassen sich das **Design** (Dunkel, Hell, Wie System) und unabhängig davon die **Zeichenfläche** (Passend, Hell, Dunkel) umschalten; die Wahl bleibt auf dem Gerät gespeichert. Eine helle Zeichenfläche im dunklen Design zeigt dunkle Motive so, wie sie auf hellem Stoff wirken. Motive, die sich kaum vom Hintergrund abheben (schwarz auf dunkler Fläche, weiß auf weißer), bekommen am Bildschirm einen feinen Umriss. Exportiert wird immer ohne Hintergrund und in den echten Farben.
 
 ### Claude in der App
 

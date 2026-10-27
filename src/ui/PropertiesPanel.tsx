@@ -155,7 +155,7 @@ function GradientEditor({ gradient, onChange, onPreview }: { gradient: Gradient;
   const stops = sortedStops(gradient);
   const [selIdx, setSelIdx] = useState(0);
   const sel = stops[Math.min(selIdx, stops.length - 1)];
-  const css = `linear-gradient(to right, ${stops.map((s) => `${rgba(s.color, s.opacity)} ${s.offset * 100}%`).join(', ')}), repeating-conic-gradient(#e4e8ec 0 25%, #fff 0 50%) 0 0 / 10px 10px`;
+  const css = `linear-gradient(to right, ${stops.map((s) => `${rgba(s.color, s.opacity)} ${s.offset * 100}%`).join(', ')}), repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 10px 10px`;
 
   const setStops = (next: GradientStop[], final = true) => (final ? onChange : onPreview)({ ...gradient, stops: next });
   const setDir = (dir: GradientDirection) => {

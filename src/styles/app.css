@@ -1,12 +1,18 @@
 /*
  * Vektordesign – Gestaltung
- * Ruhige Werkbank-Grautöne, schwarze Tinte, eine laute Farbe: Maßband-Gelb
+ * Werkbank mit Maßband: ruhige Graphit- bzw. Grautöne, eine laute Farbe – Maßband-Gelb
  * (Lineale, aktives Werkzeug, Maßeingabe). Schrift: IBM Plex Sans.
+ *
+ * Zwei Designs über data-theme am <html>-Element: hell und dunkel („Werkbank bei Nacht“).
+ * Die Zeichenfläche hat ein eigenes Attribut data-canvas, weil sie unabhängig vom Design
+ * hell bleiben kann (dunkle Motive). Farben stehen nur hier als Tokens.
  */
 :root {
   --bench: #e9ecef;
+  --chrome: #ffffff;
   --panel: #f6f7f8;
   --paper: #ffffff;
+  --hover: #f6f7f8;
   --line: #d3d9df;
   --line-2: #e4e8ec;
   --ink: #1e2328;
@@ -14,19 +20,109 @@
   --muted: #6b7480;
   --tape: #f5c518;
   --tape-dark: #d9a900;
+  --tape-hover: #ffd23a;
   --tape-soft: #fff4c7;
+  /* Schrift auf Maßband-Gelb (in beiden Designs dunkel) */
+  --on-tape: #1e2328;
+  --on-tape-field: #ffffff;
+  --on-tape-bad: #8f1d1d;
   --free: #2f6fd6;
   --free-soft: #e8f0fd;
+  --free-line: #b9cdf2;
+  --user-line: #cfdcf5;
   --ok: #23915a;
   --ok-soft: #e3f4ea;
+  --ok-line: #a9dcbc;
   --bad: #d64545;
   --bad-soft: #fde8e8;
+  --bad-line: #f0b4b4;
+  --bad-text: #8f1d1d;
   --sel: #e8590c;
   --focus: rgba(47, 111, 214, 0.45);
+  --glass: rgba(255, 255, 255, 0.94);
+  --toast-bg: #1e2328;
+  --toast-fg: #ffffff;
+  --toast-ok: #4cd18a;
+  --backdrop: rgba(30, 35, 40, 0.28);
+  --check-a: #e4e8ec;
+  --check-b: #ffffff;
+  --shadow: 0 6px 24px rgba(30, 35, 40, 0.14), 0 1px 3px rgba(30, 35, 40, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+  /* Zeichenfläche (für Tutorials und Vorschaubilder; die Fläche selbst: src/render/theme.ts) */
+  --cv-bg: #ffffff;
+  --cv-grid: #eef1f4;
+  --cv-grid-2: #dbe1e7;
+  --cv-ink: #1e2328;
+  --cv-free: #2f6fd6;
+  --cv-free-fill: rgba(47, 111, 214, 0.1);
+  --cv-free-soft: #eef3fd;
+  --cv-sel: #e8590c;
+  --cv-ok: #23915a;
+  --cv-ok-soft: #e3f4ea;
+  --cv-card: #ffffff;
+  --cv-card-line: #b9c1ca;
+  --cv-check: #f1f3f5;
+  --cv-label: rgba(255, 255, 255, 0.85);
+
   --font: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --r: 6px;
-  --shadow: 0 6px 24px rgba(30, 35, 40, 0.14), 0 1px 3px rgba(30, 35, 40, 0.12);
   color-scheme: light;
+}
+
+/* Werkbank bei Nacht: Graphit statt Grau, das Maßband wird schwarz mit gelben Markierungen */
+:root[data-theme='dark'] {
+  --bench: #17191d;
+  --chrome: #24292f;
+  --panel: #1d2126;
+  --paper: #24292f;
+  --hover: #2e343b;
+  --line: #383f47;
+  --line-2: #2d3339;
+  --ink: #e6e9ed;
+  --ink-2: #b2bac4;
+  --muted: #8c96a2;
+  --tape-dark: #b8961e;
+  --tape-soft: #3a3421;
+  --free: #6aa1ff;
+  --free-soft: #1c2a3e;
+  --free-line: #345283;
+  --user-line: #2f4a75;
+  --ok: #45c486;
+  --ok-soft: #173026;
+  --ok-line: #2a6649;
+  --bad: #f07070;
+  --bad-soft: #3a2125;
+  --bad-line: #7b3a3f;
+  --bad-text: #ffb4b4;
+  --sel: #ff8c42;
+  --focus: rgba(106, 161, 255, 0.6);
+  --glass: rgba(36, 41, 47, 0.94);
+  --toast-bg: #353c45;
+  --toast-fg: #f1f3f5;
+  --backdrop: rgba(0, 0, 0, 0.5);
+  --check-a: #2d3339;
+  --check-b: #3a414a;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+:root[data-canvas='dark'] {
+  --cv-bg: #181b1f;
+  --cv-grid: #202429;
+  --cv-grid-2: #2b3036;
+  --cv-ink: #e6e9ed;
+  --cv-free: #6aa1ff;
+  --cv-free-fill: rgba(106, 161, 255, 0.14);
+  --cv-free-soft: #1c2a3e;
+  --cv-sel: #ff8c42;
+  --cv-ok: #45c486;
+  --cv-ok-soft: #173026;
+  --cv-card: #262b31;
+  --cv-card-line: #4a525c;
+  --cv-check: #20242a;
+  --cv-label: rgba(24, 27, 31, 0.85);
 }
 
 * {
@@ -57,6 +153,10 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+:where(input:not([type='range'], [type='checkbox'], [type='radio'], [type='color']), select, textarea) {
+  background-color: var(--paper);
 }
 
 button {
@@ -145,7 +245,7 @@ kbd {
   align-items: center;
   gap: 6px;
   padding: 0 8px;
-  background: var(--paper);
+  background: var(--chrome);
   border-bottom: 1px solid var(--line);
 }
 
@@ -165,7 +265,7 @@ kbd {
   justify-content: center;
 }
 .topbtn:hover:not(:disabled) {
-  background: var(--panel);
+  background: var(--hover);
   border-color: var(--line-2);
 }
 .topbtn.on,
@@ -186,7 +286,7 @@ kbd {
   width: 26px;
   height: 14px;
   border-radius: 3px;
-  background: repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 5px) bottom left / 100% 5px no-repeat, var(--tape);
+  background: repeating-linear-gradient(90deg, var(--on-tape) 0 1px, transparent 1px 5px) bottom left / 100% 5px no-repeat, var(--tape);
   box-shadow: inset 0 0 0 1px var(--tape-dark);
 }
 .brand-name {
@@ -255,12 +355,49 @@ kbd {
   flex: 1;
 }
 .dropdown button:hover {
-  background: var(--panel);
+  background: var(--hover);
 }
 .dropdown hr {
   border: 0;
   border-top: 1px solid var(--line-2);
   margin: 5px 4px;
+}
+.dropdown.right {
+  left: auto;
+  right: 0;
+}
+
+/* Darstellung */
+.appearance-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 340px;
+  padding: 12px;
+}
+.am-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.am-row > span {
+  color: var(--ink-2);
+}
+.appearance-menu .segmented {
+  display: flex;
+}
+.appearance-menu .segmented button {
+  flex: 1;
+  width: auto;
+  height: 26px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.am-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 /* ------------------------------------------------------------------ Werkzeugleiste */
@@ -319,7 +456,7 @@ kbd {
 .rb-big.on {
   background: var(--tape);
   border-color: var(--tape-dark);
-  color: var(--ink);
+  color: var(--on-tape);
 }
 /* Umschalter und Modi: dezent – Gelb bleibt dem aktiven Werkzeug vorbehalten */
 .rb-small.on {
@@ -372,6 +509,7 @@ kbd {
 .canvas-wrap {
   position: absolute;
   inset: 0;
+  background: var(--cv-bg);
   overflow: hidden;
   overflow: clip;
   outline: none;
@@ -397,10 +535,10 @@ kbd {
   align-items: center;
   gap: 5px;
   padding: 2px 6px 2px 8px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--glass);
   border: 1px solid var(--line);
   border-radius: 5px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 .dyn-input label.has-value,
 .dyn-input label:focus-within {
@@ -436,6 +574,7 @@ kbd {
   transform: translate(-50%, -50%);
   padding: 5px 6px;
   background: var(--tape);
+  color: var(--on-tape);
   border: 1px solid var(--tape-dark);
   border-radius: 6px;
   box-shadow: var(--shadow);
@@ -454,11 +593,12 @@ kbd {
   padding: 0 8px;
   border: 1px solid var(--tape-dark);
   border-radius: 4px;
-  background: #fff;
+  background: var(--on-tape-field);
+  color: var(--on-tape);
   font-weight: 600;
 }
 .dim-editor input:focus {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--on-tape);
 }
 .dim-unit {
   font-size: 12px;
@@ -470,7 +610,7 @@ kbd {
   max-width: 240px;
 }
 .dim-error {
-  color: #8f1d1d;
+  color: var(--on-tape-bad);
   font-weight: 500;
 }
 
@@ -480,7 +620,7 @@ kbd {
   min-width: 160px;
   padding: 0 6px;
   border: 1px dashed var(--free);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--glass);
   outline: none;
 }
 
@@ -502,7 +642,7 @@ kbd {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--on-tape);
   background: var(--tape);
 }
 .marking-item {
@@ -524,11 +664,12 @@ kbd {
 .marking-list button:hover {
   background: var(--tape);
   border-color: var(--tape-dark);
+  color: var(--on-tape);
 }
 .marking-list {
   position: absolute;
-  left: -90px;
-  width: 180px;
+  left: -115px;
+  width: 230px;
   padding: 4px;
   background: var(--paper);
   border: 1px solid var(--line);
@@ -540,8 +681,8 @@ kbd {
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: 30px;
-  padding: 0 8px;
+  min-height: 30px;
+  padding: 4px 8px;
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
@@ -565,8 +706,8 @@ kbd {
 .toast {
   padding: 8px 14px;
   border-radius: 6px;
-  background: var(--ink);
-  color: #fff;
+  background: var(--toast-bg);
+  color: var(--toast-fg);
   box-shadow: var(--shadow);
   font-size: 13px;
   border-left: 4px solid var(--tape);
@@ -575,7 +716,7 @@ kbd {
   border-left-color: var(--bad);
 }
 .toast.success {
-  border-left-color: #4cd18a;
+  border-left-color: var(--toast-ok);
 }
 
 /* Tutorial-Karte */
@@ -712,10 +853,11 @@ kbd {
 .btn.accent {
   background: var(--tape);
   border-color: var(--tape-dark);
+  color: var(--on-tape);
   font-weight: 500;
 }
 .btn.accent:hover:not(:disabled) {
-  background: #ffd23a;
+  background: var(--tape-hover);
 }
 .btn.on {
   background: var(--tape-soft);
@@ -733,7 +875,7 @@ kbd {
   background: transparent;
 }
 .icon-btn:hover {
-  background: var(--panel);
+  background: var(--hover);
   border-color: var(--line);
 }
 .icon-btn.on {
@@ -773,7 +915,7 @@ kbd {
 .segmented button.on {
   background: var(--paper);
   border-color: var(--line);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
   font-weight: 500;
 }
 .segmented.big {
@@ -875,7 +1017,7 @@ kbd {
   height: 30px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  box-shadow: inset 0 0 0 2px #fff;
+  box-shadow: inset 0 0 0 2px var(--paper);
 }
 
 .color-picker {
@@ -1083,11 +1225,12 @@ kbd {
   padding: 4px 2px 5px;
   border: 1px solid var(--line-2);
   border-radius: 6px;
-  background: repeating-conic-gradient(#f1f3f5 0 25%, #fff 0 50%) 0 0 / 12px 12px;
+  background: repeating-conic-gradient(var(--cv-check) 0 25%, var(--cv-bg) 0 50%) 0 0 / 12px 12px;
   font-size: 11px;
 }
 .sugg span {
-  background: rgba(255, 255, 255, 0.85);
+  color: var(--cv-ink);
+  background: var(--cv-label);
   padding: 0 4px;
   border-radius: 3px;
 }
@@ -1203,7 +1346,7 @@ kbd {
 .msg.user {
   align-self: flex-end;
   background: var(--free-soft);
-  border: 1px solid #cfdcf5;
+  border: 1px solid var(--user-line);
 }
 .msg.bot {
   align-self: flex-start;
@@ -1222,8 +1365,8 @@ kbd {
 .msg.error {
   align-self: stretch;
   background: var(--bad-soft);
-  color: #8f1d1d;
-  border: 1px solid #f3c2c2;
+  color: var(--bad-text);
+  border: 1px solid var(--bad-line);
 }
 .msg.thinking {
   align-self: flex-start;
@@ -1292,7 +1435,7 @@ kbd {
   align-items: center;
   gap: 10px;
   padding: 0 10px;
-  background: var(--paper);
+  background: var(--chrome);
   border-top: 1px solid var(--line);
   font-size: 12px;
   white-space: nowrap;
@@ -1349,15 +1492,15 @@ kbd {
 }
 .status-pill.st-under {
   background: var(--free-soft);
-  border-color: #b9cdf2;
+  border-color: var(--free-line);
 }
 .status-pill.st-full {
   background: var(--ok-soft);
-  border-color: #a9dcbc;
+  border-color: var(--ok-line);
 }
 .status-pill.st-over {
   background: var(--bad-soft);
-  border-color: #f0b4b4;
+  border-color: var(--bad-line);
 }
 .status-pill.st-empty {
   background: var(--panel);
@@ -1402,7 +1545,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(30, 35, 40, 0.28);
+  background: var(--backdrop);
 }
 .modal-back.top {
   align-items: flex-start;

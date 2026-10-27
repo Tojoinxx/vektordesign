@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleHelp, Command as CommandIcon, FilePlus2, FolderOpen, Menu, PanelRightClose, PanelRightOpen, Redo2, Save, Search, Sparkles, Undo2, X, Download } from 'lucide-react';
+import { CircleHelp, Command as CommandIcon, FilePlus2, FolderOpen, Menu, Moon, PanelRightClose, PanelRightOpen, Redo2, Save, Search, Sparkles, Sun, SunMoon, Undo2, X, Download } from 'lucide-react';
 import { formatNumber } from '../params/expr';
 import { describeItem } from '../solver/analysis';
 import { pngSize } from '../export/png';
@@ -7,8 +7,9 @@ import { docBBox } from '../model/bounds';
 import type { Settings } from '../store/state';
 import { buildCommands, type Command } from './commands';
 import { useApp, useAppState, useUi } from './hooks';
-import { setTutorialsEnabled, TUTORIALS, tutorialsEnabled, type TutorialId } from './tutorials';
+import { refreshTutorialColors, setTutorialsEnabled, TUTORIALS, tutorialsEnabled, type TutorialId } from './tutorials';
 import { APP_VERSION } from '../model/serialize';
+import { CANVAS_LABELS, THEME_LABELS, resolveTheme, type CanvasPref, type ThemePref } from './appearance';
 
 // ---------------------------------------------------------------------------
 // Kopfzeile
@@ -25,6 +26,9 @@ export function TopBar() {
   const sideOpen = useUi((s) => s.sideOpen);
   const side = useUi((s) => s.side);
   const menu = useUi((s) => s.fileMenu);
+  const appearanceMenu = useUi((s) => s.appearanceMenu);
+  const theme = useUi((s) => s.appearance.theme);
+  const ThemeIcon = theme === 'system' ? SunMoon : resolveTheme(theme) === 'dark' ? Moon : Sun;
 
   return (
     <header className="topbar">
@@ -52,6 +56,20 @@ export function TopBar() {
       <button className="search-btn" onClick={() => app.store.setState({ paletteOpen: true })} title="Befehlssuche (Strg+K)">
         <Search size={15} /> <span>Befehl suchen</span> <kbd>Strg K</kbd>
       </button>
+      <div className="menu-wrap">
+        <button
+          className={`topbtn icon ${appearanceMenu ? 'on' : ''}`}
+          onClick={() => app.ui.setState({ appearanceMenu: !appearanceMenu })}
+          title="Darstellung: Design und Zeichenfläche"
+          aria-label="Darstellung"
+          aria-haspopup="dialog"
+          aria-expanded={appearanceMenu}
+          data-testid="appearance"
+        >
+          <ThemeIcon size={17} />
+        </button>
+        {appearanceMenu && <AppearanceMenu />}
+      </div>
       <button className="topbtn icon" onClick={() => app.ui.setState({ tutorialList: true })} title="Tutorials und Hilfe" aria-label="Tutorials und Hilfe">
         <CircleHelp size={17} />
       </button>
@@ -69,6 +87,55 @@ export function TopBar() {
         {sideOpen ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
       </button>
     </header>
+  );
+}
+
+const THEME_ORDER: ThemePref[] = ['dark', 'light', 'system'];
+const CANVAS_ORDER: CanvasPref[] = ['auto', 'light', 'dark'];
+
+/** Darstellung: Design der Oberfläche und, unabhängig davon, die Zeichenfläche. */
+function AppearanceMenu() {
+  const app = useApp();
+  const a = useUi((s) => s.appearance);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node) && !(e.target as HTMLElement).closest('[data-testid="appearance"]')) app.ui.setState({ appearanceMenu: false });
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') app.ui.setState({ appearanceMenu: false });
+    };
+    window.addEventListener('pointerdown', close, true);
+    window.addEventListener('keydown', esc, true);
+    return () => {
+      window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('keydown', esc, true);
+    };
+  }, [app]);
+  return (
+    <div className="dropdown right appearance-menu" role="dialog" aria-label="Darstellung" ref={ref}>
+      <div className="am-row">
+        <span id="am-theme">Design</span>
+        <div className="segmented" role="radiogroup" aria-labelledby="am-theme">
+          {THEME_ORDER.map((t) => (
+            <button key={t} role="radio" aria-checked={a.theme === t} className={a.theme === t ? 'on' : ''} onClick={() => app.setAppearance({ theme: t })} data-testid={`theme-${t}`}>
+              {THEME_LABELS[t]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="am-row">
+        <span id="am-canvas">Zeichenfläche</span>
+        <div className="segmented" role="radiogroup" aria-labelledby="am-canvas">
+          {CANVAS_ORDER.map((c) => (
+            <button key={c} role="radio" aria-checked={a.canvas === c} className={a.canvas === c ? 'on' : ''} onClick={() => app.setAppearance({ canvas: c })} data-testid={`canvas-${c}`}>
+              {CANVAS_LABELS[c]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="am-note">Auf heller Zeichenfläche sind dunkle Motive besser zu sehen. Exportiert wird immer mit transparentem Hintergrund.</p>
+    </div>
   );
 }
 
@@ -170,7 +237,7 @@ export function StatusBar() {
                 einen Punkt mit dem Ursprung verbinden oder fixieren.
               </p>
             )}
-            {analysis.status === 'full' && <p>Alle Maße und die Lage sind festgelegt. Die Geometrie ist schwarz dargestellt.</p>}
+            {analysis.status === 'full' && <p>Alle Maße und die Lage sind festgelegt. Keine Geometrie ist mehr blau, also nichts mehr beweglich.</p>}
             {analysis.status === 'over' && (
               <>
                 <p>{analysis.detail}</p>
@@ -456,6 +523,7 @@ export function Toasts() {
 export function TutorialCard() {
   const app = useApp();
   const id = useUi((s) => s.tutorial);
+  const appearance = useUi((s) => s.appearance);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Reduzierte Bewegung respektieren
@@ -467,6 +535,9 @@ export function TutorialCard() {
   }, [id]);
   if (!id) return null;
   const t = TUTORIALS[id];
+  // Farben aus dem aktuellen Design; neuer Schlüssel startet die Animation mit den neuen Farben
+  refreshTutorialColors();
+  const artKey = `${id}-${appearance.theme}-${appearance.canvas}`;
   return (
     <aside className="tutorial" ref={ref} role="dialog" aria-label={`Tutorial: ${t.title}`} data-testid="tutorial">
       <div className="tutorial-head">
@@ -475,7 +546,7 @@ export function TutorialCard() {
           <X size={15} />
         </button>
       </div>
-      {t.anim()}
+      <div key={artKey}>{t.anim()}</div>
       <ul>
         {t.steps.map((s) => (
           <li key={s}>{s}</li>

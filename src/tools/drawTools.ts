@@ -245,7 +245,7 @@ export class LineTool extends DrawToolBase implements Tool {
       ctx.setLineDash([]);
       if (hv) {
         const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = THEME.labelBg;
         ctx.strokeStyle = THEME.snap;
         ctx.lineWidth = 1;
         ctx.fillRect(m.x + 8, m.y - 22, 16, 16);

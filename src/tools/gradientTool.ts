@@ -152,7 +152,7 @@ export class GradientTool implements Tool {
     const stops = sortedStops(e.style.fill);
     ctx.save();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = THEME.paper;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -195,7 +195,7 @@ export class GradientTool implements Tool {
       ctx.fill();
       ctx.stroke();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = THEME.paper;
       ctx.stroke();
     };
     handle(a, stops[0]?.color ?? '#000', false);

@@ -154,6 +154,38 @@ await step('App lädt, Solver bereit, Willkommens-Tutorial erscheint', async () 
   await app(() => localStorage.setItem('vd.tutorials.off', '1'));
 });
 
+await step('Dunkles Design ist Standard; Design und Zeichenfläche getrennt umschaltbar und gespeichert', async () => {
+  // Helligkeit der leeren Zeichenfläche unten rechts (Gerätepixel)
+  const canvasLum = () =>
+    app(() => {
+      const c = document.querySelector('[data-testid="canvas"]');
+      const d = c.getContext('2d').getImageData(c.width - 40, c.height - 40, 1, 1).data;
+      return (d[0] + d[1] + d[2]) / 3;
+    });
+  const attrs = () => app(() => `${document.documentElement.dataset.theme}/${document.documentElement.dataset.canvas}`);
+  assert((await attrs()) === 'dark/dark', `Start: ${await attrs()}`);
+  assert((await canvasLum()) < 60, `Zeichenfläche nicht dunkel (${await canvasLum()})`);
+  await page.click('[data-testid="appearance"]');
+  await page.waitForSelector('.appearance-menu');
+  await page.click('[data-testid="canvas-light"]');
+  await sleep(120);
+  assert((await attrs()) === 'dark/light', `Helle Fläche: ${await attrs()}`);
+  assert((await canvasLum()) > 200, `Zeichenfläche nicht hell (${await canvasLum()})`);
+  await page.click('[data-testid="theme-light"]');
+  await sleep(80);
+  assert((await attrs()) === 'light/light', `Helles Design: ${await attrs()}`);
+  const bg = await app(() => getComputedStyle(document.querySelector('.topbar')).backgroundColor);
+  assert(bg === 'rgb(255, 255, 255)', `Kopfzeile ${bg}`);
+  const stored = await app(() => localStorage.getItem('vd.appearance'));
+  assert(stored.includes('"theme":"light"') && stored.includes('"canvas":"light"'), `gespeichert: ${stored}`);
+  await page.click('[data-testid="theme-dark"]');
+  await page.click('[data-testid="canvas-auto"]');
+  await page.keyboard.press('Escape');
+  await sleep(80);
+  assert((await attrs()) === 'dark/dark', `Zurück: ${await attrs()}`);
+  assert(!(await page.$('.appearance-menu')), 'Menü bleibt offen');
+});
+
 await step('Abnahme M1 (Variante A): Mittelpunkt-Rechteck mit Werteingabe, Kreis Ø10 → vollständig bestimmt', async () => {
   await page.click('[data-testid="rect-mode-center"]');
   await clickWorld(0, 0); // fängt den Ursprung

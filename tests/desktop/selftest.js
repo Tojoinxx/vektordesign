@@ -107,6 +107,18 @@
 
       const fonts = await invoke('list_fonts');
       check('Installierte Schriftarten werden gelistet', Array.isArray(fonts) && fonts.length > 0, `${fonts.length} Familien, z. B. ${fonts.slice(0, 3).join(', ')}`);
+
+      // Design: angewendet, und die Fensterfarbe darf umgeschaltet werden (Berechtigung)
+      const root = document.documentElement;
+      check('Design angewendet (Oberfläche und Zeichenfläche)', ['dark', 'light'].includes(root.dataset.theme) && ['dark', 'light'].includes(root.dataset.canvas), `${root.dataset.theme}/${root.dataset.canvas}`);
+      let themeErr = '';
+      try {
+        await invoke('plugin:window|set_theme', { label: 'main', value: 'light' });
+        await invoke('plugin:window|set_theme', { label: 'main', value: root.dataset.theme });
+      } catch (e) {
+        themeErr = String(e);
+      }
+      check('Fensterfarbe folgt dem Design (Berechtigung vorhanden)', !/not allowed|permission|denied|forbidden/i.test(themeErr), themeErr || 'umgeschaltet');
     } catch (e) {
       check('Unerwartete Ausnahme', false, e && e.stack ? e.stack : e);
     }

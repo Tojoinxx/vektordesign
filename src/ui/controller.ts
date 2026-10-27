@@ -17,6 +17,7 @@ import { openFile, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '
 import { Agent, type ChatEntry } from '../assistant/agent';
 import { loadApiKey, loadModel } from '../assistant/api';
 import { TUTORIALS, isTutorialSeen, markTutorialSeen, tutorialsEnabled, type TutorialId } from './tutorials';
+import { applyAppearance, loadAppearance, onSystemThemeChange, saveAppearance, type Appearance } from './appearance';
 
 export type SidePanel = 'props' | 'claude';
 
@@ -42,6 +43,9 @@ export interface UiState {
   statusDetail: boolean;
   about: boolean;
   fileMenu: boolean;
+  /** Design der Oberfläche und der Zeichenfläche */
+  appearance: Appearance;
+  appearanceMenu: boolean;
 }
 
 export interface ExportRequest {
@@ -85,7 +89,17 @@ export class AppController {
       statusDetail: false,
       about: false,
       fileMenu: false,
+      appearance: loadAppearance(),
+      appearanceMenu: false,
     }));
+    applyAppearance(this.ui.getState().appearance);
+    // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
+    onSystemThemeChange(() => {
+      const a = this.ui.getState().appearance;
+      if (a.theme !== 'system') return;
+      applyAppearance(a);
+      this.canvas.requestRender();
+    });
     const app = this;
     this.ctx = {
       editor: this.editor,
@@ -262,6 +276,15 @@ export class AppController {
     } catch (e) {
       this.editor.toast(`Speichern fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`, 'error', 6000);
     }
+  }
+
+  /** Design umschalten (Oberfläche und/oder Zeichenfläche); wird auf diesem Gerät gespeichert. */
+  setAppearance(patch: Partial<Appearance>): void {
+    const next = { ...this.ui.getState().appearance, ...patch };
+    saveAppearance(next);
+    this.ui.setState({ appearance: next });
+    applyAppearance(next);
+    this.canvas.requestRender();
   }
 
   openExport(format: 'svg' | 'png' = 'svg', dpi?: number): void {

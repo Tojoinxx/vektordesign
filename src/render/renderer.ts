@@ -54,7 +54,7 @@ export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp
   drawAxes(ctx, vp);
 
   const T = (p: Vec2) => toScreen(vp, p);
-  drawDesign({ ctx, toScreen: T, scale: vp.zoom, minStrokePx: 0.6 }, doc, { skip: s.skip });
+  drawDesign({ ctx, toScreen: T, scale: vp.zoom, minStrokePx: 0.6, contrast: { background: THEME.paper, hint: THEME.contrastHint } }, doc, { skip: s.skip });
 
   const problems = problemSet(doc, s.analysis);
   if (settings.showOverlay) drawSketchOverlay(ctx, s, problems.entities);
@@ -146,7 +146,7 @@ function drawOrigin(ctx: Ctx, vp: Viewport, active: boolean): void {
   const o = toScreen(vp, { x: 0, y: 0 });
   ctx.save();
   ctx.fillStyle = active ? THEME.selected : THEME.ink;
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = THEME.originRing;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.arc(o.x, o.y, 3.5, 0, Math.PI * 2);
@@ -239,7 +239,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
       else ctx.lineTo(a.x, a.y);
     });
     ctx.closePath();
-    ctx.fillStyle = s.selection.has(e.id) ? 'rgba(232,89,12,0.10)' : 'rgba(245,159,0,0.10)';
+    ctx.fillStyle = s.selection.has(e.id) ? THEME.selectedFill : THEME.hoverFill;
     ctx.fill();
   }
 
@@ -428,7 +428,7 @@ function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>): SceneLayout
   ctx.textBaseline = 'middle';
   for (const l of labels) {
     if (l.sel) {
-      ctx.fillStyle = '#fff1e6';
+      ctx.fillStyle = THEME.dimSelectedBg;
       ctx.fillRect(l.box.x, l.box.y, l.box.w, l.box.h);
     }
     if (l.sel || l.hov) {
@@ -452,7 +452,7 @@ function drawRulers(ctx: Ctx, vp: Viewport, cursor: Vec2 | null): void {
   ctx.fillStyle = THEME.tape;
   ctx.fillRect(0, 0, vp.width, RULER);
   ctx.fillRect(0, 0, RULER, vp.height);
-  ctx.fillStyle = THEME.tapeDark;
+  ctx.fillStyle = THEME.tapeEdge;
   ctx.fillRect(0, RULER - 1, vp.width, 1);
   ctx.fillRect(RULER - 1, 0, 1, vp.height);
 
@@ -522,9 +522,9 @@ function drawRulers(ctx: Ctx, vp: Viewport, cursor: Vec2 | null): void {
     ctx.stroke();
   }
   // Ecke
-  ctx.fillStyle = THEME.tapeDark;
+  ctx.fillStyle = THEME.tapeCorner;
   ctx.fillRect(0, 0, RULER, RULER);
-  ctx.fillStyle = THEME.tapeInk;
+  ctx.fillStyle = THEME.tapeCornerInk;
   ctx.font = `600 9px ${THEME.uiFont}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

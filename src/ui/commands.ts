@@ -166,6 +166,12 @@ export function buildCommands(): Command[] {
     { id: 'view.gridSnap', label: 'Am Raster fangen', group: 'Ansicht', run: (a) => toggle(a, 'gridSnap') },
     { id: 'view.dims', label: 'Bemaßungen ein/aus', group: 'Ansicht', run: (a) => toggle(a, 'showDims') },
     { id: 'view.overlay', label: 'Skizzenlinien ein/aus', group: 'Ansicht', keywords: 'vorschau design', run: (a) => toggle(a, 'showOverlay') },
+    { id: 'view.theme.dark', label: 'Dunkles Design', group: 'Ansicht', keywords: 'darstellung dark mode nacht farbe', run: (a) => a.setAppearance({ theme: 'dark' }) },
+    { id: 'view.theme.light', label: 'Helles Design', group: 'Ansicht', keywords: 'darstellung light mode tag farbe', run: (a) => a.setAppearance({ theme: 'light' }) },
+    { id: 'view.theme.system', label: 'Design wie System', group: 'Ansicht', keywords: 'darstellung automatisch windows', run: (a) => a.setAppearance({ theme: 'system' }) },
+    { id: 'view.canvas.auto', label: 'Zeichenfläche passend zum Design', group: 'Ansicht', keywords: 'hintergrund darstellung', run: (a) => a.setAppearance({ canvas: 'auto' }) },
+    { id: 'view.canvas.light', label: 'Zeichenfläche hell', group: 'Ansicht', keywords: 'hintergrund weiß darstellung', run: (a) => a.setAppearance({ canvas: 'light' }) },
+    { id: 'view.canvas.dark', label: 'Zeichenfläche dunkel', group: 'Ansicht', keywords: 'hintergrund schwarz darstellung', run: (a) => a.setAppearance({ canvas: 'dark' }) },
     {
       id: 'view.glyphsOn',
       label: 'Alle Abhängigkeiten anzeigen',

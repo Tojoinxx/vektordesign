@@ -2,7 +2,7 @@ import type { Entity, Gradient, Id, SketchDoc, Style, Vec2 } from '../model/type
 import { lineOf, pathVertices, pt } from '../model/doc';
 import { entityBBox } from '../model/bounds';
 import { gradientToWorld, isGradient, sortedStops } from '../model/paint';
-import { rgba } from '../model/color';
+import { hexToRgb, rgbLuminance, rgba, type RGB } from '../model/color';
 import { cssFont } from '../model/textMetrics';
 import { bboxValid, dist } from '../model/geometry';
 
@@ -17,6 +17,11 @@ export interface DesignTarget {
   scale: number;
   /** Mindestkonturstärke in px (Bildschirm), 0 beim Export */
   minStrokePx: number;
+  /**
+   * Nur Bildschirm: Motive, die sich kaum vom Hintergrund abheben (schwarz auf dunkler Fläche,
+   * weiß auf weißer), bekommen einen feinen Umriss in `hint`. Nie im Export.
+   */
+  contrast?: { background: string; hint: string };
 }
 
 export interface DesignOptions {
@@ -100,6 +105,53 @@ function buildPath(t: DesignTarget, doc: SketchDoc, e: Entity): boolean {
   }
 }
 
+const rgbCache = new Map<string, RGB>();
+function rgbOf(color: string): RGB {
+  let v = rgbCache.get(color);
+  if (v === undefined) {
+    v = hexToRgb(color);
+    if (rgbCache.size > 2000) rgbCache.clear();
+    rgbCache.set(color, v);
+  }
+  return v;
+}
+
+/** Kontrastschwelle, unter der ein Objekt auf dem Bildschirm einen Hilfsumriss bekommt. */
+export const LOW_CONTRAST = 1.6;
+
+/**
+ * Höchster Kontrast (WCAG-Verhältnis) der sichtbaren Farben eines Objekts zum Hintergrund,
+ * Deckkraft eingerechnet. 1 = unsichtbar.
+ */
+export function paintContrast(e: Entity, background: string): number {
+  const s = e.style;
+  const opacity = Math.min(1, Math.max(0, s.opacity ?? 1));
+  const bgRgb = rgbOf(background);
+  const bg = rgbLuminance(bgRgb);
+  let best = 1;
+  const consider = (color: string, alpha: number) => {
+    const a = Math.min(1, Math.max(0, alpha)) * opacity;
+    if (a <= 0) return;
+    // Mischen wie die Zeichenfläche (in sRGB), dann Kontrast nach WCAG
+    const c = rgbOf(color);
+    const l = rgbLuminance({ r: c.r * a + bgRgb.r * (1 - a), g: c.g * a + bgRgb.g * (1 - a), b: c.b * a + bgRgb.b * (1 - a) });
+    const ratio = (Math.max(l, bg) + 0.05) / (Math.min(l, bg) + 0.05);
+    if (ratio > best) best = ratio;
+  };
+  const filled = e.kind === 'text' || e.kind === 'circle' || (e.kind === 'path' && e.closed);
+  if (s.fill && filled) {
+    if (isGradient(s.fill)) for (const st of s.fill.stops) consider(st.color, st.opacity);
+    else consider(s.fill, 1);
+  }
+  if (s.stroke && s.strokeWidth > 0) consider(s.stroke, 1);
+  return best;
+}
+
+function needsHint(t: DesignTarget, e: Entity): string | null {
+  if (!t.contrast) return null;
+  return paintContrast(e, t.contrast.background) < LOW_CONTRAST ? t.contrast.hint : null;
+}
+
 /** Zeichnet ein einzelnes Objekt in seinem echten Stil. */
 export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
   if (e.construction) return;
@@ -122,6 +174,15 @@ export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
       ctx.fillText(e.text, a.x, a.y);
     }
     if (applyStroke(t, s)) ctx.strokeText(e.text, a.x, a.y);
+    const hint = needsHint(t, e);
+    if (hint) {
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = hint;
+      ctx.strokeText(e.text, a.x, a.y);
+    }
     ctx.restore();
     return;
   }
@@ -135,6 +196,15 @@ export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
     ctx.fill('nonzero');
   }
   if (applyStroke(t, s)) ctx.stroke();
+  const hint = needsHint(t, e);
+  if (hint) {
+    // Der Pfad ist noch aktiv: feiner Umriss entlang der Geometrie
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = hint;
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

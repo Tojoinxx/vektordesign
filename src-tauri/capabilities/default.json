@@ -1,7 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Rechte des Hauptfensters: Systemdialoge zum Öffnen/Speichern.",
-  "windows": ["main"],
-  "permissions": ["core:default", "dialog:default"]
+  "description": "Rechte des Hauptfensters: Systemdialoge zum Öffnen/Speichern, Fensterfarbe passend zum Design.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-theme",
+    "dialog:default"
+  ]
 }

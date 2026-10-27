@@ -172,9 +172,9 @@ export class DimensionTool implements Tool {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const w = ctx.measureText(g.label).width + 10;
-    ctx.fillStyle = THEME.tape;
+    ctx.fillStyle = THEME.tag;
     ctx.fillRect(tp.x - w / 2, tp.y - 9, w, 18);
-    ctx.fillStyle = THEME.tapeInk;
+    ctx.fillStyle = THEME.tagInk;
     ctx.fillText(g.label, tp.x, tp.y + 0.5);
     ctx.restore();
   }
