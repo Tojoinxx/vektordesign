@@ -86,6 +86,25 @@ Inventor-Weg: Rechteck irgendwo grob aufziehen, mit `D` die Breite (80) und Höh
 4. Füllung gelb setzen, einen Kreis dahinter mit Füllung blau.
 5. Export SVG, PDF und PNG (300 dpi): Breite jeweils exakt 100 mm, PNG mit transparentem Hintergrund.
 
+### Produktion und LabwearOS (Tab „Produktion“)
+
+Die Tech-Packs entstehen in LabwearOS. Vektordesign liefert die passenden Artwork-Dateien dazu.
+
+- **Artikel:** Name, Version und Kleidungsstück (Hoodie, T-Shirt, Sweatshirt, Cap). Daraus entstehen die Dateinamen, z. B. `Vereinshoodie_v2_Brustlogo_Schwarz.pdf`.
+- **Motive:** Veredelung (Siebdruck, DTG, Puff Print, Stick, Patch, Silikondruck, Sublimation, Transferdruck, Prägung, Allover), Druckbereich (Brust links/rechts, Front A4/A3, Rücken, Nacken, Cap-Front) und Lage in mm: Oberkante unter der Kragennaht und Abstand der Motivmitte von der Mittellinie. Mehrere Motive trennst du über Ebenen.
+- **Platzieren:** zeigt das Kleidungsstück in echter Größe mit Druckbereichen. Das Motiv lässt sich ziehen (rastet an Mittellinie und Druckbereichen ein) oder per Werteingabe setzen. Eine **LabwearOS-Vorlage** (PDF oder AI mit PDF-Kompatibilität) kann als Hintergrund importiert werden; danach den Bezugspunkt (Kragennaht Mitte) anklicken und über eine bekannte Strecke den Maßstab festlegen.
+- **Farbvarianten:** Stofffarbe und Ersetzung jeder Motivfarbe, z. B. Gelb auf Schwarz und Rot auf Weiß.
+- **Farbangaben:** HEX, CMYK (berechnet, überschreibbar) und Pantone als Freitext. Eine Pantone-Bibliothek ist lizenzpflichtig und deshalb bewusst nicht eingebaut.
+- **Export-Profile:** LabwearOS, Plotter, DTF, Siebdruck – Formate, Farbmodus, PNG-Auflösung, Mindestauflösung, Spiegeln, Artwork-Blatt. Die Werte sind auf dem Gerät gespeichert; trage die Datei-Anforderungen aus deinem LabwearOS-Konto ein.
+- **ZIP-Paket** mit einem Klick: alle Motive je Variante und Format (1:1, Text als Pfade, keine verknüpften Dateien), **Artwork-Blatt** (PDF, A4 quer: Platzierungsskizze vorne/hinten mit Maßen, Motiv mit Größe, Veredelung, Farbtabelle, Variantenübersicht), `Farben.csv`, `LIESMICH.txt` und optional die Projektdatei.
+
+### Abnahmetest Meilenstein 3
+
+1. Logo aus Meilenstein 2 öffnen, Tab **Produktion**: Artikelname und Version eintragen, Kleidungsstück „Hoodie“, Veredelung „Siebdruck“.
+2. **Platzieren** → „Brust links (Trägersicht)“; bei Bedarf „Unter Kragen“ anpassen.
+3. **Variante** hinzufügen, Stofffarbe und Druckfarben der zweiten Variante ändern, Pantone-Code als Freitext eintragen.
+4. **ZIP-Paket exportieren**: Das Paket enthält je Variante PDF, SVG und PNG (300 dpi) sowie das Artwork-Blatt.
+
 ### Darstellung
 
 Standard ist das dunkle Design. Über das Mond-Symbol oben rechts lassen sich das **Design** (Dunkel, Hell, Wie System) und unabhängig davon die **Zeichenfläche** (Passend, Hell, Dunkel) umschalten; die Wahl bleibt auf dem Gerät gespeichert. Eine helle Zeichenfläche im dunklen Design zeigt dunkle Motive so, wie sie auf hellem Stoff wirken. Motive, die sich kaum vom Hintergrund abheben (schwarz auf dunkler Fläche, weiß auf weißer), bekommen am Bildschirm einen feinen Umriss. Exportiert wird immer ohne Hintergrund und in den echten Farben.
@@ -142,7 +161,7 @@ Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Zieh
 | `npm run build` | Typprüfung und Produktionsbuild nach `dist/` |
 | `npm run build:single` | Ganze App als eine HTML-Datei: `dist-single/Vektordesign.html` |
 | `npm test` | Unit-Tests: Ausdrücke, Solver, Abnahme M1, Export, Claude-Werkzeuge |
-| `npm run test:e2e` | Bedienung im echten Browser inkl. Abnahme M1 und M2 (`CHROME_PATH` auf Chrome/Chromium setzen) |
+| `npm run test:e2e` | Bedienung im echten Browser inkl. Abnahme M1, M2 und M3 (`CHROME_PATH` auf Chrome/Chromium setzen) |
 | `npm run test:desktop` | Startet die Desktop-App und prüft Solver, Export und Dateibefehle im echten Fenster |
 | `npm run desktop:build` | Windows-Installer (NSIS-Setup und MSI) |
 | `npm run version:set -- 0.2.0` | Versionsnummer überall gleich setzen |
@@ -153,16 +172,17 @@ Datenmodell, Solver und Darstellung sind strikt getrennt. Werkzeuge, Oberfläche
 
 ```
 src/
-  model/      Datenmodell in mm (Punkte, Linien, Kreise, Text, Pfade), Farben, Verläufe, Projektdatei
+  model/      Datenmodell in mm (Punkte, Linien, Kreise, Text, Pfade, Formen), Ebenen, Farben, Verläufe,
+              boolesche Operationen, Produktion (Motive, Varianten), Kleidungsstücke, Export-Profile
   params/     Ausdrücke und Parameter der Bemaßungen (d0, d1 …)
   solver/     planegcs (FreeCAD-Solver als WebAssembly): Zerlegung in Teilsysteme, Freiheitsgrade, Konflikte
   store/      Zustand und Editor-Befehle mit Rückgängig/Wiederholen
   render/     Canvas-Darstellung: Raster, Maßband-Lineale, Bemaßungen, Glyphen
-  tools/      Werkzeuge: Auswahl, Zeichnen, Bemaßung, Abhängigkeiten, Verlauf, Fang
-  export/     SVG und PNG
+  tools/      Werkzeuge: Auswahl, Zeichnen, Bemaßung, Abhängigkeiten, Verlauf, Stutzen/Dehnen, Messen, Fang
+  export/     SVG, PDF, EPS, DXF, PNG, Artwork-Blatt und ZIP-Paket
   assistant/  Claude-Anbindung (Messages-API mit Werkzeugen und Bildern)
   design/     Stilvorschläge
-  platform/   Dateien, Schriftarten, Zwischenspeicher (Desktop und Browser)
+  platform/   Dateien, Schriftarten und -umrisse, PDF-Vorlagen-Import, Zwischenspeicher
   ui/         React-Oberfläche
 src-tauri/    Desktop-Hülle (Tauri 2, Rust): Dateizugriff und Schriftarten
 tests/        Unit-, Browser- und Desktop-Tests
@@ -190,10 +210,10 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 
 1. ✅ MVP Desktop
 2. ✅ Gestaltung und Bearbeiten: Ebenen, Gruppen, Ausrichten, boolesche Operationen, Stutzen/Dehnen/Abrunden/Versatz, Muster, Messen, Text in Pfade, PDF/EPS/DXF
-3. LabwearOS-Export: Vorlagen-Import, Platzierung auf dem Kleidungsstück, Artwork-Blatt, Export-Profile, ZIP-Paket
+3. ✅ LabwearOS-Export: Vorlagen-Import, Platzierung auf dem Kleidungsstück, Artwork-Blatt, Export-Profile, ZIP-Paket
 4. iPad: installierbare Web-App, Touch- und Apple-Pencil-Bedienung, Formerkennung, Sync über iCloud Drive/OneDrive
 5. Textil- und Komfortfunktionen: Mockups, Farbseparation, Plotter-Prüfung, Rapport, Größenstaffel, Kostenschätzung
 
 ## Lizenz
 
-MIT – siehe [LICENSE](LICENSE). Verwendete Bibliotheken und ihre Lizenzen: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Pantone-Codes werden (ab Meilenstein 3) nur als Freitext erfasst; eine Pantone-Bibliothek ist lizenzpflichtig und wird bewusst nicht eingebaut.
+MIT – siehe [LICENSE](LICENSE). Verwendete Bibliotheken und ihre Lizenzen: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Pantone-Codes werden nur als Freitext erfasst; eine Pantone-Bibliothek ist lizenzpflichtig und wird bewusst nicht eingebaut.

@@ -763,6 +763,78 @@ await step('Abnahme M2: Logo aus Text und Formen, 100 mm breit, zwei Farben, Tex
   results.push(`   Logo: 100 × ${H.toFixed(2)} mm, SVG/PDF/PNG geprüft`);
 });
 
+await step('Abnahme M3: Logo auf Hoodie-Brust, Siebdruck, zwei Farbvarianten → ZIP mit Motiven und Artwork-Blatt', async () => {
+  // Fortsetzung mit dem Logo aus der Abnahme M2
+  await page.click('[data-testid="tab-production"]');
+  await page.waitForSelector('[data-testid="production"]');
+  const setField = async (sel, value) => {
+    await page.$eval(sel, (el) => {
+      el.focus();
+      el.select();
+    });
+    await page.keyboard.type(value);
+    await page.keyboard.press('Enter');
+    await sleep(80);
+  };
+  await setField('[data-testid="prod-article"]', 'Vereinshoodie');
+  await setField('[data-testid="prod-version"]', '2');
+  await page.select('[data-testid="prod-garment"]', 'hoodie');
+  await page.select('[data-testid="motif-technique-0"]', 'screen');
+  await setField('[data-testid="motif-name-0"]', 'Brustlogo');
+  // Platzierung: Brust links über die Platzierungsansicht
+  await page.click('[data-testid="motif-place-0"]');
+  await page.waitForSelector('[data-testid="placement"]');
+  await page.click('[data-testid="area-chest-left"]');
+  await sleep(200);
+  await shot('30-platzierung-hoodie');
+  // Motiv per Ziehen 10 mm tiefer schieben, dann exakt 80 mm eingeben
+  await setField('[data-testid="placement-y"]', '80');
+  await page.click('[data-testid="placement-close"]');
+  let p = await app(() => window.vektordesign.editor.s.doc.production);
+  assert(p.motifs[0].placement.area === 'chest-left' && p.motifs[0].placement.y === 80 && p.motifs[0].placement.x === 105, `Platzierung ${JSON.stringify(p.motifs[0].placement)}`);
+  // Zweite Farbvariante
+  await page.click('[data-testid="variant-add"]');
+  await sleep(100);
+  await setField('[data-testid="variant-name-0"]', 'Schwarz');
+  await setField('[data-testid="variant-name-1"]', 'Weiß');
+  await app(() =>
+    window.vektordesign.editor.updateProduction('Variante Weiß', (q) => {
+      q.variants[1].fabric = '#f4f4f2';
+      q.variants[1].fabricName = 'Weiß';
+      q.variants[1].colors = { '#f5c518': '#c8102e' };
+    }),
+  );
+  await sleep(100);
+  await setField('[data-testid="pantone-f5c518"]', '116 C');
+  p = await app(() => window.vektordesign.editor.s.doc.production);
+  assert(p.variants.length === 2 && p.colorSpecs['#f5c518']?.pantone === '116 C', 'Varianten/Pantone fehlen');
+  await page.evaluate(() => document.querySelector('[data-testid="package-export"]').scrollIntoView());
+  await shot('31-produktion');
+  // Paket über die Oberfläche
+  for (const f of readdirSync(DL)) rmSync(join(DL, f), { force: true });
+  await page.click('[data-testid="package-export"]');
+  const zipFile = await waitDownload('zip', []);
+  await sleep(200);
+  copyFileSync(zipFile, join(OUT, 'm3-paket.zip'));
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const files = unzipSync(readFileSync(zipFile));
+  const names = Object.keys(files).sort();
+  const expect = ['Brustlogo_Schwarz.pdf', 'Brustlogo_Schwarz.svg', 'Brustlogo_Schwarz.png', 'Brustlogo_Weiss.pdf', 'Brustlogo_Weiss.svg', 'Brustlogo_Weiss.png'].map((n) => `Vereinshoodie_v2/Motive/Vereinshoodie_v2_${n}`);
+  for (const e of [...expect, 'Vereinshoodie_v2/Vereinshoodie_v2_Artwork-Blatt.pdf', 'Vereinshoodie_v2/Farben.csv', 'Vereinshoodie_v2/LIESMICH.txt']) assert(names.includes(e), `fehlt im ZIP: ${e} (vorhanden: ${names.join(', ')})`);
+  const svgW = strFromU8(files['Vereinshoodie_v2/Motive/Vereinshoodie_v2_Brustlogo_Weiss.svg']);
+  assert(/width="100mm"/.test(svgW) && svgW.includes('#c8102e') && !svgW.includes('#f5c518'), 'Variante Weiß falsch');
+  const png = Buffer.from(files['Vereinshoodie_v2/Motive/Vereinshoodie_v2_Brustlogo_Schwarz.png']);
+  assert(png.readUInt32BE(16) === Math.ceil((100 / 25.4) * 300), 'PNG-Breite im Paket');
+  const sheet = files['Vereinshoodie_v2/Vereinshoodie_v2_Artwork-Blatt.pdf'];
+  const sheetTxt = new TextDecoder('latin1').decode(sheet);
+  assert(sheetTxt.startsWith('%PDF-') && /\/Count 2/.test(sheetTxt), 'Artwork-Blatt fehlerhaft');
+  const { writeFileSync } = await import('node:fs');
+  writeFileSync(join(OUT, 'm3-artwork-blatt.pdf'), sheet);
+  const readme = strFromU8(files['Vereinshoodie_v2/LIESMICH.txt']);
+  assert(readme.includes('Siebdruck') && readme.includes('Oberkante 80 mm'), 'LIESMICH unvollständig');
+  results.push(`   Paket: ${names.length} Dateien`);
+});
+
 await step('Leistung: 150 Rechtecke mit Bemaßungen, Ziehen bleibt flüssig', async () => {
   await newDoc();
   const t = await app(() => {

@@ -761,7 +761,7 @@ kbd {
 /* ------------------------------------------------------------------ Seitenleiste */
 
 .side {
-  width: 320px;
+  width: 360px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -778,9 +778,14 @@ kbd {
 .side-tabs button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
@@ -1910,3 +1915,205 @@ kbd {
   margin: 8px 0 0;
   font-size: 11px;
 }
+
+/* ------------------------------------------------------------------ Produktion */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+  margin: 6px 0;
+}
+.form-grid > span:nth-child(odd) {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.form-grid input[type='text'],
+.form-grid select {
+  min-width: 0;
+}
+.form-grid > input[type='text'] {
+  width: 100%;
+}
+.motif-card,
+.variant-card {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.motif-card > .row:first-child input,
+.variant-card > .row:first-child input {
+  font-weight: 600;
+  width: 130px;
+}
+.layer-picks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.check.small {
+  font-size: 12px;
+}
+.warn-list {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+  color: var(--bad-text);
+  font-size: 12px;
+}
+.warn-list li {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 4px 0;
+}
+.color-map {
+  margin: 4px 0;
+}
+.color-map .swatch,
+.color-table .swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+}
+.color-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.color-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 2px 4px;
+}
+.color-table td {
+  padding: 3px 4px;
+}
+.btn.wide {
+  width: 100%;
+  justify-content: center;
+}
+.field.column {
+  flex-direction: column;
+  align-items: stretch;
+}
+.field.column textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Platzierungsansicht */
+.placement-back {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 18px;
+  background: var(--backdrop);
+}
+.placement {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--paper);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.placement-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.placement-head h2 {
+  margin: 0 8px 0 0;
+  font-size: 16px;
+}
+.placement-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.placement-canvas {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bench);
+}
+.placement-canvas canvas {
+  display: block;
+}
+.placement-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  right: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.placement-side {
+  padding: 12px 14px;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+}
+.placement-side h3 {
+  margin: 0 0 2px;
+}
+.placement-side h4 {
+  margin: 14px 0 6px;
+}
+.area-list {
+  display: grid;
+  gap: 4px;
+}
+.area-list .btn {
+  justify-content: space-between;
+}
+.area-list .btn small {
+  color: var(--muted);
+}
+.area-list .btn.on,
+.placement-side .btn.on {
+  border-color: var(--tape-dark);
+  background: var(--tape);
+  color: var(--on-tape);
+}
+.area-list .btn.on small {
+  color: var(--on-tape);
+  opacity: 0.75;
+}
+@media (max-width: 900px) {
+  .placement-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .placement-side {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    max-height: 40vh;
+  }
+}
+.side-tabs button.on {
+  flex-shrink: 0;
+}
+.side-tabs button svg { flex-shrink: 0; }

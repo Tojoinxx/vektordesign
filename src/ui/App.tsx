@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Layers, Settings2, Sparkles } from 'lucide-react';
+import { Layers, Settings2, Shirt, Sparkles } from 'lucide-react';
 import type { AppController } from './controller';
 import { AppCtx, useUi } from './hooks';
 import { CanvasView } from './CanvasView';
@@ -7,6 +7,8 @@ import { Ribbon } from './Ribbon';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AssistantPanel } from './AssistantPanel';
 import { LayersPanel } from './LayersPanel';
+import { ProductionPanel, ProfileEditor } from './ProductionPanel';
+import { PlacementView } from './PlacementView';
 import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, MeasureCard, ParamDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
 import { buildCommands, matchKey } from './commands';
 
@@ -21,6 +23,9 @@ function SidePanel({ app }: { app: AppController }) {
         <button role="tab" aria-selected={side === 'layers'} className={side === 'layers' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'layers' })} data-testid="tab-layers">
           <Layers size={15} /> Ebenen
         </button>
+        <button role="tab" aria-selected={side === 'production'} className={side === 'production' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'production' })} data-testid="tab-production" title="Produktion: Artikel, Platzierung, Varianten, Export für LabwearOS">
+          <Shirt size={15} /> Produktion
+        </button>
         <button
           role="tab"
           aria-selected={side === 'claude'}
@@ -34,7 +39,7 @@ function SidePanel({ app }: { app: AppController }) {
           <Sparkles size={15} /> Claude
         </button>
       </div>
-      <div className="side-body">{side === 'props' ? <PropertiesPanel /> : side === 'layers' ? <LayersPanel /> : <AssistantPanel />}</div>
+      <div className="side-body">{side === 'props' ? <PropertiesPanel /> : side === 'layers' ? <LayersPanel /> : side === 'production' ? <ProductionPanel /> : <AssistantPanel />}</div>
     </aside>
   );
 }
@@ -49,7 +54,7 @@ function Shell({ app }: { app: AppController }) {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
       const s = app.store.getState();
-      if (typing || s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().paramDialog) return;
+      if (typing || s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().paramDialog || app.ui.getState().placement || app.ui.getState().profileEditor) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         app.escape();
@@ -113,6 +118,8 @@ function Shell({ app }: { app: AppController }) {
       <StatusBar />
       <ExportDialog />
       <ParamDialog />
+      <PlacementView />
+      <ProfileEditor />
       <CommandPalette />
       <ConfirmDialog />
       <TutorialList />

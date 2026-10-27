@@ -5,6 +5,8 @@ import { entityBBox } from '../model/bounds';
 import { bboxValid, dist } from '../model/geometry';
 import { makeGradient, type GradientDirection } from '../model/paint';
 import { normalizeHex } from '../model/color';
+import { allColors, motifSize, productionOf } from '../model/production';
+import { areaOf, garmentOf, TECHNIQUES } from '../model/garments';
 import { numberToExpr } from '../params/expr';
 import type { Analysis } from '../solver/analysis';
 import type { CommitOutcome, Editor, PlacedPoint } from '../store/editor';
@@ -240,6 +242,35 @@ export const TOOL_DEFS: ToolDef[] = [
     name: 'undo',
     description: 'Undo the last change.',
     input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_production',
+    description: 'Production data for LabwearOS: article, version, garment, motifs (placement on the garment, finishing technique), color variants, Pantone notes, available print areas and techniques.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'set_production',
+    description:
+      'Change production data. Placement: area id (e.g. chest-left = wearer\'s left chest), or x (mm from center line, + = right in the image) and y (mm from collar seam to top edge of motif). Variants: list replaces all variants; colors maps original design colors to print colors. pantone: map print color #rrggbb → Pantone code text (free text only).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        article: { type: 'string' },
+        version: { type: 'string' },
+        garment: { type: 'string', enum: ['hoodie', 'tshirt', 'sweatshirt', 'cap'] },
+        motif_index: { type: 'number', description: 'Motif to change (default 0)' },
+        motif_name: { type: 'string' },
+        technique: { type: 'string', enum: ['screen', 'dtg', 'puff', 'embroidery', 'patch', 'silicone', 'sublimation', 'transfer', 'emboss', 'allover'] },
+        area: { type: 'string' },
+        x: { type: 'number' },
+        y: { type: 'number' },
+        variants: {
+          type: 'array',
+          items: { type: 'object', properties: { name: { type: 'string' }, fabric: COLOR, fabric_name: { type: 'string' }, colors: { type: 'object', additionalProperties: { type: 'string' } } }, required: ['name', 'fabric'] },
+        },
+        pantone: { type: 'object', additionalProperties: { type: 'string' } },
+      },
+    },
   },
   {
     name: 'open_export_dialog',
@@ -731,6 +762,58 @@ export async function runTool(host: AgentHost, name: string, input: Record<strin
       case 'undo': {
         const ok = ed.undo();
         return { content: ok ? 'Undone.' : 'Nothing to undo.', summary: 'Rückgängig' };
+      }
+      case 'get_production': {
+        const p = productionOf(doc);
+        const g = garmentOf(p.garment);
+        return {
+          content: JSON.stringify({
+            ...p,
+            templates: undefined,
+            design_colors: allColors(doc, p),
+            motif_sizes_mm: p.motifs.map((m) => motifSize(doc, m)).map((sz) => (sz ? [r3(sz.w), r3(sz.h)] : null)),
+            print_areas: g.areas.map((a) => ({ id: a.id, name: a.name, view: a.view, x: a.x, y: a.y, w: a.w, h: a.h })),
+            techniques: TECHNIQUES.map((t) => `${t.id} = ${t.name}`),
+          }),
+          summary: 'Produktionsangaben gelesen',
+        };
+      }
+      case 'set_production': {
+        const out = ed.updateProduction('Produktion (Claude)', (p) => {
+          if (typeof input.article === 'string') p.article = input.article;
+          if (typeof input.version === 'string') p.version = input.version;
+          if (typeof input.garment === 'string') p.garment = input.garment as typeof p.garment;
+          const g = garmentOf(p.garment);
+          const m = p.motifs[typeof input.motif_index === 'number' ? input.motif_index : 0];
+          if (m) {
+            if (typeof input.motif_name === 'string') m.name = input.motif_name;
+            if (typeof input.technique === 'string') m.technique = input.technique as typeof m.technique;
+            if (typeof input.area === 'string') {
+              const a = areaOf(g, input.area);
+              if (!a) throw new Error(`Unknown print area ${input.area}`);
+              m.placement = { view: a.view, area: a.id, x: a.x, y: a.y };
+            }
+            if (typeof input.x === 'number') m.placement.x = input.x;
+            if (typeof input.y === 'number') m.placement.y = input.y;
+          }
+          if (Array.isArray(input.variants)) {
+            p.variants = (input.variants as { name: string; fabric: string; fabric_name?: string; colors?: Record<string, string> }[]).map((v, i) => ({
+              id: `v${i + 1}`,
+              name: v.name,
+              fabric: normalizeHex(v.fabric) ?? '#ffffff',
+              fabricName: v.fabric_name,
+              colors: Object.fromEntries(Object.entries(v.colors ?? {}).map(([k, c]) => [(normalizeHex(k) ?? k).toLowerCase(), (normalizeHex(c) ?? c).toLowerCase()])),
+            }));
+          }
+          if (input.pantone && typeof input.pantone === 'object') {
+            for (const [k, v] of Object.entries(input.pantone as Record<string, string>)) {
+              const key = (normalizeHex(k) ?? k).toLowerCase();
+              p.colorSpecs[key] = { ...(p.colorSpecs[key] ?? {}), pantone: String(v).replace(/^pantone\s*/i, '') };
+            }
+          }
+        });
+        if (!out.ok) return fail(out.message);
+        return { content: 'OK', summary: 'Produktionsangaben geändert' };
       }
       case 'open_export_dialog': {
         const fmt = input.format === 'png' ? 'png' : 'svg';

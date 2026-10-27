@@ -14,11 +14,17 @@ import { booleanOp, cornerOp, offsetOp, patternOp, selectionCenter, selectionSiz
 import type { BoolOp } from '../model/boolean';
 import { evaluate } from '../params/expr';
 import { docBBox } from '../model/bounds';
+import { loadProfiles, profileById, saveProfiles, type ExportProfile } from '../model/profiles';
+import { productionOf, articleBase } from '../model/production';
+import type { GarmentView } from '../model/types';
+import { buildPackage } from '../export/package';
+import { buildArtworkSheet } from '../export/artworkSheet';
+import { decodeImage, renderPdfPage } from '../platform/pdfImport';
 import type { DynamicInputSpec, Tool, ToolContext } from '../tools/types';
 import { exportSvg } from '../export/svg';
 import { exportPng, renderPreviewPng } from '../export/png';
 import { parseDoc, serializeDoc, PROJECT_EXT } from '../model/serialize';
-import { DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
+import { AI_TYPE, DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, TEMPLATE_TYPE, ZIP_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
 import { buildScene, textOutlines } from '../export/scene';
 import { exportPdf } from '../export/pdf';
 import { exportEps } from '../export/eps';
@@ -29,7 +35,7 @@ import { loadApiKey, loadModel } from '../assistant/api';
 import { TUTORIALS, isTutorialSeen, markTutorialSeen, tutorialsEnabled, type TutorialId } from './tutorials';
 import { applyAppearance, loadAppearance, onSystemThemeChange, saveAppearance, type Appearance } from './appearance';
 
-export type SidePanel = 'props' | 'layers' | 'claude';
+export type SidePanel = 'props' | 'layers' | 'production' | 'claude';
 
 export interface TextEditState {
   id: Id | null;
@@ -61,6 +67,13 @@ export interface UiState {
   /** Eingabedialog für Bearbeiten-Befehle */
   paramDialog: ParamDialogSpec | null;
   ribbonTab: 'sketch' | 'edit';
+  /** Platzierungsansicht für ein Motiv (Id) */
+  placement: Id | null;
+  /** Export-Profile (Gerät) und Profil-Dialog */
+  profiles: ExportProfile[];
+  profileEditor: string | null;
+  /** Fortschritt langer Exporte */
+  busy: string | null;
 }
 
 export interface ParamField {
@@ -145,6 +158,10 @@ export class AppController {
       measure: null,
       paramDialog: null,
       ribbonTab: 'sketch',
+      placement: null,
+      profiles: loadProfiles(),
+      profileEditor: null,
+      busy: null,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -532,6 +549,104 @@ export class AppController {
           },
         });
         return;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Produktion (Meilenstein 3)
+  // -------------------------------------------------------------------------
+
+  saveProfile(p: ExportProfile): void {
+    const list = this.ui.getState().profiles.map((x) => (x.id === p.id ? p : x));
+    if (!list.some((x) => x.id === p.id)) list.push(p);
+    saveProfiles(list);
+    this.ui.setState({ profiles: list });
+  }
+
+  resetProfile(id: string): void {
+    const list = this.ui.getState().profiles.filter((x) => x.id !== id);
+    saveProfiles(list);
+    this.ui.setState({ profiles: loadProfiles() });
+  }
+
+  currentProfile(): ExportProfile {
+    return profileById(productionOf(this.editor.s.doc).profileId, this.ui.getState().profiles);
+  }
+
+  private async pngBytes(doc: import('../model/types').SketchDoc, dpi: number, mirror: boolean, bounds: 'geometry' | 'stroke'): Promise<Uint8Array> {
+    return (await exportPng(doc, { dpi, mirror, bounds })).bytes;
+  }
+
+  /** Ein-Klick-Paket (ZIP) mit allen Motiven, Varianten und dem Artwork-Blatt. */
+  async exportPackage(path?: string | null): Promise<boolean> {
+    const doc = this.editor.s.doc;
+    const p = productionOf(doc);
+    const profile = this.currentProfile();
+    this.ui.setState({ busy: 'Paket wird erstellt …' });
+    try {
+      const res = await buildPackage(doc, p, profile, {
+        renderPng: (d, dpi, mirror, bounds) => this.pngBytes(d, dpi, mirror, bounds),
+        decodeTemplate: (t) => decodeImage(t.image),
+        onProgress: (t) => this.ui.setState({ busy: t }),
+      });
+      this.ui.setState({ busy: null });
+      const saved = await saveFile(res.zip, res.fileName, ZIP_TYPE, path);
+      if (!saved) return false;
+      const n = res.files.filter((f) => f.includes('/Motive/')).length;
+      this.editor.toast(`Paket ${res.fileName} exportiert: ${n} Motivdateien${profile.sheet ? ' und Artwork-Blatt' : ''}`, 'success', 5000);
+      for (const w of res.warnings) this.editor.toast(w, 'info', 8000);
+      return true;
+    } catch (e) {
+      this.ui.setState({ busy: null });
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
+      return false;
+    }
+  }
+
+  async exportArtworkSheet(path?: string | null): Promise<boolean> {
+    const doc = this.editor.s.doc;
+    const p = productionOf(doc);
+    const profile = this.currentProfile();
+    try {
+      this.ui.setState({ busy: 'Artwork-Blatt wird erstellt …' });
+      const bytes = await buildArtworkSheet(doc, p, { colorMode: profile.colorMode, decodeTemplate: (t) => decodeImage(t.image) });
+      this.ui.setState({ busy: null });
+      const saved = await saveFile(bytes, `${articleBase(p)}_Artwork-Blatt.pdf`, PDF_TYPE, path);
+      if (saved) this.editor.toast('Artwork-Blatt exportiert', 'success');
+      return !!saved;
+    } catch (e) {
+      this.ui.setState({ busy: null });
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
+      return false;
+    }
+  }
+
+  /** Vorlage (PDF/AI) als Hintergrund der Platzierung importieren. */
+  async importTemplate(view: GarmentView, file?: { name: string; data: Uint8Array }, pageNo = 1): Promise<boolean> {
+    const f = file ?? (await openFile([TEMPLATE_TYPE, AI_TYPE]));
+    if (!f) return false;
+    try {
+      this.ui.setState({ busy: 'Vorlage wird gelesen …' });
+      const r = await renderPdfPage(f.data, pageNo);
+      this.ui.setState({ busy: null });
+      const out = this.editor.updateProduction('Vorlage importieren', (p) => {
+        p.templates = { ...(p.templates ?? {}) };
+        p.templates[view] = { name: f.name, image: r.image, widthMm: r.widthMm, heightMm: r.heightMm, originX: r.widthMm / 2, originY: r.heightMm * 0.18 };
+      });
+      if (!out.ok) {
+        this.editor.toast(out.message, 'error');
+        return false;
+      }
+      this.editor.toast(
+        `Vorlage „${f.name}“ importiert (${Math.round(r.widthMm)} × ${Math.round(r.heightMm)} mm${r.pages > 1 ? `, Seite ${pageNo} von ${r.pages}` : ''}). Jetzt den Bezugspunkt und den Maßstab festlegen.`,
+        'success',
+        7000,
+      );
+      return true;
+    } catch (e) {
+      this.ui.setState({ busy: null });
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 8000);
+      return false;
     }
   }
 

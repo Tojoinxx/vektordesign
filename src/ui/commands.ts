@@ -184,6 +184,22 @@ export function buildCommands(): Command[] {
     { id: 'export.eps', label: 'Als EPS exportieren …', group: 'Datei', run: (a) => a.openExport('eps') },
     { id: 'export.dxf', label: 'Als DXF exportieren …', group: 'Datei', keywords: 'plotter cad', run: (a) => a.openExport('dxf') },
 
+    // Produktion (LabwearOS)
+    { id: 'prod.open', label: 'Produktion: Artikel, Motive, Varianten', group: 'Produktion', keywords: 'labwearos hoodie shirt veredelung siebdruck', run: (a) => a.ui.setState({ side: 'production', sideOpen: true }) },
+    {
+      id: 'prod.place',
+      label: 'Motiv platzieren …',
+      group: 'Produktion',
+      keywords: 'brust rücken druckbereich kragen',
+      run: (a) => {
+        const d = a.editor.s.doc;
+        a.ui.setState({ placement: d.production?.motifs[0]?.id ?? 'm1' });
+      },
+    },
+    { id: 'prod.package', label: 'ZIP-Paket für LabwearOS exportieren', group: 'Produktion', keywords: 'export zip paket labwearos', run: (a) => void a.exportPackage() },
+    { id: 'prod.sheet', label: 'Artwork-Blatt exportieren (PDF)', group: 'Produktion', keywords: 'pdf blatt platzierung', run: (a) => void a.exportArtworkSheet() },
+    { id: 'prod.template', label: 'LabwearOS-Vorlage importieren (PDF/AI) …', group: 'Produktion', keywords: 'vorlage import pdf ai illustrator', run: (a) => void a.importTemplate('front') },
+
     // Ansicht
     { id: 'view.fit', label: 'Alles anzeigen', group: 'Ansicht', shortcut: 'F', keys: [{ key: 'f' }], keywords: 'zoom', run: (a) => a.editor.zoomToFit() },
     { id: 'view.zoomIn', label: 'Vergrößern', group: 'Ansicht', shortcut: '+', keys: [{ key: '+' }, { key: '=' }], run: (a) => zoomBy(a, 1.25) },

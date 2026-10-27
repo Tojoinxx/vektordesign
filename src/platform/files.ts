@@ -106,6 +106,9 @@ export const SVG_TYPE: FileType = { description: 'SVG-Grafik', mime: 'image/svg+
 export const PNG_TYPE: FileType = { description: 'PNG-Bild', mime: 'image/png', ext: 'png' };
 export const PDF_TYPE: FileType = { description: 'PDF-Dokument', mime: 'application/pdf', ext: 'pdf' };
 export const EPS_TYPE: FileType = { description: 'EPS-Grafik', mime: 'application/postscript', ext: 'eps' };
+export const ZIP_TYPE: FileType = { description: 'ZIP-Paket', mime: 'application/zip', ext: 'zip' };
+export const TEMPLATE_TYPE: FileType = { description: 'PDF-Vorlage', mime: 'application/pdf', ext: 'pdf' };
+export const AI_TYPE: FileType = { description: 'Illustrator-Datei (PDF-kompatibel)', mime: 'application/postscript', ext: 'ai' };
 export const DXF_TYPE: FileType = { description: 'DXF-Zeichnung', mime: 'application/dxf', ext: 'dxf' };
 
 /** Dateiname ohne verbotene Zeichen. */
