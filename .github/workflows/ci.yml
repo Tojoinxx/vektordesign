@@ -44,6 +44,17 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome
 
+      - name: Einzeldatei bauen (läuft ohne Installation im Browser)
+        run: npm run build:single
+
+      - name: Einzeldatei hochladen
+        uses: actions/upload-artifact@v7
+        with:
+          name: Vektordesign-Einzeldatei
+          path: dist-single/Vektordesign.html
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Screenshots der Browser-Tests
         if: always()
         uses: actions/upload-artifact@v7

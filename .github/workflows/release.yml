@@ -50,9 +50,19 @@ jobs:
           releaseBody: |
             **Installation unter Windows:** `Vektordesign_…_x64-setup.exe` herunterladen und starten. Das Setup braucht keine Administratorrechte und läuft danach komplett offline.
             Für die Verteilung über die IT gibt es zusätzlich das `.msi`-Paket.
+            Ohne Installation: `Vektordesign.html` herunterladen und doppelklicken – läuft offline im Browser.
 
             Das Programm ist (noch) nicht signiert. Zeigt Windows SmartScreen eine Warnung, auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken.
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
           uploadUpdaterJson: false
+
+      - name: Einzeldatei (ohne Installation) an das Release hängen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          npm run build:single
+          gh release upload "$TAG" dist-single/Vektordesign.html --clobber

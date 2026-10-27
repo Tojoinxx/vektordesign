@@ -19,9 +19,12 @@ Die App läuft komplett offline. Sie nutzt die in Windows 10/11 eingebaute WebVi
 
 Jeder Push baut außerdem einen Test-Installer: im Reiter **Actions** → Lauf „CI“ → Artefakt **Vektordesign-Windows**.
 
-### Web-Version
+### Ohne Installation
 
-Läuft ohne Installation im Browser (Chrome, Edge, Safari): <https://tojoinxx.github.io/vektordesign/>. Die installierbare iPad-Version mit Offline-Betrieb, Touch- und Pencil-Bedienung folgt in Meilenstein 4.
+- **Einzeldatei:** `Vektordesign.html` aus dem Release herunterladen und doppelklicken. Die ganze App steckt in dieser einen Datei und läuft offline in Chrome, Edge oder Firefox.
+- **Web-Version:** <https://tojoinxx.github.io/vektordesign/> im Browser öffnen.
+
+Die installierbare iPad-Version mit Offline-Betrieb, Touch- und Pencil-Bedienung folgt in Meilenstein 4.
 
 ### Aus dem Quellcode
 
@@ -106,6 +109,7 @@ Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Zieh
 | --- | --- |
 | `npm run dev` | Entwicklungsserver (Browser) |
 | `npm run build` | Typprüfung und Produktionsbuild nach `dist/` |
+| `npm run build:single` | Ganze App als eine HTML-Datei: `dist-single/Vektordesign.html` |
 | `npm test` | Unit-Tests: Ausdrücke, Solver, Abnahme M1, Export, Claude-Werkzeuge |
 | `npm run test:e2e` | Bedienung im echten Browser inkl. Abnahme M1 (`CHROME_PATH` auf Chrome/Chromium setzen) |
 | `npm run test:desktop` | Startet die Desktop-App und prüft Solver, Export und Dateibefehle im echten Fenster |
@@ -142,7 +146,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-Der Workflow „Release“ übernimmt die Version aus dem Tag, testet, baut den Installer und hängt `.exe` und `.msi` an ein GitHub-Release. Versionsnummern bestehen nur aus Zahlen (`v1.2.3`), weil der MSI-Installer nichts anderes erlaubt.
+Der Workflow „Release“ übernimmt die Version aus dem Tag, testet, baut den Installer und hängt `.exe`, `.msi` und die Einzeldatei `Vektordesign.html` an ein GitHub-Release. Versionsnummern bestehen nur aus Zahlen (`v1.2.3`), weil der MSI-Installer nichts anderes erlaubt.
 
 ### GitHub einrichten (einmalig)
 
