@@ -7,7 +7,7 @@ import { Ribbon } from './Ribbon';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AssistantPanel } from './AssistantPanel';
 import { LayersPanel } from './LayersPanel';
-import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
+import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, MeasureCard, ParamDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
 import { buildCommands, matchKey } from './commands';
 
 function SidePanel({ app }: { app: AppController }) {
@@ -49,7 +49,7 @@ function Shell({ app }: { app: AppController }) {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
       const s = app.store.getState();
-      if (typing || s.paletteOpen || s.exportOpen || s.confirm) return;
+      if (typing || s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().paramDialog) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         app.escape();
@@ -106,11 +106,13 @@ function Shell({ app }: { app: AppController }) {
       <main className="main">
         <CanvasView />
         <TutorialCard />
+        <MeasureCard />
         <Toasts />
       </main>
       {sideOpen && <SidePanel app={app} />}
       <StatusBar />
       <ExportDialog />
+      <ParamDialog />
       <CommandPalette />
       <ConfirmDialog />
       <TutorialList />

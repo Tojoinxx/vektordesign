@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Copy, FileImage, FileCode2, Grid3x3, Maximize, Palette, Ruler, Sparkles, Trash2, Eye, EyeOff, Magnet } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Copy, FileImage, FileCode2, FileText, FileDown, Grid3x3, Maximize, Palette, Ruler, Sparkles, Trash2, Eye, EyeOff, Magnet } from 'lucide-react';
 import type { ConstraintKind } from '../model/types';
 import { CONSTRAINT_LABELS } from '../solver/analysis';
 import type { ToolId } from '../store/state';
@@ -17,7 +17,27 @@ import {
   IconRectCenter,
   IconSelect,
   IconText,
+  IconTrim,
+  IconExtend,
+  IconMeasure,
+  IconMove,
+  IconRotate,
+  IconScale,
+  IconMirror,
+  IconPatternRect,
+  IconPatternCirc,
+  IconOffset,
+  IconFillet,
+  IconChamfer,
+  IconTextToPaths,
+  IconToShape,
+  IconUnion,
+  IconSubtract,
+  IconIntersect,
+  IconExclude,
 } from './icons';
+import type { EditCommand } from './controller';
+import { useUi } from './hooks';
 
 function Big({ icon, label, kbd, active, onClick, testId }: { icon: ReactNode; label: string; kbd?: string; active?: boolean; onClick: () => void; testId?: string }) {
   return (
@@ -46,6 +66,79 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function Ribbon() {
+  const app = useApp();
+  const tab = useUi((s) => s.ribbonTab);
+  return (
+    <div className="ribbon-wrap">
+      <div className="ribbon-tabs" role="tablist" aria-label="Werkzeugleisten">
+        <button role="tab" aria-selected={tab === 'sketch'} className={tab === 'sketch' ? 'on' : ''} onClick={() => app.ui.setState({ ribbonTab: 'sketch' })} data-testid="ribbon-sketch">
+          Skizze
+        </button>
+        <button role="tab" aria-selected={tab === 'edit'} className={tab === 'edit' ? 'on' : ''} onClick={() => app.ui.setState({ ribbonTab: 'edit' })} data-testid="ribbon-edit">
+          Bearbeiten
+        </button>
+      </div>
+      {tab === 'sketch' ? <SketchRibbon /> : <EditRibbon />}
+    </div>
+  );
+}
+
+function EditRibbon() {
+  const app = useApp();
+  const tool = useAppState((s) => s.tool);
+  const cmd = (c: EditCommand) => () => app.editCommand(c);
+  return (
+    <nav className="ribbon" aria-label="Bearbeiten">
+      <Group title="Ändern">
+        <Big icon={<IconMove />} label="Verschieben" onClick={cmd('move')} testId="edit-move" />
+        <Big icon={<IconRotate />} label="Drehen" onClick={cmd('rotate')} testId="edit-rotate" />
+        <Big icon={<IconScale />} label="Skalieren" onClick={cmd('scale')} testId="edit-scale" />
+        <Big icon={<IconMirror />} label="Spiegeln" onClick={cmd('mirror')} testId="edit-mirror" />
+        <div className="rb-col">
+          <Small icon={<IconPatternRect size={18} />} label="Rechteckiges Muster" onClick={cmd('pattern-rect')} testId="edit-pattern-rect" />
+          <Small icon={<IconPatternCirc size={18} />} label="Kreisförmiges Muster" onClick={cmd('pattern-circ')} testId="edit-pattern-circ" />
+        </div>
+      </Group>
+      <Group title="Skizze">
+        <Big icon={<IconTrim />} label="Stutzen" kbd="X" active={tool === 'trim'} onClick={() => app.setTool('trim')} testId="tool-trim" />
+        <Big icon={<IconExtend />} label="Dehnen" kbd="E" active={tool === 'extend'} onClick={() => app.setTool('extend')} testId="tool-extend" />
+      </Group>
+      <Group title="Form">
+        <Big icon={<IconTextToPaths />} label="Text in Pfade" onClick={cmd('text-to-paths')} testId="edit-text-to-paths" />
+        <Big icon={<IconOffset />} label="Versatz" kbd="O" onClick={cmd('offset')} testId="edit-offset" />
+        <div className="rb-col">
+          <Small icon={<IconFillet size={18} />} label="Abrunden" onClick={cmd('fillet')} testId="edit-fillet" />
+          <Small icon={<IconChamfer size={18} />} label="Fase" onClick={cmd('chamfer')} testId="edit-chamfer" />
+        </div>
+        <div className="rb-col">
+          <Small icon={<IconToShape size={18} />} label="In Form umwandeln (Skizze → freie Form)" onClick={cmd('to-shape')} testId="edit-to-shape" />
+        </div>
+      </Group>
+      <Group title="Kombinieren">
+        <Big icon={<IconUnion />} label="Vereinigen" onClick={cmd('union')} testId="bool-union" />
+        <Big icon={<IconSubtract />} label="Subtrahieren" onClick={cmd('subtract')} testId="bool-subtract" />
+        <div className="rb-col">
+          <Small icon={<IconIntersect size={18} />} label="Schnittmenge" onClick={cmd('intersect')} testId="bool-intersect" />
+          <Small icon={<IconExclude size={18} />} label="Ausschließen" onClick={cmd('exclude')} testId="bool-exclude" />
+        </div>
+      </Group>
+      <Group title="Messen">
+        <Big icon={<IconMeasure />} label="Messen" kbd="M" active={tool === 'measure'} onClick={() => app.setTool('measure')} testId="tool-measure" />
+      </Group>
+      <Group title="Export">
+        <Big icon={<FileCode2 size={24} strokeWidth={1.75} />} label="SVG" onClick={() => app.openExport('svg')} />
+        <Big icon={<FileText size={24} strokeWidth={1.75} />} label="PDF" onClick={() => app.openExport('pdf')} testId="export-pdf" />
+        <div className="rb-col">
+          <Small icon={<FileDown size={17} />} label="EPS" onClick={() => app.openExport('eps')} />
+          <Small icon={<FileDown size={17} />} label="DXF" onClick={() => app.openExport('dxf')} />
+        </div>
+        <Big icon={<FileImage size={24} strokeWidth={1.75} />} label="PNG" onClick={() => app.openExport('png', 300)} />
+      </Group>
+    </nav>
+  );
+}
+
+function SketchRibbon() {
   const app = useApp();
   const tool = useAppState((s) => s.tool);
   const rectMode = useAppState((s) => s.rectMode);
@@ -162,6 +255,7 @@ export function Ribbon() {
 
       <Group title="Export">
         <Big icon={<FileCode2 size={24} strokeWidth={1.75} />} label="SVG" onClick={() => app.openExport('svg')} testId="export-svg" />
+        <Big icon={<FileText size={24} strokeWidth={1.75} />} label="PDF" onClick={() => app.openExport('pdf')} />
         <Big icon={<FileImage size={24} strokeWidth={1.75} />} label="PNG" onClick={() => app.openExport('png', 300)} testId="export-png" />
       </Group>
 

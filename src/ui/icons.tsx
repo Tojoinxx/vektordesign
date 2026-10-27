@@ -181,3 +181,136 @@ export const CONSTRAINT_ORDER: ConstraintKind[] = [
   'midpoint',
   'fix',
 ];
+
+// ---------------------------------------------------------------------------
+// Bearbeiten (Meilenstein 2)
+// ---------------------------------------------------------------------------
+
+export const IconTrim = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 12 H9 M15 12 H20" />
+    <path d="M9 12 H15" strokeDasharray="1.5 2.5" strokeOpacity="0.5" />
+    <path d="M9 5 V19 M15 5 V19" strokeOpacity="0.55" />
+    <path d="M10.5 8.5 L13.5 15.5 M13.5 8.5 L10.5 15.5" strokeWidth="1.4" />
+  </Icon>
+);
+export const IconExtend = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M3 12 H11" />
+    <path d="M11 12 H18" strokeDasharray="2 2" />
+    <path d="M19 4 V20" strokeOpacity="0.55" />
+    <path d="M15 9 L18 12 L15 15" />
+  </Icon>
+);
+export const IconMeasure = (p: { size?: number }) => (
+  <Icon {...p}>
+    <rect x="2.5" y="8" width="19" height="8" rx="1" transform="rotate(-30 12 12)" />
+    <path d="M7.4 13.6 L6.4 11.9 M10.4 11.9 L9.4 10.2 M13.4 10.2 L12.4 8.5 M16.4 8.5 L15.4 6.8" transform="translate(0.6 1.6)" />
+  </Icon>
+);
+export const IconMove = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M12 3 V21 M3 12 H21" />
+    <path d="M9.5 5.5 L12 3 L14.5 5.5 M9.5 18.5 L12 21 L14.5 18.5 M5.5 9.5 L3 12 L5.5 14.5 M18.5 9.5 L21 12 L18.5 14.5" />
+  </Icon>
+);
+export const IconRotate = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M19 12 a7 7 0 1 1 -2.05 -4.95" />
+    <path d="M17.5 3.5 V7.5 H13.5" />
+    {dot(12, 12)}
+  </Icon>
+);
+export const IconScale = (p: { size?: number }) => (
+  <Icon {...p}>
+    <rect x="3.5" y="11" width="9.5" height="9.5" strokeOpacity="0.55" />
+    <rect x="3.5" y="3.5" width="17" height="17" />
+    <path d="M13 11 L19 5 M15 5 H19 V9" />
+  </Icon>
+);
+export const IconMirror = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M12 3 V21" strokeDasharray="2 2" strokeOpacity="0.6" />
+    <path d="M9 7 L3.5 17 H9 Z" />
+    <path d="M15 7 L20.5 17 H15 Z" fill="currentColor" fillOpacity="0.15" />
+  </Icon>
+);
+export const IconPatternRect = (p: { size?: number }) => (
+  <Icon {...p}>
+    <rect x="3.5" y="3.5" width="6" height="6" />
+    <rect x="14.5" y="3.5" width="6" height="6" strokeOpacity="0.55" />
+    <rect x="3.5" y="14.5" width="6" height="6" strokeOpacity="0.55" />
+    <rect x="14.5" y="14.5" width="6" height="6" strokeOpacity="0.55" />
+  </Icon>
+);
+export const IconPatternCirc = (p: { size?: number }) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8" strokeDasharray="1.5 2.5" strokeOpacity="0.45" />
+    <circle cx="12" cy="4" r="2.2" />
+    <circle cx="19" cy="16" r="2.2" strokeOpacity="0.55" />
+    <circle cx="5" cy="16" r="2.2" strokeOpacity="0.55" />
+  </Icon>
+);
+export const IconOffset = (p: { size?: number }) => (
+  <Icon {...p}>
+    <rect x="7.5" y="7.5" width="9" height="9" rx="0.5" />
+    <rect x="3.5" y="3.5" width="17" height="17" rx="4" strokeDasharray="2.5 2" />
+  </Icon>
+);
+export const IconFillet = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 20 V11 a7 7 0 0 1 7 -7 H20" />
+    <path d="M4 4 V8 M4 4 H8" strokeOpacity="0.45" strokeDasharray="1.5 2" />
+  </Icon>
+);
+export const IconChamfer = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 20 V10 L10 4 H20" />
+    <path d="M4 4 V8 M4 4 H8" strokeOpacity="0.45" strokeDasharray="1.5 2" />
+  </Icon>
+);
+export const IconTextToPaths = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 20 L9.5 4 H11.5 L17 20 M6.5 14 H14.5" />
+    {dot(4, 20)}
+    {dot(9.5, 4)}
+    {dot(17, 20)}
+    <path d="M18 6 h3 M19.5 4.5 v3" strokeOpacity="0.6" />
+  </Icon>
+);
+export const IconToShape = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M5 18 C5 8 9 5 19 5" />
+    {dot(5, 18)}
+    {dot(19, 5)}
+    <path d="M5 18 L9 9" strokeOpacity="0.45" />
+    <circle cx="9" cy="9" r="1.4" />
+  </Icon>
+);
+const boolShapes = (fillA: number, fillB: number, fillI: number) => (
+  <>
+    <defs />
+    <rect x="3.5" y="3.5" width="11" height="11" rx="1" fill="currentColor" fillOpacity={fillA} />
+    <circle cx="15" cy="15" r="6" fill="currentColor" fillOpacity={fillB} />
+    {fillI > 0 && <path d="M14.5 9 V14.5 H9 A6 6 0 0 1 14.5 9 Z" fill="currentColor" fillOpacity={fillI} stroke="none" />}
+  </>
+);
+export const IconUnion = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M3.5 4.5 a1 1 0 0 1 1 -1 H13.5 a1 1 0 0 1 1 1 V9.1 A6 6 0 1 1 9.1 14.5 H4.5 a1 1 0 0 1 -1 -1 Z" fill="currentColor" fillOpacity="0.3" />
+  </Icon>
+);
+export const IconSubtract = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M3.5 4.5 a1 1 0 0 1 1 -1 H13.5 a1 1 0 0 1 1 1 V9.1 A6 6 0 0 0 9.1 14.5 H4.5 a1 1 0 0 1 -1 -1 Z" fill="currentColor" fillOpacity="0.3" />
+    <circle cx="15" cy="15" r="6" strokeDasharray="2 2" strokeOpacity="0.55" />
+  </Icon>
+);
+export const IconIntersect = (p: { size?: number }) => <Icon {...p}>{boolShapes(0, 0, 0.45)}</Icon>;
+export const IconExclude = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M3.5 4.5 a1 1 0 0 1 1 -1 H13.5 a1 1 0 0 1 1 1 V9.1 A6 6 0 0 0 9.1 14.5 H4.5 a1 1 0 0 1 -1 -1 Z" fill="currentColor" fillOpacity="0.3" stroke="none" />
+    <path d="M14.5 9.1 V13.5 a1 1 0 0 1 -1 1 H9.1 A6 6 0 1 0 14.5 9.1 Z" fill="currentColor" fillOpacity="0.3" stroke="none" />
+    {boolShapes(0, 0, 0)}
+  </Icon>
+);

@@ -66,6 +66,26 @@ Inventor-Weg: Rechteck irgendwo grob aufziehen, mit `D` die Breite (80) und Höh
 - **Stilvorschläge**: Objekt auswählen – im Bereich *Stilvorschläge* erscheinen zehn Varianten als Vorschau, ein Klick übernimmt (`Strg+Z` nimmt zurück). Mit Claude-Schlüssel gibt es zusätzlich KI-Vorschläge zu einem Stichwort („Vintage“, „Neon“, „Vereinsfarben Blau-Weiß“).
 - **Konstruktionslinien** (`Q`) sind gestrichelt und werden nie exportiert; Bemaßungen und Glyphen ebenso nicht.
 
+### Ebenen, Bearbeiten und Messen
+
+- **Ebenen** (Tab *Ebenen*): anlegen, umbenennen, ein-/ausblenden, sperren, Reihenfolge ändern; neue Objekte landen auf der aktiven Ebene. Ebenennamen gehen als benannte Ebenen in SVG, PDF, EPS und DXF.
+- **Gruppieren** (`Strg+G`, aufheben `Strg+Umschalt+G`), **Anordnen** und **Ausrichten/Verteilen** im Bereich *Eigenschaften*.
+- Registerkarte **Bearbeiten** über dem Band:
+  - *Ändern*: Verschieben, Drehen, Skalieren (Faktor oder Zielbreite), Spiegeln, rechteckiges und kreisförmiges Muster – jeweils mit Eingabedialog (Ausdrücke wie `20+5` erlaubt, optional als Kopie).
+  - *Skizze*: **Stutzen** (`X`) entfernt das angeklickte Linienstück bis zu den nächsten Schnittpunkten, **Dehnen** (`E`) verlängert eine Linie bis zur nächsten Geometrie.
+  - *Form*: **Text in Pfade**, **Versatz** (`O`, Rand außen/innen), **Abrunden**, **Fase**, *In Form umwandeln*.
+  - *Kombinieren*: **Vereinigen**, **Subtrahieren** (hinterstes minus die übrigen), **Schnittmenge**, **Ausschließen**. Text wird dabei automatisch in Pfade umgewandelt.
+- **Freie Formen** (Ergebnis von Text in Pfade und booleschen Operationen) lassen sich über *Größe* (Breite oder Höhe in mm) oder mit dem Bemaßungswerkzeug `D` proportional auf ein Maß bringen; das Maß bleibt als Bemaßung erhalten.
+- **Messen** (`M`): zwei Punkte → Abstand, Δx, Δy und Winkel; zwei Linien → Winkel; Klick in eine Fläche → Fläche, Umfang, Breite und Höhe. Die Zeichnung bleibt unverändert.
+
+### Abnahmetest Meilenstein 2
+
+1. Text `T` setzen (z. B. „TEAM“), auswählen, *Bearbeiten → Text in Pfade*.
+2. Ein Rechteck als Unterstrich zeichnen, beide auswählen, *Vereinigen*.
+3. Die neue Form auswählen, unter *Größe* die Breite `100` eintragen.
+4. Füllung gelb setzen, einen Kreis dahinter mit Füllung blau.
+5. Export SVG, PDF und PNG (300 dpi): Breite jeweils exakt 100 mm, PNG mit transparentem Hintergrund.
+
 ### Darstellung
 
 Standard ist das dunkle Design. Über das Mond-Symbol oben rechts lassen sich das **Design** (Dunkel, Hell, Wie System) und unabhängig davon die **Zeichenfläche** (Passend, Hell, Dunkel) umschalten; die Wahl bleibt auf dem Gerät gespeichert. Eine helle Zeichenfläche im dunklen Design zeigt dunkle Motive so, wie sie auf hellem Stoff wirken. Motive, die sich kaum vom Hintergrund abheben (schwarz auf dunkler Fläche, weiß auf weißer), bekommen am Bildschirm einen feinen Umriss. Exportiert wird immer ohne Hintergrund und in den echten Farben.
@@ -82,7 +102,10 @@ Einrichtung: Unter [console.anthropic.com](https://console.anthropic.com) einen 
 
 | Format | Eigenschaften |
 | --- | --- |
-| SVG | Maße in mm (`width`/`height` in mm, `viewBox` in mm), benannte Ebene „Motiv“, ohne Bemaßungen, Glyphen und Konstruktionslinien – passt für Illustrator, Inkscape, Cricut Design Space und Silhouette Studio |
+| SVG | Maße in mm (`width`/`height` in mm, `viewBox` in mm), benannte Ebenen, Text wahlweise als Pfade (Standard), ohne Bemaßungen, Glyphen und Konstruktionslinien – passt für Illustrator, Inkscape, Cricut Design Space und Silhouette Studio |
+| PDF | Vektor-PDF in Originalgröße (Seite = Motiv), Ebenen als PDF-Ebenen (in Illustrator/Acrobat sichtbar), Verläufe und Verblassen, Deckkraft, RGB oder CMYK, Text als Pfade |
+| EPS | PostScript Level 3 für ältere Programme, RGB oder CMYK, Verläufe; ohne Transparenz (wird beim Export angezeigt) |
+| DXF | R12, Einheit mm, Ebenen als Layer, Kreise als echte Kreise, Kurven fein angenähert – für Plotter und Schnittmuster-Software; ohne Farben |
 | PNG | 300, 360, 600, 720 oder 1200 dpi, transparenter Hintergrund, Auflösung im Dateikopf (pHYs) |
 | Projekt (`.vdp`) | Geometrie, Bemaßungen, Abhängigkeiten und Stile; wird zusätzlich automatisch zwischengespeichert |
 
@@ -103,7 +126,11 @@ Optional beim Export: Rand inklusive Konturstärke und horizontal spiegeln (Flex
 | `F` | Alles anzeigen | | `Strg+K` | Befehlssuche |
 | `+` / `−` | Vergrößern / Verkleinern | | `Strg+I` | Claude-Assistent |
 | `F8` / `F9` | Abhängigkeiten ein-/ausblenden | | `Strg+]` / `Strg+[` | Nach vorne / nach hinten |
-| `Esc` | Abbrechen, zurück zur Auswahl | | `Strg+Umschalt+]` / `[` | Ganz nach vorne / hinten |
+| `X` | Stutzen | | `Strg+Umschalt+]` / `[` | Ganz nach vorne / hinten |
+| `E` | Dehnen | | `Strg+G` | Gruppieren |
+| `O` | Versatz | | `Strg+Umschalt+G` | Gruppierung aufheben |
+| `M` | Messen | | | |
+| `Esc` | Abbrechen, zurück zur Auswahl | | | |
 
 Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Ziehen verschiebt die Ansicht, Rechtsklick öffnet das Markierungsmenü (wie in Inventor; Rechtsklick gedrückt halten und in eine Richtung ziehen startet den Befehl direkt). Fang an Endpunkt, Mitte, Schnittpunkt, Kreismittelpunkt, Kurve und Raster lässt sich unten in der Statusleiste umschalten.
 
@@ -115,7 +142,7 @@ Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Zieh
 | `npm run build` | Typprüfung und Produktionsbuild nach `dist/` |
 | `npm run build:single` | Ganze App als eine HTML-Datei: `dist-single/Vektordesign.html` |
 | `npm test` | Unit-Tests: Ausdrücke, Solver, Abnahme M1, Export, Claude-Werkzeuge |
-| `npm run test:e2e` | Bedienung im echten Browser inkl. Abnahme M1 (`CHROME_PATH` auf Chrome/Chromium setzen) |
+| `npm run test:e2e` | Bedienung im echten Browser inkl. Abnahme M1 und M2 (`CHROME_PATH` auf Chrome/Chromium setzen) |
 | `npm run test:desktop` | Startet die Desktop-App und prüft Solver, Export und Dateibefehle im echten Fenster |
 | `npm run desktop:build` | Windows-Installer (NSIS-Setup und MSI) |
 | `npm run version:set -- 0.2.0` | Versionsnummer überall gleich setzen |
@@ -162,7 +189,7 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 ## Fahrplan
 
 1. ✅ MVP Desktop
-2. Gestaltung und Bearbeiten: Ebenen, Gruppen, Ausrichten, boolesche Operationen, Stutzen/Dehnen/Abrunden/Versatz, Muster, Messen, Text in Pfade, PDF/EPS/DXF
+2. ✅ Gestaltung und Bearbeiten: Ebenen, Gruppen, Ausrichten, boolesche Operationen, Stutzen/Dehnen/Abrunden/Versatz, Muster, Messen, Text in Pfade, PDF/EPS/DXF
 3. LabwearOS-Export: Vorlagen-Import, Platzierung auf dem Kleidungsstück, Artwork-Blatt, Export-Profile, ZIP-Paket
 4. iPad: installierbare Web-App, Touch- und Apple-Pencil-Bedienung, Formerkennung, Sync über iCloud Drive/OneDrive
 5. Textil- und Komfortfunktionen: Mockups, Farbseparation, Plotter-Prüfung, Rapport, Größenstaffel, Kostenschätzung

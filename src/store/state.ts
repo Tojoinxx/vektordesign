@@ -12,7 +12,12 @@ export type ToolId =
   | 'point'
   | 'dimension'
   | 'gradient'
+  | 'trim'
+  | 'extend'
+  | 'measure'
   | `constraint:${string}`;
+
+export type ExportFormat = 'svg' | 'pdf' | 'eps' | 'dxf' | 'png';
 
 export interface ViewState {
   /** Bildmitte in Weltkoordinaten (mm) */
@@ -96,7 +101,7 @@ export interface AppState {
   textEdit: Id | null;
   paletteOpen: boolean;
   exportOpen: boolean;
-  exportPreset: { format: 'svg' | 'png'; dpi?: number } | null;
+  exportPreset: { format: ExportFormat; dpi?: number } | null;
   assistantOpen: boolean;
   confirm: ConfirmRequest | null;
   toasts: Toast[];

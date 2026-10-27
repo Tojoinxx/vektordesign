@@ -4,7 +4,7 @@ import { formatNumber } from '../params/expr';
 import { describeItem } from '../solver/analysis';
 import { pngSize } from '../export/png';
 import { docBBox } from '../model/bounds';
-import type { Settings } from '../store/state';
+import type { ExportFormat, Settings } from '../store/state';
 import { buildCommands, type Command } from './commands';
 import { useApp, useAppState, useUi } from './hooks';
 import { refreshTutorialColors, setTutorialsEnabled, TUTORIALS, tutorialsEnabled, type TutorialId } from './tutorials';
@@ -293,15 +293,25 @@ function Modal({ title, onClose, children, wide, testId }: { title: string; onCl
   );
 }
 
+const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
+  { id: 'svg', label: 'SVG', hint: 'Illustrator, Cricut, Silhouette' },
+  { id: 'pdf', label: 'PDF', hint: 'Druckerei, LabwearOS' },
+  { id: 'eps', label: 'EPS', hint: 'ältere Programme' },
+  { id: 'dxf', label: 'DXF', hint: 'Plotter, Schnittmuster' },
+  { id: 'png', label: 'PNG', hint: 'DTF, Vorschau' },
+];
+
 export function ExportDialog() {
   const app = useApp();
   const open = useAppState((s) => s.exportOpen);
   const preset = useAppState((s) => s.exportPreset);
   const doc = useAppState((s) => s.doc);
-  const [format, setFormat] = useState<'svg' | 'png'>('svg');
+  const [format, setFormat] = useState<ExportFormat>('svg');
   const [dpi, setDpi] = useState(300);
   const [bounds, setBounds] = useState<'geometry' | 'stroke'>('geometry');
   const [mirror, setMirror] = useState(false);
+  const [cmyk, setCmyk] = useState(false);
+  const [outlines, setOutlines] = useState(true);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open && preset) {
@@ -313,22 +323,22 @@ export function ExportDialog() {
   const close = () => app.store.setState({ exportOpen: false, exportPreset: null });
   const box = docBBox(doc, { includeStroke: bounds === 'stroke' });
   const px = format === 'png' ? pngSize(doc, dpi, bounds) : null;
+  const hasText = Object.values(doc.entities).some((e) => e.kind === 'text' && !e.construction);
   const run = async () => {
     setBusy(true);
-    const ok = await app.exportFile({ format, dpi, bounds, mirror });
+    const ok = await app.exportFile({ format, dpi, bounds, mirror, colorMode: cmyk ? 'cmyk' : 'rgb', outlines });
     setBusy(false);
     if (ok) close();
   };
   return (
     <Modal title="Exportieren" onClose={close} testId="export-dialog">
       <div className="stack">
-        <div className="segmented big" role="radiogroup" aria-label="Format">
-          <button className={format === 'svg' ? 'on' : ''} onClick={() => setFormat('svg')} role="radio" aria-checked={format === 'svg'}>
-            SVG <small>Vektor · Plotter, Illustrator</small>
-          </button>
-          <button className={format === 'png' ? 'on' : ''} onClick={() => setFormat('png')} role="radio" aria-checked={format === 'png'}>
-            PNG <small>Bild · DTF, Vorschau</small>
-          </button>
+        <div className="segmented big formats" role="radiogroup" aria-label="Format">
+          {FORMATS.map((f) => (
+            <button key={f.id} className={format === f.id ? 'on' : ''} onClick={() => setFormat(f.id)} role="radio" aria-checked={format === f.id} data-testid={`format-${f.id}`}>
+              {f.label} <small>{f.hint}</small>
+            </button>
+          ))}
         </div>
         {format === 'png' && (
           <label className="field wide">
@@ -340,6 +350,22 @@ export function ExportDialog() {
                 </option>
               ))}
             </select>
+          </label>
+        )}
+        {(format === 'pdf' || format === 'eps') && (
+          <div className="segmented" role="radiogroup" aria-label="Farbraum">
+            <button className={!cmyk ? 'on' : ''} onClick={() => setCmyk(false)} role="radio" aria-checked={!cmyk}>
+              RGB
+            </button>
+            <button className={cmyk ? 'on' : ''} onClick={() => setCmyk(true)} role="radio" aria-checked={cmyk} data-testid="export-cmyk">
+              CMYK
+            </button>
+          </div>
+        )}
+        {format === 'svg' && hasText && (
+          <label className="check">
+            <input type="checkbox" checked={outlines} onChange={(e) => setOutlines(e.target.checked)} data-testid="export-outlines" />
+            Text in Pfade umwandeln (empfohlen – die Schrift muss beim Empfänger dann nicht installiert sein)
           </label>
         )}
         <label className="check">
@@ -362,7 +388,12 @@ export function ExportDialog() {
                   · {px.wPx} × {px.hPx} px bei {dpi} dpi, transparenter Hintergrund
                 </span>
               )}
-              <p className="muted small">Bemaßungen, Abhängigkeitssymbole und Konstruktionsgeometrie werden nicht exportiert.</p>
+              <p className="muted small">
+                {format === 'pdf' && 'Vektor-PDF in Originalgröße mit benannten Ebenen; Text immer als Pfade. '}
+                {format === 'eps' && 'EPS kennt keine Transparenz – Deckkraft und Verblassen werden ignoriert; Text immer als Pfade. '}
+                {format === 'dxf' && 'DXF enthält nur Konturen in mm (keine Farben); Text immer als Pfade. '}
+                Bemaßungen, Abhängigkeitssymbole und Konstruktionsgeometrie werden nicht exportiert.
+              </p>
             </>
           ) : (
             <span className="error-text">Nichts zu exportieren – zeichne zuerst eine Form (Konstruktionsgeometrie zählt nicht).</span>
@@ -651,5 +682,111 @@ export function AboutDialog() {
         Constraint-Solver: planegcs (FreeCAD, LGPL-2.1), React, Tauri. Schrift: IBM Plex Sans (OFL). Lizenz: MIT.
       </p>
     </Modal>
+  );
+}
+
+/** Eingabedialog für Bearbeiten-Befehle (Verschieben, Drehen, Versatz …); Ausdrücke wie 20+5 sind erlaubt. */
+export function ParamDialog() {
+  const app = useApp();
+  const spec = useUi((s) => s.paramDialog);
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const [err, setErr] = useState<string | null>(null);
+  const first = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!spec) return;
+    setVals(Object.fromEntries(spec.fields.map((f) => [f.key, f.value])));
+    setErr(null);
+    setTimeout(() => {
+      first.current?.focus();
+      first.current?.select();
+    }, 30);
+  }, [spec]);
+  if (!spec) return null;
+  const close = () => app.ui.setState({ paramDialog: null });
+  const run = async () => {
+    try {
+      await spec.run(vals);
+      close();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+  let firstSet = false;
+  return (
+    <Modal title={spec.title} onClose={close} testId="param-dialog">
+      <form
+        className="stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run();
+        }}
+      >
+        {spec.text && <p className="muted small">{spec.text}</p>}
+        <div className="param-grid">
+          {spec.fields.map((f) => {
+            const v = vals[f.key] ?? '';
+            const set = (nv: string) => setVals((o) => ({ ...o, [f.key]: nv }));
+            if (f.kind === 'check')
+              return (
+                <label key={f.key} className="check" style={{ gridColumn: '1 / -1' }}>
+                  <input type="checkbox" checked={!!v} onChange={(e) => set(e.target.checked ? '1' : '')} data-testid={`param-${f.key}`} />
+                  {f.label}
+                </label>
+              );
+            const label = <span key={`${f.key}-l`}>{f.label}</span>;
+            if (f.kind === 'choice')
+              return [
+                label,
+                <select key={f.key} value={v} onChange={(e) => set(e.target.value)} aria-label={f.label} data-testid={`param-${f.key}`}>
+                  {f.options!.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>,
+              ];
+            const ref = !firstSet ? first : undefined;
+            firstSet = true;
+            return [
+              label,
+              <div key={f.key} className="param-input">
+                <input ref={ref} type="text" inputMode="decimal" value={v} onChange={(e) => set(e.target.value)} aria-label={f.label} data-testid={`param-${f.key}`} />
+                {f.unit && <em>{f.unit}</em>}
+              </div>,
+              f.hint ? (
+                <div key={`${f.key}-h`} className="param-hint">
+                  {f.hint}
+                </div>
+              ) : null,
+            ];
+          })}
+        </div>
+        {err && <p className="error-text">{err}</p>}
+        <div className="row end">
+          <button type="button" className="btn" onClick={close}>
+            Abbrechen
+          </button>
+          <button type="submit" className="btn accent" data-testid="param-ok">
+            {spec.ok}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Ergebnis des Messwerkzeugs (verändert die Zeichnung nicht). */
+export function MeasureCard() {
+  const r = useUi((s) => s.measure);
+  const tool = useAppState((s) => s.tool);
+  if (!r || tool !== 'measure') return null;
+  return (
+    <div className="measure-card" role="status" aria-live="polite" data-testid="measure-card">
+      <h3>{r.title}</h3>
+      <dl>
+        {r.rows.map(([k, v]) => [<dt key={`${k}-k`}>{k}</dt>, <dd key={`${k}-v`}>{v}</dd>])}
+      </dl>
+      <p className="muted">Die Zeichnung bleibt unverändert · Esc beendet</p>
+    </div>
   );
 }

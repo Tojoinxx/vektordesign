@@ -16,6 +16,7 @@ import type {
 import { shapeSize } from '../model/shape';
 import { DEFAULT_LAYER, groupMembers, isInert, layerIdOf, layersOf } from '../model/layers';
 import { applyXf, cloneInto, type Xf, type XfReport } from './xform';
+import { extendLine, trimLine, type TrimResult } from './trimExtend';
 import { ORIGIN_ID } from '../model/types';
 import {
   addCircle,
@@ -946,6 +947,29 @@ export class Editor {
   }
 
   /** Stiländerung für Objekte (Linie im Pfad → Pfad). */
+  /**
+   * Größe einer freien Form über eine treibende Breiten- oder Höhenbemaßung festlegen
+   * (proportional). Eine vorhandene treibende Bemaßung der anderen Richtung wird getrieben.
+   */
+  setShapeSize(id: Id, kind: 'width' | 'height', expr: string): CommitOutcome {
+    const doc = this.s.doc;
+    const sh = doc.entities[id];
+    if (!sh || sh.kind !== 'shape') return { ok: false, reason: 'invalid', message: 'Keine Form ausgewählt.' };
+    const trimmed = expr.trim();
+    if (!trimmed) return { ok: false, reason: 'invalid', message: 'Bitte einen Wert eingeben.' };
+    const dims = Object.values(doc.dims).filter((m) => m.refs[0] === id && (m.kind === 'width' || m.kind === 'height'));
+    const own = dims.find((m) => m.kind === kind);
+    return this.commit(kind === 'width' ? 'Breite der Form' : 'Höhe der Form', (d) => {
+      for (const m of dims) if (m.kind !== kind && !m.driven) d.dims[m.id].driven = true;
+      if (own) {
+        d.dims[own.id].expr = trimmed;
+        d.dims[own.id].driven = false;
+      } else {
+        addDimension(d, { kind, refs: [id], expr: trimmed, value: 0, driven: false, offset: 8 / this.s.view.zoom + 4, shift: 0 });
+      }
+    });
+  }
+
   setStyle(ids: Id[], patch: Partial<Style>): CommitOutcome {
     const targets = drawableTargets(this.s.doc, ids);
     if (!targets.length) {
@@ -1100,6 +1124,29 @@ export class Editor {
       for (const n of report.notes) this.toast(n, 'info', 6000);
     }
     return { ...out, ids: result };
+  }
+
+  /** Stutzen: das angeklickte Stück einer Linie bis zu den nächsten Schnittpunkten entfernen. */
+  trim(lineId: Id, click: Vec2): CommitOutcome {
+    let res: TrimResult = { kind: 'none' };
+    const out = this.commit(
+      'Stutzen',
+      (d) => {
+        res = trimLine(d, lineId, click);
+        if (res.kind === 'delete') deleteIds(d, [lineId]);
+      },
+      { allowOver: true },
+    );
+    if (out.ok && res.kind === 'none') return { ok: false, reason: 'invalid', message: 'Hier gibt es nichts zu stutzen.' };
+    return out;
+  }
+
+  /** Dehnen: Linienende bis zur nächsten Geometrie verlängern. */
+  extend(lineId: Id, click: Vec2): CommitOutcome {
+    let done = false;
+    const out = this.commit('Dehnen', (d) => void (done = extendLine(d, lineId, click)), { allowOver: true });
+    if (out.ok && !done) return { ok: false, reason: 'invalid', message: 'In Verlängerung der Linie liegt keine Geometrie, bis zu der gedehnt werden kann.' };
+    return out;
   }
 
   duplicate(ids: Id[] = this.s.selection): CommitOutcome & { ids?: Id[] } {

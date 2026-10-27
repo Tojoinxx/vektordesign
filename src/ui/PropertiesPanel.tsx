@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bold, CircleDot, Italic, Repeat, Trash2 } from 'lucide-react';
-import type { Gradient, GradientStop, Id, Style, TextEntity } from '../model/types';
+import type { Gradient, GradientStop, Id, ShapeEntity, Style, TextEntity } from '../model/types';
+import { contoursBBox, shapeWorldContours } from '../model/shape';
 import { DEFAULT_STYLE } from '../model/doc';
 import { colorAt, DIRECTION_LABELS, DIRECTION_POINTS, fadeGradient, isFade, isGradient, paintColor, sortedStops, type GradientDirection } from '../model/paint';
 import { rgba } from '../model/color';
@@ -98,6 +99,7 @@ export function PropertiesPanel() {
       )}
 
       {texts.length === 1 && <TextProps text={texts[0]} />}
+      {targets.length === 1 && first?.kind === 'shape' && <ShapeProps shape={first} />}
 
       {(targets.length > 0 || (!selection.length && doc.order.length > 0)) && (
         <StyleSuggestions targets={targets.length ? targets : doc.order.filter((id) => !doc.entities[id]?.construction)} whole={!targets.length} />
@@ -388,6 +390,64 @@ function OpacityEditor({ targets, style }: { targets: Id[]; style: Style }) {
       />
       <em>{v} %</em>
     </label>
+  );
+}
+
+/** Größe einer freien Form: Breite oder Höhe eingeben (proportional, als Bemaßung gespeichert). */
+function ShapeProps({ shape }: { shape: ShapeEntity }) {
+  const app = useApp();
+  const doc = useAppState((s) => s.doc);
+  const b = contoursBBox(shapeWorldContours(doc, shape));
+  const w = b ? b.maxX - b.minX : 0;
+  const h = b ? b.maxY - b.minY : 0;
+  const dims = Object.values(doc.dims).filter((m) => m.refs[0] === shape.id && (m.kind === 'width' || m.kind === 'height'));
+  const driving = dims.find((m) => !m.driven);
+  const [wv, setWv] = useState('');
+  const [hv, setHv] = useState('');
+  useEffect(() => {
+    setWv(formatNumber(w, 2));
+    setHv(formatNumber(h, 2));
+  }, [w, h]);
+  const apply = (kind: 'width' | 'height', v: string) => {
+    const current = kind === 'width' ? w : h;
+    if (v.trim() === formatNumber(current, 2)) return;
+    const out = app.editor.setShapeSize(shape.id, kind, v.replace(',', '.'));
+    if (!out.ok) {
+      app.editor.toast(out.message, 'error');
+      setWv(formatNumber(w, 2));
+      setHv(formatNumber(h, 2));
+    }
+  };
+  const field = (kind: 'width' | 'height', label: string, v: string, set: (x: string) => void) => (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={v}
+        onChange={(e) => set(e.target.value)}
+        onBlur={() => apply(kind, v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        style={{ width: 76 }}
+        aria-label={`${label} in mm`}
+        data-testid={`shape-${kind}`}
+      />
+      <span className="muted">mm</span>
+    </label>
+  );
+  return (
+    <section className="props-section">
+      <h4>Größe</h4>
+      <div className="row">
+        {field('width', 'Breite', wv, setWv)}
+        {field('height', 'Höhe', hv, setHv)}
+      </div>
+      <p className="muted small">
+        {driving ? `Festgelegt durch ${driving.name} (${driving.kind === 'width' ? 'Breite' : 'Höhe'}) – Seitenverhältnis bleibt erhalten.` : 'Wert eingeben – die Form wird proportional skaliert. Ausdrücke wie 100/2 sind erlaubt.'}
+      </p>
+    </section>
   );
 }
 

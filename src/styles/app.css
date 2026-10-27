@@ -220,8 +220,11 @@ kbd {
 .topbar {
   grid-area: top;
 }
-.ribbon {
+.ribbon-wrap {
   grid-area: ribbon;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .main {
   grid-area: main;
@@ -1785,4 +1788,125 @@ kbd {
   * {
     scroll-behavior: auto !important;
   }
+}
+
+/* Exportformate: fünf gleich breite Felder */
+.segmented.big.formats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.segmented.big.formats button {
+  padding: 8px 4px;
+}
+.segmented.big.formats small {
+  text-align: center;
+  line-height: 1.25;
+}
+
+/* Registerkarten über dem Band (wie Inventor „Skizze“ / „Ändern“) */
+.ribbon-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px 10px 0;
+  background: var(--panel);
+}
+.ribbon-tabs button {
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.ribbon-tabs button:hover {
+  color: var(--ink);
+}
+.ribbon-tabs button.on {
+  color: var(--ink);
+  background: var(--chrome);
+  border-color: var(--line);
+  box-shadow: inset 0 2px 0 var(--tape);
+}
+.ribbon-wrap .ribbon {
+  background: var(--chrome);
+  border-top: 1px solid var(--line);
+  margin-top: -1px;
+}
+
+/* Eingabedialog für Bearbeiten-Befehle */
+.param-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+.param-grid > span {
+  color: var(--muted);
+}
+.param-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.param-grid select {
+  justify-self: start;
+  min-width: 180px;
+}
+.param-input input[type='text'] {
+  width: 120px;
+  font-variant-numeric: tabular-nums;
+}
+.param-input em {
+  font-style: normal;
+  color: var(--muted);
+  min-width: 2em;
+}
+.param-hint {
+  grid-column: 2;
+  margin-top: -4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* Messergebnis */
+.measure-card {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 6;
+  min-width: 220px;
+  padding: 10px 12px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+}
+.measure-card h3 {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.measure-card dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: space-between;
+  gap: 3px 18px;
+  margin: 0;
+}
+.measure-card dt {
+  color: var(--muted);
+}
+.measure-card dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.measure-card .muted {
+  margin: 8px 0 0;
+  font-size: 11px;
 }

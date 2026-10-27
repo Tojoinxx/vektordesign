@@ -9,7 +9,9 @@ Vektordesign selbst steht unter der MIT-Lizenz (siehe [LICENSE](LICENSE)). In de
 | [zustand](https://github.com/pmndrs/zustand) | Zustandsverwaltung | MIT |
 | [Immer](https://github.com/immerjs/immer) | Unveränderliche Daten für Rückgängig/Wiederholen | MIT |
 | [Lucide](https://lucide.dev) | Symbole | ISC |
-| [IBM Plex Sans](https://github.com/IBM/plex) über Fontsource | Schrift der Oberfläche | SIL Open Font License 1.1 |
+| [Clipper](https://sourceforge.net/projects/jsclipper/) (clipper-lib, JavaScript-Port von Angus Johnsons Clipper) | Boolesche Operationen, Versatz, Abrunden | Boost Software License 1.0 |
+| [opentype.js](https://github.com/opentypejs/opentype.js) | Schriftumrisse für „Text in Pfade“ | MIT |
+| [IBM Plex Sans](https://github.com/IBM/plex) über Fontsource | Schrift der Oberfläche; Ersatzschrift für „Text in Pfade“, wenn eine Schrift nicht verfügbar ist | SIL Open Font License 1.1 |
 | [Tauri](https://tauri.app), tauri-plugin-dialog | Desktop-App, Datei-Dialoge | MIT oder Apache-2.0 |
 | [fontdb](https://github.com/RazrFalcon/fontdb) | Liste der installierten Schriftarten | MIT |
 | serde, serde_json, percent-encoding | Datenaustausch zwischen Oberfläche und Rust | MIT oder Apache-2.0 |

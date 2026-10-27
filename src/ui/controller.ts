@@ -9,11 +9,21 @@ import { CircleTool, LineTool, PointTool, RectTool, TextTool } from '../tools/dr
 import { DimensionTool } from '../tools/dimensionTool';
 import { ConstraintTool } from '../tools/constraintTool';
 import { GradientTool } from '../tools/gradientTool';
+import { MeasureTool, TrimExtendTool, type MeasureResult } from '../tools/editTools';
+import { booleanOp, cornerOp, offsetOp, patternOp, selectionCenter, selectionSize, textToPaths, toShape } from '../store/ops';
+import type { BoolOp } from '../model/boolean';
+import { evaluate } from '../params/expr';
+import { docBBox } from '../model/bounds';
 import type { DynamicInputSpec, Tool, ToolContext } from '../tools/types';
 import { exportSvg } from '../export/svg';
 import { exportPng, renderPreviewPng } from '../export/png';
 import { parseDoc, serializeDoc, PROJECT_EXT } from '../model/serialize';
-import { openFile, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
+import { DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
+import { buildScene, textOutlines } from '../export/scene';
+import { exportPdf } from '../export/pdf';
+import { exportEps } from '../export/eps';
+import { exportDxf } from '../export/dxf';
+import type { ExportFormat } from '../store/state';
 import { Agent, type ChatEntry } from '../assistant/agent';
 import { loadApiKey, loadModel } from '../assistant/api';
 import { TUTORIALS, isTutorialSeen, markTutorialSeen, tutorialsEnabled, type TutorialId } from './tutorials';
@@ -46,13 +56,54 @@ export interface UiState {
   /** Design der Oberfläche und der Zeichenfläche */
   appearance: Appearance;
   appearanceMenu: boolean;
+  /** Ergebnis des Messwerkzeugs */
+  measure: MeasureResult | null;
+  /** Eingabedialog für Bearbeiten-Befehle */
+  paramDialog: ParamDialogSpec | null;
+  ribbonTab: 'sketch' | 'edit';
 }
 
+export interface ParamField {
+  key: string;
+  label: string;
+  unit?: string;
+  value: string;
+  kind?: 'number' | 'choice' | 'check';
+  options?: { value: string; label: string }[];
+  hint?: string;
+}
+
+export interface ParamDialogSpec {
+  title: string;
+  text?: string;
+  fields: ParamField[];
+  ok: string;
+  run: (v: Record<string, string>) => void | Promise<void>;
+}
+
+export type EditCommand =
+  | 'move'
+  | 'rotate'
+  | 'scale'
+  | 'mirror'
+  | 'pattern-rect'
+  | 'pattern-circ'
+  | 'offset'
+  | 'fillet'
+  | 'chamfer'
+  | 'text-to-paths'
+  | 'to-shape'
+  | BoolOp;
+
 export interface ExportRequest {
-  format: 'svg' | 'png';
+  format: ExportFormat;
   dpi: number;
   bounds: 'geometry' | 'stroke';
   mirror: boolean;
+  /** Farbraum für PDF/EPS (Standard RGB) */
+  colorMode?: 'rgb' | 'cmyk';
+  /** Text als Pfade (SVG; PDF/EPS/DXF immer) – Standard: ja */
+  outlines?: boolean;
 }
 
 export class AppController {
@@ -91,6 +142,9 @@ export class AppController {
       fileMenu: false,
       appearance: loadAppearance(),
       appearanceMenu: false,
+      measure: null,
+      paramDialog: null,
+      ribbonTab: 'sketch',
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -162,6 +216,13 @@ export class AppController {
         break;
       case 'gradient':
         t = new GradientTool(this.ctx);
+        break;
+      case 'trim':
+      case 'extend':
+        t = new TrimExtendTool(this.ctx, id);
+        break;
+      case 'measure':
+        t = new MeasureTool(this.ctx, (r) => this.ui.setState({ measure: r }));
         break;
       default:
         if (id.startsWith('constraint:')) t = new ConstraintTool(this.ctx, id.slice('constraint:'.length) as ConstraintKind);
@@ -278,6 +339,207 @@ export class AppController {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Bearbeiten (Meilenstein 2)
+  // -------------------------------------------------------------------------
+
+  private async runOp(p: Promise<{ ok: boolean; message?: string }> | { ok: boolean; message?: string }): Promise<boolean> {
+    try {
+      const out = await p;
+      if (!out.ok && out.message) this.editor.toast(out.message, 'error', 6000);
+      return out.ok;
+    } catch (e) {
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 6000);
+      return false;
+    }
+  }
+
+  /** Bearbeiten-Befehle: direkt ausführen oder Eingabedialog öffnen. */
+  editCommand(cmd: EditCommand): void {
+    const ed = this.editor;
+    const sel = ed.s.selection;
+    const doc = ed.s.doc;
+    const needSel = () => {
+      if (!sel.length) {
+        ed.toast('Zuerst Objekte auswählen.', 'info', 3000);
+        return true;
+      }
+      return false;
+    };
+    const num = (v: string, name: string): number => {
+      try {
+        return evaluate(v.trim() || '0');
+      } catch {
+        throw new Error(`${name}: „${v}“ ist keine Zahl.`);
+      }
+    };
+    const pivot = (v: string) => (v === 'origin' ? { x: 0, y: 0 } : selectionCenter(this.editor.s.doc, sel) ?? { x: 0, y: 0 });
+    const pivotField: ParamField = {
+      key: 'pivot',
+      label: 'Bezugspunkt',
+      value: 'center',
+      kind: 'choice',
+      options: [
+        { value: 'center', label: 'Mitte der Auswahl' },
+        { value: 'origin', label: 'Ursprung' },
+      ],
+    };
+    const copyField: ParamField = { key: 'copy', label: 'Als Kopie', value: '', kind: 'check' };
+    const open = (spec: ParamDialogSpec) => this.ui.setState({ paramDialog: spec });
+    switch (cmd) {
+      case 'union':
+      case 'subtract':
+      case 'intersect':
+      case 'exclude':
+        if (!needSel()) void this.runOp(booleanOp(ed, cmd));
+        return;
+      case 'text-to-paths':
+        if (!needSel()) void this.runOp(textToPaths(ed));
+        return;
+      case 'to-shape':
+        if (!needSel()) void this.runOp(toShape(ed));
+        return;
+      case 'move':
+        if (needSel()) return;
+        open({
+          title: 'Verschieben',
+          fields: [{ key: 'dx', label: 'Waagrecht', unit: 'mm', value: '10' }, { key: 'dy', label: 'Senkrecht', unit: 'mm', value: '0' }, copyField],
+          ok: 'Verschieben',
+          run: (v) => void this.runOp(ed.transform({ kind: 'move', dx: num(v.dx, 'Waagrecht'), dy: num(v.dy, 'Senkrecht') }, { copy: !!v.copy })),
+        });
+        return;
+      case 'rotate':
+        if (needSel()) return;
+        open({
+          title: 'Drehen',
+          text: 'Positive Winkel drehen gegen den Uhrzeigersinn.',
+          fields: [{ key: 'angle', label: 'Winkel', unit: '°', value: '90' }, pivotField, copyField],
+          ok: 'Drehen',
+          run: (v) => {
+            const c = pivot(v.pivot);
+            void this.runOp(ed.transform({ kind: 'rotate', angle: num(v.angle, 'Winkel'), cx: c.x, cy: c.y }, { copy: !!v.copy }));
+          },
+        });
+        return;
+      case 'scale': {
+        if (needSel()) return;
+        const size = selectionSize(doc, sel);
+        open({
+          title: 'Skalieren',
+          text: size ? `Aktuelle Größe: ${fmt(size.w)} × ${fmt(size.h)} mm. Entweder Faktor oder neue Breite angeben.` : undefined,
+          fields: [
+            { key: 'factor', label: 'Faktor', unit: '%', value: '100' },
+            { key: 'width', label: 'Neue Breite', unit: 'mm', value: '', hint: 'leer = Faktor gilt' },
+            pivotField,
+            copyField,
+          ],
+          ok: 'Skalieren',
+          run: (v) => {
+            let k = num(v.factor, 'Faktor') / 100;
+            if (v.width.trim() && size && size.w > 0) k = num(v.width, 'Neue Breite') / size.w;
+            if (!(k > 0)) throw new Error('Der Faktor muss größer als 0 sein.');
+            const c = pivot(v.pivot);
+            void this.runOp(ed.transform({ kind: 'scale', k, cx: c.x, cy: c.y }, { copy: !!v.copy }));
+          },
+        });
+        return;
+      }
+      case 'mirror':
+        if (needSel()) return;
+        open({
+          title: 'Spiegeln',
+          fields: [
+            {
+              key: 'axis',
+              label: 'Richtung',
+              value: 'y',
+              kind: 'choice',
+              options: [
+                { value: 'y', label: 'Links ↔ rechts' },
+                { value: 'x', label: 'Oben ↕ unten' },
+              ],
+            },
+            pivotField,
+            { ...copyField, value: '1' },
+          ],
+          ok: 'Spiegeln',
+          run: (v) => {
+            const c = pivot(v.pivot);
+            void this.runOp(ed.transform({ kind: 'mirror', axis: v.axis === 'x' ? 'x' : 'y', cx: c.x, cy: c.y }, { copy: !!v.copy }));
+          },
+        });
+        return;
+      case 'pattern-rect':
+        if (needSel()) return;
+        open({
+          title: 'Rechteckiges Muster',
+          fields: [
+            { key: 'nx', label: 'Spalten', value: '3' },
+            { key: 'ny', label: 'Zeilen', value: '1' },
+            { key: 'dx', label: 'Abstand waagrecht', unit: 'mm', value: '20' },
+            { key: 'dy', label: 'Abstand senkrecht', unit: 'mm', value: '20' },
+          ],
+          ok: 'Muster erzeugen',
+          run: (v) => void this.runOp(patternOp(ed, { kind: 'rect', nx: Math.round(num(v.nx, 'Spalten')), ny: Math.round(num(v.ny, 'Zeilen')), dx: num(v.dx, 'Abstand'), dy: num(v.dy, 'Abstand') })),
+        });
+        return;
+      case 'pattern-circ':
+        if (needSel()) return;
+        open({
+          title: 'Kreisförmiges Muster',
+          fields: [{ key: 'n', label: 'Anzahl', value: '6' }, { key: 'angle', label: 'Gesamtwinkel', unit: '°', value: '360' }, { ...pivotField, label: 'Mittelpunkt', value: 'origin' }],
+          ok: 'Muster erzeugen',
+          run: (v) => {
+            const c = pivot(v.pivot);
+            void this.runOp(patternOp(ed, { kind: 'circ', n: Math.round(num(v.n, 'Anzahl')), angle: num(v.angle, 'Winkel'), cx: c.x, cy: c.y }));
+          },
+        });
+        return;
+      case 'offset':
+        if (needSel()) return;
+        open({
+          title: 'Versatz',
+          text: 'Erzeugt eine neue Kontur im Abstand um die Auswahl, z. B. als Rand oder Entgitterungshilfe. Negativ = nach innen.',
+          fields: [
+            { key: 'd', label: 'Abstand', unit: 'mm', value: '2' },
+            {
+              key: 'join',
+              label: 'Ecken',
+              value: 'round',
+              kind: 'choice',
+              options: [
+                { value: 'round', label: 'Rund' },
+                { value: 'miter', label: 'Spitz' },
+              ],
+            },
+          ],
+          ok: 'Versatz erzeugen',
+          run: (v) => void this.runOp(offsetOp(ed, num(v.d, 'Abstand'), v.join === 'miter' ? 'miter' : 'round')),
+        });
+        return;
+      case 'fillet':
+      case 'chamfer':
+        if (needSel()) return;
+        open({
+          title: cmd === 'fillet' ? 'Abrunden' : 'Fase',
+          text: 'Wirkt auf alle Ecken der gewählten Flächen. Skizzenflächen werden dabei zu Formen (ihre Bemaßungen entfallen).',
+          fields: [{ key: 'r', label: cmd === 'fillet' ? 'Radius' : 'Abstand', unit: 'mm', value: '3' }],
+          ok: cmd === 'fillet' ? 'Abrunden' : 'Fase anlegen',
+          run: (v) => {
+            const r = num(v.r, 'Radius');
+            if (!(r > 0)) throw new Error('Der Wert muss größer als 0 sein.');
+            void this.runOp(cornerOp(ed, r, cmd));
+          },
+        });
+        return;
+    }
+  }
+
+  /** Begrenzungsrahmen (mm) der gegebenen Objekte bzw. der ganzen Zeichnung – für Tests und den Assistenten. */
+  bbox(ids?: string[]): { minX: number; minY: number; maxX: number; maxY: number } | null {
+    return docBBox(this.editor.s.doc, ids ? { only: new Set(ids) } : {});
+  }
+
   /** Design umschalten (Oberfläche und/oder Zeichenfläche); wird auf diesem Gerät gespeichert. */
   setAppearance(patch: Partial<Appearance>): void {
     const next = { ...this.ui.getState().appearance, ...patch };
@@ -287,7 +549,7 @@ export class AppController {
     this.canvas.requestRender();
   }
 
-  openExport(format: 'svg' | 'png' = 'svg', dpi?: number): void {
+  openExport(format: ExportFormat = 'svg', dpi?: number): void {
     this.store.setState({ exportOpen: true, exportPreset: { format, dpi } });
   }
 
@@ -296,10 +558,46 @@ export class AppController {
     const doc = this.editor.s.doc;
     const base = safeName(this.projectName());
     try {
-      if (req.format === 'svg') {
-        const { svg, widthMm, heightMm } = exportSvg(doc, { bounds: req.bounds, mirror: req.mirror, title: this.projectName() });
-        const res = await saveFile(svg, `${base}${req.mirror ? '_gespiegelt' : ''}.svg`, SVG_TYPE, path);
-        if (res) this.editor.toast(`SVG exportiert (${fmtMm(widthMm)} × ${fmtMm(heightMm)} mm)`, 'success');
+      const suffix = `${req.mirror ? '_gespiegelt' : ''}${req.colorMode === 'cmyk' && (req.format === 'pdf' || req.format === 'eps') ? '_CMYK' : ''}`;
+      if (req.format !== 'png') {
+        const wantOutlines = req.format !== 'svg' || req.outlines !== false;
+        let outlines: Map<string, import('../model/types').Contour[]> | undefined;
+        if (wantOutlines) {
+          const t = await textOutlines(doc);
+          outlines = t.outlines;
+          if (t.substituted.length) this.editor.toast(`Schrift nicht gefunden, ersetzt: ${t.substituted.join(', ')}`, 'info', 6000);
+        }
+        const title = this.projectName();
+        let data: Uint8Array | string;
+        let w: number;
+        let h: number;
+        let type = SVG_TYPE;
+        let note = '';
+        if (req.format === 'svg') {
+          const r = exportSvg(doc, { bounds: req.bounds, mirror: req.mirror, title, outlines });
+          data = r.svg;
+          w = r.widthMm;
+          h = r.heightMm;
+        } else {
+          const scene = buildScene(doc, { bounds: req.bounds, outlines });
+          w = scene.widthMm;
+          h = scene.heightMm;
+          if (req.format === 'pdf') {
+            data = exportPdf(scene, { colorMode: req.colorMode, mirror: req.mirror, title });
+            type = PDF_TYPE;
+          } else if (req.format === 'eps') {
+            const r = exportEps(scene, { colorMode: req.colorMode, mirror: req.mirror, title });
+            data = r.bytes;
+            type = EPS_TYPE;
+            if (r.lostTransparency) note = ' – Hinweis: EPS kennt keine Transparenz, Deckkraft wurde ignoriert';
+          } else {
+            data = exportDxf(scene, { mirror: req.mirror });
+            type = DXF_TYPE;
+            note = ' – nur Konturen, ohne Farben';
+          }
+        }
+        const res = await saveFile(data, `${base}${suffix}.${type.ext}`, type, path);
+        if (res) this.editor.toast(`${type.ext.toUpperCase()} exportiert (${fmtMm(w)} × ${fmtMm(h)} mm)${note}`, 'success', note ? 6000 : undefined);
         return !!res;
       }
       const out = await exportPng(doc, { dpi: req.dpi, bounds: req.bounds, mirror: req.mirror });
@@ -313,4 +611,5 @@ export class AppController {
   }
 }
 
+const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 2 });
 const fmtMm = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 2 });

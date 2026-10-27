@@ -157,6 +157,33 @@ export function buildCommands(): Command[] {
     { id: 'arrange.backward', label: 'Nach hinten', group: 'Anordnen', shortcut: 'Strg+[', keys: [{ key: '[', ctrl: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'backward')) },
     { id: 'arrange.back', label: 'Ganz nach hinten', group: 'Anordnen', shortcut: 'Strg+Umschalt+[', keys: [{ key: '[', ctrl: true, shift: true }, { key: '{', ctrl: true, shift: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'back')) },
 
+    // Gruppieren
+    { id: 'arrange.group', label: 'Gruppieren', group: 'Anordnen', shortcut: 'Strg+G', keys: [{ key: 'g', ctrl: true }], run: (a) => report(a, a.editor.group()) },
+    { id: 'arrange.ungroup', label: 'Gruppierung aufheben', group: 'Anordnen', shortcut: 'Strg+Umschalt+G', keys: [{ key: 'g', ctrl: true, shift: true }, { key: 'G', ctrl: true, shift: true }], run: (a) => report(a, a.editor.ungroup()) },
+
+    // Ändern (Meilenstein 2)
+    { id: 'tool.trim', label: 'Stutzen', group: 'Ändern', shortcut: 'X', keys: [{ key: 'x' }], keywords: 'trim abschneiden', run: (a) => a.setTool('trim') },
+    { id: 'tool.extend', label: 'Dehnen', group: 'Ändern', shortcut: 'E', keys: [{ key: 'e' }], keywords: 'extend verlängern', run: (a) => a.setTool('extend') },
+    { id: 'tool.measure', label: 'Messen', group: 'Messen', shortcut: 'M', keys: [{ key: 'm' }], keywords: 'abstand winkel fläche umfang', run: (a) => a.setTool('measure') },
+    { id: 'edit.move', label: 'Verschieben …', group: 'Ändern', keywords: 'bewegen', run: (a) => a.editCommand('move') },
+    { id: 'edit.rotate', label: 'Drehen …', group: 'Ändern', keywords: 'rotieren', run: (a) => a.editCommand('rotate') },
+    { id: 'edit.scale', label: 'Skalieren …', group: 'Ändern', keywords: 'größe faktor', run: (a) => a.editCommand('scale') },
+    { id: 'edit.mirror', label: 'Spiegeln …', group: 'Ändern', run: (a) => a.editCommand('mirror') },
+    { id: 'edit.patternRect', label: 'Rechteckiges Muster …', group: 'Ändern', keywords: 'anordnung reihe raster', run: (a) => a.editCommand('pattern-rect') },
+    { id: 'edit.patternCirc', label: 'Kreisförmiges Muster …', group: 'Ändern', keywords: 'polar rund', run: (a) => a.editCommand('pattern-circ') },
+    { id: 'edit.offset', label: 'Versatz …', group: 'Form', shortcut: 'O', keys: [{ key: 'o' }], keywords: 'offset kontur rand', run: (a) => a.editCommand('offset') },
+    { id: 'edit.fillet', label: 'Abrunden …', group: 'Form', keywords: 'radius ecke', run: (a) => a.editCommand('fillet') },
+    { id: 'edit.chamfer', label: 'Fase …', group: 'Form', keywords: 'ecke abschrägen', run: (a) => a.editCommand('chamfer') },
+    { id: 'edit.textToPaths', label: 'Text in Pfade umwandeln', group: 'Form', keywords: 'kontur umriss outline', run: (a) => a.editCommand('text-to-paths') },
+    { id: 'edit.toShape', label: 'In Form umwandeln', group: 'Form', keywords: 'pfad fest', run: (a) => a.editCommand('to-shape') },
+    { id: 'bool.union', label: 'Vereinigen', group: 'Kombinieren', keywords: 'boolesch addieren union', run: (a) => a.editCommand('union') },
+    { id: 'bool.subtract', label: 'Subtrahieren', group: 'Kombinieren', keywords: 'boolesch abziehen ausschneiden', run: (a) => a.editCommand('subtract') },
+    { id: 'bool.intersect', label: 'Schnittmenge', group: 'Kombinieren', keywords: 'boolesch', run: (a) => a.editCommand('intersect') },
+    { id: 'bool.exclude', label: 'Ausschließen', group: 'Kombinieren', keywords: 'boolesch xor', run: (a) => a.editCommand('exclude') },
+    { id: 'export.pdf', label: 'Als PDF exportieren …', group: 'Datei', keywords: 'druck', run: (a) => a.openExport('pdf') },
+    { id: 'export.eps', label: 'Als EPS exportieren …', group: 'Datei', run: (a) => a.openExport('eps') },
+    { id: 'export.dxf', label: 'Als DXF exportieren …', group: 'Datei', keywords: 'plotter cad', run: (a) => a.openExport('dxf') },
+
     // Ansicht
     { id: 'view.fit', label: 'Alles anzeigen', group: 'Ansicht', shortcut: 'F', keys: [{ key: 'f' }], keywords: 'zoom', run: (a) => a.editor.zoomToFit() },
     { id: 'view.zoomIn', label: 'Vergrößern', group: 'Ansicht', shortcut: '+', keys: [{ key: '+' }, { key: '=' }], run: (a) => zoomBy(a, 1.25) },

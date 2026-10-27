@@ -1,5 +1,6 @@
 import type { Dimension, Id, SketchDoc, Vec2 } from '../model/types';
-import { circleOf, lineOf, pt } from '../model/doc';
+import { circleOf, entityOf, lineOf, pt } from '../model/doc';
+import { contoursBBox, shapeWorldContours } from '../model/shape';
 import { measureDim } from '../model/measure';
 import { cross, dist, dot, lineIntersection, norm, normAngle2pi, sub, toDeg } from '../model/geometry';
 import { dimGeometry } from '../render/dimGeometry';
@@ -9,7 +10,7 @@ import type { DimensionSpec } from '../store/editor';
 import { hitTest, type Hit } from './hit';
 import type { Tool, ToolContext, ToolPointer } from './types';
 
-type Pick = { kind: 'point' | 'line' | 'circle'; id: Id };
+type Pick = { kind: 'point' | 'line' | 'circle' | 'shape'; id: Id };
 
 /**
  * Bemaßungswerkzeug wie in Inventor: Geometrie wählen, Maß mit der Maus platzieren,
@@ -31,18 +32,19 @@ export class DimensionTool implements Tool {
   }
 
   hint(): string {
-    if (!this.picks.length) return 'Linie, Kreis oder Punkt wählen (zwei Elemente für Abstand oder Winkel)';
+    if (!this.picks.length) return 'Linie, Kreis, Punkt oder Form wählen (zwei Elemente für Abstand oder Winkel)';
     return 'Maß platzieren · oder zweites Element wählen · Esc bricht ab';
   }
 
   private hitPick(p: ToolPointer): Pick | null {
     const doc = this.ed.s.doc;
-    const hit = hitTest(doc, this.ctx.vp(), this.ctx.layout(), p.screen, { points: true, curves: true, helperPoints: true, dims: true });
+    const hit = hitTest(doc, this.ctx.vp(), this.ctx.layout(), p.screen, { points: true, curves: true, helperPoints: true, dims: true, fills: true });
     this.hover = hit;
     if (!hit) return null;
     if (hit.kind === 'point') return { kind: 'point', id: hit.id };
     if (hit.kind === 'line') return { kind: 'line', id: hit.id };
     if (hit.kind === 'circle' && hit.dist > 0) return { kind: 'circle', id: hit.id };
+    if (hit.kind === 'shape') return { kind: 'shape', id: hit.id };
     return null;
   }
 
@@ -78,6 +80,7 @@ export class DimensionTool implements Tool {
   private combinable(picks: Pick[]): boolean {
     if (picks.length === 1) return true;
     const [a, b] = picks;
+    if (a.kind === 'shape' || b.kind === 'shape') return false;
     if (a.kind === 'point' || b.kind === 'point') return true;
     if (a.kind === 'line' && b.kind === 'line') return true;
     if (a.kind === 'circle' && b.kind === 'circle') return true;
@@ -199,6 +202,16 @@ export function specFromPicks(doc: SketchDoc, picks: Pick[], cursor: Vec2, px: n
       const l = lineOf(doc, a.id);
       if (!l) return null;
       return linearSpec(doc, l.p1, l.p2, cursor, forceAligned);
+    }
+    if (a.kind === 'shape') {
+      // Freie Form: Breite (Maß oberhalb/unterhalb) oder Höhe (Maß seitlich)
+      const sh = entityOf(doc, a.id, 'shape');
+      const b = sh ? contoursBBox(shapeWorldContours(doc, sh)) : null;
+      if (!b) return null;
+      const side = cursor.x > b.maxX || cursor.x < b.minX;
+      const above = cursor.y > b.maxY || cursor.y < b.minY;
+      if (side && !above) return { kind: 'height', refs: [a.id], offset: cursor.x - b.maxX };
+      return { kind: 'width', refs: [a.id], offset: cursor.y - b.maxY };
     }
     return null;
   }

@@ -8,7 +8,7 @@
  * Optional: CHROME_ARGS="--no-sandbox --headless=new", E2E_URL=http://localhost:4173/
  */
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
@@ -546,6 +546,221 @@ await step('Rückgängig/Wiederholen über Tastatur', async () => {
   await page.keyboard.up('Control');
   const n2 = await app(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
   assert(n1 < n0 && n2 === n0, `${n0} → ${n1} → ${n2}`);
+});
+
+// ---------------------------------------------------------------------------
+// Meilenstein 2
+// ---------------------------------------------------------------------------
+
+const entities = () => app(() => Object.values(window.vektordesign.store.getState().doc.entities).map((e) => ({ id: e.id, kind: e.kind, fill: e.style.fill, layer: e.layer ?? null })));
+async function waitFor(fn, msg, ms = 6000) {
+  for (let t = 0; t < ms; t += 100) {
+    if (await fn()) return;
+    await sleep(100);
+  }
+  throw new Error(msg);
+}
+async function exportVia(format, ext) {
+  // gleicher Dateiname wie vorher → Chromium überschreibt; daher Ordner leeren
+  for (const f of readdirSync(DL)) rmSync(join(DL, f), { force: true });
+  const before = [];
+  await app(() => window.vektordesign.openExport('svg'));
+  await page.waitForSelector('[data-testid="export-dialog"]');
+  await page.click(`[data-testid="format-${format}"]`);
+  await page.click('[data-testid="export-run"]');
+  try {
+    const f = await waitDownload(ext, before);
+    await sleep(100);
+    copyFileSync(f, join(OUT, `m2-logo.${ext}`));
+    return f;
+  } catch (e) {
+    const toasts = await app(() => window.vektordesign.store.getState().toasts.map((t) => `${t.kind}: ${t.text}`));
+    throw new Error(`${e.message} – Meldungen: ${toasts.join(' | ')}`);
+  }
+}
+
+await step('Bearbeiten-Leiste: Registerkarte, Messen (Fläche/Umfang), Drehen über Dialog, Muster', async () => {
+  await newDoc();
+  await app(() => {
+    const ed = window.vektordesign.editor;
+    ed.createRectangle({ pos: { x: 0, y: 0 } }, { pos: { x: 40, y: 20 } }, 'center', { width: '80', height: '40' });
+  });
+  await page.click('[data-testid="ribbon-edit"]');
+  await page.waitForSelector('[data-testid="tool-measure"]');
+  await shot('20-leiste-bearbeiten');
+  await page.click('[data-testid="tool-measure"]');
+  await clickWorld(17, 9);
+  await page.waitForSelector('[data-testid="measure-card"]');
+  const card = await page.$eval('[data-testid="measure-card"]', (e) => e.textContent);
+  assert(card.includes('3200 mm²') || card.includes('3.200 mm²'), `Messkarte: ${card}`);
+  assert(card.includes('240 mm'), `Umfang fehlt: ${card}`);
+  await shot('21-messen');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  // Drehen: alles auswählen, Dialog, 90°
+  await app(() => window.vektordesign.editor.selectAll());
+  await page.click('[data-testid="edit-rotate"]');
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await shot('22-dialog-drehen');
+  await page.click('[data-testid="param-ok"]');
+  await sleep(200);
+  let b = await app(() => window.vektordesign.bbox());
+  assert(Math.abs(b.maxX - b.minX - 40) < 1e-6 && Math.abs(b.maxY - b.minY - 80) < 1e-6, `Nach Drehen ${b.maxX - b.minX} × ${b.maxY - b.minY}`);
+  // Muster: 3 Spalten im Abstand 50
+  await app(() => window.vektordesign.editor.selectAll());
+  await page.click('[data-testid="edit-pattern-rect"]');
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await page.$eval('[data-testid="param-dx"]', (el) => {
+    el.focus();
+    el.select();
+  });
+  await page.keyboard.type('50');
+  await page.keyboard.press('Enter');
+  await sleep(250);
+  b = await app(() => window.vektordesign.bbox());
+  assert(Math.abs(b.maxX - b.minX - 140) < 1e-6, `Musterbreite ${b.maxX - b.minX}`);
+  const paths = (await entities()).filter((e) => e.kind === 'path').length;
+  assert(paths === 3, `${paths} Rechtecke statt 3`);
+  await page.keyboard.press('Escape');
+});
+
+await step('Stutzen (X): Mittelstück einer gekreuzten Linie entfernen', async () => {
+  await newDoc();
+  await app(() => {
+    const ed = window.vektordesign.editor;
+    ed.createLine({ pos: { x: -30, y: 0 } }, { pos: { x: 30, y: 0 } }, {});
+    ed.createLine({ pos: { x: -10, y: -20 } }, { pos: { x: -10, y: 20 } }, {});
+    ed.createLine({ pos: { x: 10, y: -20 } }, { pos: { x: 10, y: 20 } }, {});
+  }).catch(() => {});
+  let lines = (await entities()).filter((e) => e.kind === 'line').length;
+  if (lines < 3) {
+    // Fallback über die Oberfläche
+    await page.keyboard.press('l');
+    for (const [a, c] of [[[-30, 0], [30, 0]], [[-10, -20], [-10, 20]], [[10, -20], [10, 20]]]) {
+      await clickWorld(...a);
+      await clickWorld(...c);
+      await page.keyboard.press('Escape');
+    }
+    await page.keyboard.press('Escape');
+    lines = (await entities()).filter((e) => e.kind === 'line').length;
+  }
+  assert(lines === 3, `${lines} Linien`);
+  await page.keyboard.press('x');
+  await clickWorld(0, 0);
+  await sleep(150);
+  const lens = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return Object.values(d.entities)
+      .filter((e) => e.kind === 'line')
+      .map((l) => Math.hypot(d.points[l.p2].x - d.points[l.p1].x, d.points[l.p2].y - d.points[l.p1].y))
+      .sort((a, b) => a - b);
+  });
+  assert(lens.length === 4 && Math.abs(lens[0] - 20) < 1e-6 && Math.abs(lens[1] - 20) < 1e-6, `Längen nach Stutzen: ${lens.join(', ')}`);
+  await page.keyboard.press('Escape');
+});
+
+await step('Abnahme M2: Logo aus Text und Formen, 100 mm breit, zwei Farben, Text in Pfade, vereinigt', async () => {
+  await newDoc();
+  await page.click('[data-testid="ribbon-sketch"]');
+  // Text über die Oberfläche
+  await page.keyboard.press('t');
+  await clickWorld(-15, 0);
+  await page.waitForSelector('[data-testid="text-input"]');
+  await page.keyboard.type('TEAM');
+  await page.keyboard.press('Enter');
+  await sleep(100);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  const textId = (await entities()).find((e) => e.kind === 'text').id;
+  // Text in Pfade über die Bearbeiten-Leiste
+  await app((id) => window.vektordesign.editor.select([id]), textId);
+  await page.click('[data-testid="ribbon-edit"]');
+  await page.click('[data-testid="edit-text-to-paths"]');
+  await waitFor(async () => (await entities()).some((e) => e.kind === 'shape') && !(await entities()).some((e) => e.kind === 'text'), 'Text wurde nicht in Pfade umgewandelt');
+  const tb = await app(() => window.vektordesign.bbox());
+  // Unterstrich als Form, dann vereinigen
+  const barId = await app(
+    (b) => window.vektordesign.editor.createRectangle({ pos: { x: b.minX, y: b.minY - 3 } }, { pos: { x: b.maxX, y: b.minY - 1 } }, 'corner').pathId,
+    tb,
+  );
+  const shapeId = (await entities()).find((e) => e.kind === 'shape').id;
+  await app(([a, b]) => window.vektordesign.editor.select([a, b]), [shapeId, barId]);
+  await page.click('[data-testid="bool-union"]');
+  await waitFor(async () => {
+    const es = await entities();
+    return es.filter((e) => e.kind === 'shape').length === 1 && !es.some((e) => e.kind === 'path');
+  }, 'Vereinigen hat nicht genau eine Form ergeben');
+  const logo = (await entities()).find((e) => e.kind === 'shape').id;
+  // Breite 100 mm über das Eigenschaftenfeld (legt eine Bemaßung an)
+  await app((id) => window.vektordesign.editor.select([id]), logo);
+  await page.click('[data-testid="tab-props"]').catch(() => {});
+  await page.waitForSelector('[data-testid="shape-width"]');
+  await page.$eval('[data-testid="shape-width"]', (el) => {
+    el.focus();
+    el.select();
+  });
+  await page.keyboard.type('100');
+  await page.keyboard.press('Enter');
+  await sleep(200);
+  let b = await app((id) => window.vektordesign.bbox([id]), logo);
+  assert(Math.abs(b.maxX - b.minX - 100) < 1e-6, `Logobreite ${b.maxX - b.minX}`);
+  const wdim = await app(() => Object.values(window.vektordesign.store.getState().doc.dims).find((d) => d.kind === 'width'));
+  assert(wdim && Math.abs(wdim.value - 100) < 1e-9 && !wdim.driven, 'Breitenbemaßung fehlt');
+  // Zwei Farben: Logo gelb, Hintergrundkreis blau (innerhalb der Breite)
+  await app(
+    ([id, bb]) => {
+      const ed = window.vektordesign.editor;
+      ed.setStyle([id], { fill: '#f5c518', stroke: null });
+      const c = ed.createCircle({ pos: { x: (bb.minX + bb.maxX) / 2, y: (bb.minY + bb.maxY) / 2 } }, 15);
+      ed.setStyle([c.circleId], { fill: '#1f3a93', stroke: null });
+      ed.arrange([c.circleId], 'back');
+      ed.select([]);
+    },
+    [logo, b],
+  );
+  b = await app(() => window.vektordesign.bbox());
+  assert(Math.abs(b.maxX - b.minX - 100) < 1e-6, `Gesamtbreite ${b.maxX - b.minX}`);
+  const H = b.maxY - b.minY;
+  await page.keyboard.press('f');
+  await sleep(150);
+  await shot('23-abnahme-m2-logo');
+
+  // SVG
+  const svgFile = await exportVia('svg', 'svg');
+  const svg = readFileSync(svgFile, 'utf8');
+  const m = svg.match(/width="([\d.]+)mm" height="([\d.]+)mm"/);
+  assert(m && Number(m[1]) === 100, `SVG-Breite ${m?.[1]}`);
+  assert(Math.abs(Number(m[2]) - H) < 1e-3, `SVG-Höhe ${m?.[2]} statt ${H}`);
+  assert(!/<text/.test(svg), 'SVG enthält lebenden Text');
+  const fills = new Set([...svg.matchAll(/fill="(#[0-9a-f]{6})"/gi)].map((x) => x[1].toLowerCase()));
+  assert(fills.size === 2 && fills.has('#f5c518') && fills.has('#1f3a93'), `Farben im SVG: ${[...fills]}`);
+
+  // PDF
+  const pdfFile = await exportVia('pdf', 'pdf');
+  const pdf = readFileSync(pdfFile, 'latin1');
+  assert(pdf.startsWith('%PDF-'), 'kein PDF');
+  assert(pdf.includes('/MediaBox [0 0 283.465 '), `PDF-Seitengröße: ${pdf.match(/\/MediaBox \[[^\]]+\]/)?.[0]}`);
+
+  // PNG 300 dpi, transparent
+  const pngFile = await exportVia('png', 'png');
+  const bytes = readFileSync(pngFile);
+  const w = bytes.readUInt32BE(16);
+  assert(w === Math.ceil((100 / 25.4) * 300), `PNG-Breite ${w} px`); // Motiv exakt 100 mm, Bild auf ganze Pixel aufgerundet
+  const i = bytes.indexOf(Buffer.from('pHYs'));
+  assert(Math.round(bytes.readUInt32BE(i + 4) * 0.0254) === 300, 'PNG nicht 300 dpi');
+  const alpha = await app(async (b64) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${b64}`;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    return ctx.getImageData(2, Math.round(img.height / 2), 1, 1).data[3]; // links neben dem T-Stamm
+  }, bytes.toString('base64'));
+  assert(alpha === 0, `PNG-Ecke nicht transparent (${alpha})`);
+  results.push(`   Logo: 100 × ${H.toFixed(2)} mm, SVG/PDF/PNG geprüft`);
 });
 
 await step('Leistung: 150 Rechtecke mit Bemaßungen, Ziehen bleibt flüssig', async () => {
