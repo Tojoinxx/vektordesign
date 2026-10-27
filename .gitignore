@@ -1,0 +1,24 @@
+# Abhängigkeiten
+node_modules/
+
+# Build-Ausgaben
+dist/
+dist-ssr/
+dist-single/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Tests
+coverage/
+tests/e2e/output/
+.chromium/
+
+# Editor und System
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+*.local
+.env
