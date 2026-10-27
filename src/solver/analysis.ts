@@ -80,36 +80,10 @@ export function analysisFromResult(doc: SketchDoc, res: SolveResult, free: Analy
 }
 
 /**
- * Ermittelt, welche Punkte/Kreise noch frei sind: Ein Punkt ist bestimmt, wenn ein
- * zusätzliches Festhalten die Freiheitsgrade nicht verringert.
+ * Ermittelt, welche Punkte/Kreise noch frei sind (je Teilsystem, siehe SketchSolver.freedom).
  * Koinzidente Punkte werden gemeinsam geprüft. Gibt null zurück, wenn die Skizze zu groß ist.
  */
-export function analyzeFreedom(solver: SketchSolver, doc: SketchDoc, baseDof: number, limit = 400): Analysis['free'] {
-  const points = new Set<Id>();
-  const circles = new Set<Id>();
-  if (baseDof === 0) return { points, circles };
-
-  const clusters = coincidenceClusters(doc);
-  const lockedRoots = new Set<Id>();
-  for (const p of Object.values(doc.points)) if (p.locked) lockedRoots.add(clusters.get(p.id)!);
-
-  const reps = new Map<Id, Id[]>();
-  for (const [pid, root] of clusters) {
-    if (lockedRoots.has(root)) continue;
-    const list = reps.get(root);
-    if (list) list.push(pid);
-    else reps.set(root, [pid]);
-  }
-  const circleIds = Object.values(doc.entities).filter((e) => e.kind === 'circle').map((e) => e.id);
-  if (reps.size + circleIds.length > limit) return null;
-
-  for (const [root, members] of reps) {
-    const res = solver.solve(doc, { probe: { points: [root] } });
-    if (res.dof < baseDof) members.forEach((m) => points.add(m));
-  }
-  for (const cid of circleIds) {
-    const res = solver.solve(doc, { probe: { circles: [cid] } });
-    if (res.dof < baseDof) circles.add(cid);
-  }
-  return { points, circles };
+export function analyzeFreedom(solver: SketchSolver, doc: SketchDoc, baseDof: number): Analysis['free'] {
+  if (baseDof === 0) return { points: new Set(), circles: new Set() };
+  return solver.freedom(doc, coincidenceClusters(doc));
 }

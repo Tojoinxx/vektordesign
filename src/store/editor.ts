@@ -34,6 +34,7 @@ import {
 import { displayValue, measureDim } from '../model/measure';
 import { dist, mid, norm, sub } from '../model/geometry';
 import { docBBox } from '../model/bounds';
+import { dimGeometry } from '../render/dimGeometry';
 import { evaluateDims, namesInExpr, replaceName } from '../params/params';
 import { evaluate, numberToExpr, ExprError } from '../params/expr';
 import { SketchSolver, withSolution, type DragSpec, type SolveResult } from '../solver/solver';
@@ -205,6 +206,11 @@ export class Editor {
 
     if (res.ok) next = applySolution(next, res);
     next = refreshDriven(next);
+    if (next === current) {
+      // Keine Änderung → kein Verlaufseintrag
+      if (opts.select) this.set({ selection: opts.select });
+      return { ok: true, doc: current, result: res };
+    }
     this.accept(current, next, label, res, opts.select);
     return { ok: true, doc: next, result: res };
   }
@@ -1196,6 +1202,20 @@ export class Editor {
     const doc = this.s.doc;
     const box = docBBox(doc, { construction: true });
     const { width, height } = this.viewport;
+    // Bemaßungen gehören zur Ansicht dazu
+    if (box && this.s.settings.showDims) {
+      const z = Math.max(this.s.view.zoom, 0.02);
+      for (const d of Object.values(doc.dims)) {
+        const g = dimGeometry(doc, d, 1 / z);
+        if (!g) continue;
+        for (const p of [g.text, ...g.lines.flat()]) {
+          box.minX = Math.min(box.minX, p.x - 6 / z);
+          box.maxX = Math.max(box.maxX, p.x + 6 / z);
+          box.minY = Math.min(box.minY, p.y - 4 / z);
+          box.maxY = Math.max(box.maxY, p.y + 4 / z);
+        }
+      }
+    }
     if (!box) {
       this.setView({ cx: 0, cy: 0, zoom: Math.max(1, Math.min(width, height) / 120) });
       return;
