@@ -14,6 +14,8 @@ import type {
   Vec2,
 } from '../model/types';
 import { shapeSize } from '../model/shape';
+import { productionOf } from '../model/production';
+import type { Production } from '../model/types';
 import { DEFAULT_LAYER, groupMembers, isInert, layerIdOf, layersOf } from '../model/layers';
 import { applyXf, cloneInto, type Xf, type XfReport } from './xform';
 import { extendLine, trimLine, type TrimResult } from './trimExtend';
@@ -1269,6 +1271,18 @@ export class Editor {
     );
     this.set({ activeLayer: id });
     return id;
+  }
+
+  /** Produktionsangaben ändern (Artikel, Motive, Varianten …) – ein Rückgängig-Schritt. */
+  updateProduction(label: string, recipe: (p: Production) => void): CommitOutcome {
+    return this.commit(
+      label,
+      (d) => {
+        if (!d.production) d.production = productionOf(d as SketchDoc);
+        recipe(d.production);
+      },
+      { skipSolve: true },
+    );
   }
 
   updateLayer(id: Id, patch: Partial<Pick<Layer, 'name' | 'visible' | 'locked'>>): CommitOutcome {

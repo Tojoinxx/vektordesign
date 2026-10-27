@@ -257,6 +257,8 @@ export interface SketchDoc {
   order: Id[];
   /** Ebenen, unten → oben. Fehlt in alten Dateien (dann eine Ebene „Motiv“). */
   layers?: Layer[];
+  /** Produktionsangaben (Artikel, Motive, Platzierung, Varianten) – Meilenstein 3 */
+  production?: Production;
   /** Zähler für eindeutige Ids */
   nextId: number;
   /** Zähler für Bemaßungsnamen d0, d1 … */
@@ -266,3 +268,78 @@ export interface SketchDoc {
 export const ORIGIN_ID = 'O';
 
 export type SketchStatus = 'empty' | 'under' | 'full' | 'over';
+
+// ---------------------------------------------------------------------------
+// Produktion (LabwearOS-Export)
+// ---------------------------------------------------------------------------
+
+export type Technique = 'screen' | 'dtg' | 'puff' | 'embroidery' | 'patch' | 'silicone' | 'sublimation' | 'transfer' | 'emboss' | 'allover';
+export type GarmentId = 'hoodie' | 'tshirt' | 'sweatshirt' | 'cap';
+export type GarmentView = 'front' | 'back';
+
+/**
+ * Lage eines Motivs auf dem Kleidungsstück. Bezugspunkt ist die Kragennaht in der Mitte
+ * (vorne bzw. hinten; bei der Cap die Schirmnaht in der Mitte). x = Abstand der Motivmitte
+ * von der Mittellinie (positiv = im Bild nach rechts), y = Abstand der Motiv-Oberkante unter
+ * dem Bezugspunkt, beides in mm.
+ */
+export interface Placement {
+  view: GarmentView;
+  /** Druckbereich-Vorlage (z. B. 'chest-left') oder 'custom' */
+  area: string;
+  x: number;
+  y: number;
+}
+
+export interface Motif {
+  id: Id;
+  name: string;
+  /** Ebenen, aus denen das Motiv besteht (leer = alle sichtbaren) */
+  layers: Id[];
+  technique: Technique;
+  placement: Placement;
+  note?: string;
+}
+
+/** Farbvariante: Stofffarbe und Ersetzung der Motivfarben (Originalfarbe → neue Farbe). */
+export interface Variant {
+  id: Id;
+  name: string;
+  fabric: string;
+  fabricName?: string;
+  colors: Record<string, string>;
+}
+
+/** Zusatzangaben zu einer Druckfarbe (Schlüssel: '#rrggbb' klein). Pantone nur als Freitext. */
+export interface ColorSpec {
+  name?: string;
+  pantone?: string;
+  /** Eigene CMYK-Werte 0…100 (sonst umgerechnet) */
+  cmyk?: [number, number, number, number];
+}
+
+/** Importierte Kleidungsstück-Vorlage (z. B. aus LabwearOS) als Hintergrundbild. */
+export interface GarmentTemplate {
+  name: string;
+  /** PNG als Data-URL */
+  image: string;
+  /** Bildgröße in mm (nach Kalibrierung) */
+  widthMm: number;
+  heightMm: number;
+  /** Lage des Bezugspunkts (Kragennaht Mitte) im Bild, mm von links oben */
+  originX: number;
+  originY: number;
+}
+
+export interface Production {
+  article: string;
+  version: string;
+  garment: GarmentId;
+  motifs: Motif[];
+  variants: Variant[];
+  colorSpecs: Record<string, ColorSpec>;
+  templates?: Partial<Record<GarmentView, GarmentTemplate>>;
+  /** gewähltes Export-Profil */
+  profileId: string;
+  note?: string;
+}
