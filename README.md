@@ -145,12 +145,14 @@ tests/        Unit-, Browser- und Desktop-Tests
 
 ### Release veröffentlichen
 
+Auf github.com unter **Actions → Release → Run workflow** die Version eingeben (z. B. `0.2.0`), das geht auch vom Handy. Alternativ per Git:
+
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-Der Workflow „Release“ übernimmt die Version aus dem Tag, testet, baut den Installer und hängt `.exe`, `.msi` und die Einzeldatei `Vektordesign.html` an ein GitHub-Release. Versionsnummern bestehen nur aus Zahlen (`v1.2.3`), weil der MSI-Installer nichts anderes erlaubt.
+Der Workflow „Release“ übernimmt die Version, testet, baut den Installer und hängt `.exe`, `.msi` und die Einzeldatei `Vektordesign.html` an ein GitHub-Release. Versionsnummern bestehen nur aus Zahlen (`v1.2.3`), weil der MSI-Installer nichts anderes erlaubt.
 
 ### GitHub einrichten (einmalig)
 
