@@ -2,6 +2,8 @@ import type { Entity, Id, SketchDoc } from './types';
 import { lineOf, pathVertices, pt } from './doc';
 import { bboxAddPoint, bboxValid, emptyBBox, type BBox } from './geometry';
 import { measureText } from './textMetrics';
+import { contoursBBox, shapeWorldContours } from './shape';
+import { visibleOrder } from './layers';
 
 /** Umschließendes Rechteck eines Objekts in mm (ohne Konturstärke, außer includeStroke). */
 export function entityBBox(doc: SketchDoc, e: Entity, includeStroke = false): BBox {
@@ -30,6 +32,14 @@ export function entityBBox(doc: SketchDoc, e: Entity, includeStroke = false): BB
       for (const v of pathVertices(doc, e)) bboxAddPoint(b, v, pad);
       break;
     }
+    case 'shape': {
+      const sb = contoursBBox(shapeWorldContours(doc, e));
+      if (sb) {
+        bboxAddPoint(b, { x: sb.minX, y: sb.minY }, pad);
+        bboxAddPoint(b, { x: sb.maxX, y: sb.maxY }, pad);
+      }
+      break;
+    }
   }
   return b;
 }
@@ -54,7 +64,7 @@ export interface DocBBoxOptions {
 /** Box aller zeichenbaren Objekte (Pfade, freie Linien, Kreise, Texte). */
 export function docBBox(doc: SketchDoc, opts: DocBBoxOptions = {}): BBox | null {
   const b = emptyBBox();
-  for (const id of doc.order) {
+  for (const id of visibleOrder(doc)) {
     const e = doc.entities[id];
     if (!e) continue;
     if (opts.only && !opts.only.has(id)) continue;

@@ -11,8 +11,9 @@ import { listFonts } from '../platform/fonts';
 import { ColorButton } from './ColorPicker';
 import { useApp, useAppState } from './hooks';
 import { StyleSuggestions } from './StyleSuggestions';
+import { ArrangeSection } from './ArrangeSection';
 
-const KIND_NAMES: Record<string, string> = { path: 'Fläche', line: 'Linie', circle: 'Kreis', text: 'Text' };
+const KIND_NAMES: Record<string, string> = { path: 'Fläche', line: 'Linie', circle: 'Kreis', text: 'Text', shape: 'Form' };
 
 /** Wendet Stiländerungen an – live beim Ziehen, als ein Rückgängig-Schritt. */
 function useStyleApply(targets: Id[]) {
@@ -82,6 +83,8 @@ export function PropertiesPanel() {
           </div>
         )}
       </section>
+
+      {targets.length > 0 && <ArrangeSection targets={targets} />}
 
       {(targets.length > 0 || !selection.length) && (
         <section className="props-section">

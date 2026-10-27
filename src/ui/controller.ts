@@ -19,7 +19,7 @@ import { loadApiKey, loadModel } from '../assistant/api';
 import { TUTORIALS, isTutorialSeen, markTutorialSeen, tutorialsEnabled, type TutorialId } from './tutorials';
 import { applyAppearance, loadAppearance, onSystemThemeChange, saveAppearance, type Appearance } from './appearance';
 
-export type SidePanel = 'props' | 'claude';
+export type SidePanel = 'props' | 'layers' | 'claude';
 
 export interface TextEditState {
   id: Id | null;

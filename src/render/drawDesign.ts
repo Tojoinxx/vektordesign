@@ -5,6 +5,8 @@ import { gradientToWorld, isGradient, sortedStops } from '../model/paint';
 import { hexToRgb, rgbLuminance, rgba, type RGB } from '../model/color';
 import { cssFont } from '../model/textMetrics';
 import { bboxValid, dist } from '../model/geometry';
+import { segments, shapeWorldContours } from '../model/shape';
+import { visibleOrder } from '../model/layers';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -100,6 +102,23 @@ function buildPath(t: DesignTarget, doc: SketchDoc, e: Entity): boolean {
       ctx.arc(c.x, c.y, e.r * t.scale, 0, Math.PI * 2);
       return true;
     }
+    case 'shape': {
+      for (const c of shapeWorldContours(doc, e)) {
+        if (!c.nodes.length) continue;
+        const s0 = t.toScreen(c.nodes[0]);
+        ctx.moveTo(s0.x, s0.y);
+        for (const seg of segments(c)) {
+          const p3 = t.toScreen(seg.p3);
+          if (seg.curved) {
+            const p1 = t.toScreen(seg.p1);
+            const p2 = t.toScreen(seg.p2);
+            ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+          } else ctx.lineTo(p3.x, p3.y);
+        }
+        if (c.closed) ctx.closePath();
+      }
+      return true;
+    }
     case 'text':
       return false;
   }
@@ -138,7 +157,7 @@ export function paintContrast(e: Entity, background: string): number {
     const ratio = (Math.max(l, bg) + 0.05) / (Math.min(l, bg) + 0.05);
     if (ratio > best) best = ratio;
   };
-  const filled = e.kind === 'text' || e.kind === 'circle' || (e.kind === 'path' && e.closed);
+  const filled = e.kind === 'text' || e.kind === 'circle' || e.kind === 'shape' || (e.kind === 'path' && e.closed);
   if (s.fill && filled) {
     if (isGradient(s.fill)) for (const st of s.fill.stops) consider(st.color, st.opacity);
     else consider(s.fill, 1);
@@ -190,10 +209,10 @@ export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
     ctx.restore();
     return;
   }
-  const closed = e.kind === 'circle' || (e.kind === 'path' && e.closed);
+  const closed = e.kind === 'circle' || e.kind === 'shape' || (e.kind === 'path' && e.closed);
   if (closed && s.fill) {
     ctx.fillStyle = isGradient(s.fill) ? makePaint(t, s.fill, doc, e) : s.fill;
-    ctx.fill('nonzero');
+    ctx.fill(e.kind === 'shape' ? e.fillRule : 'nonzero');
   }
   if (applyStroke(t, s)) ctx.stroke();
   const hint = needsHint(t, e);
@@ -210,7 +229,7 @@ export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
 
 /** Zeichnet alle sichtbaren Objekte in Zeichenreihenfolge (ohne Konstruktionsgeometrie). */
 export function drawDesign(t: DesignTarget, doc: SketchDoc, opts: DesignOptions = {}): void {
-  for (const id of doc.order) {
+  for (const id of visibleOrder(doc)) {
     const e = doc.entities[id];
     if (!e) continue;
     if (opts.only && !opts.only.has(id)) continue;

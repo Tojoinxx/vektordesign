@@ -2,11 +2,13 @@ import type { Id, SketchDoc, Vec2 } from '../model/types';
 import { lineOf, pathVertices, pt } from '../model/doc';
 import { measureText } from '../model/textMetrics';
 import { closestOnSegment, dist, pointInPolygon } from '../model/geometry';
+import { pointInPolys, shapeWorldPolys } from '../model/shape';
+import { isInert } from '../model/layers';
 import type { SceneLayout } from '../render/renderer';
 import { hitGlyph } from '../render/glyphs';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
 
-export type HitKind = 'point' | 'line' | 'circle' | 'text' | 'path' | 'dim' | 'glyph';
+export type HitKind = 'point' | 'line' | 'circle' | 'text' | 'path' | 'shape' | 'dim' | 'glyph';
 
 export interface Hit {
   kind: HitKind;
@@ -34,7 +36,9 @@ const ALL: HitOptions = { points: true, curves: true, texts: true, fills: true, 
 
 export function hitTest(doc: SketchDoc, vp: Viewport, layout: SceneLayout | null, s: Vec2, optsIn: HitOptions = ALL): Hit | null {
   const opts = { ...optsIn };
-  const ex = opts.exclude;
+  // Ausgeblendete und gesperrte Ebenen sind nicht auswählbar
+  const exIn = opts.exclude;
+  const ex = { has: (id: Id) => !!exIn?.has(id) || isInert(doc, id) };
   const pointTol = opts.pointTol ?? 8;
   const curveTol = opts.curveTol ?? 6;
 
@@ -96,6 +100,19 @@ export function hitTest(doc: SketchDoc, vp: Viewport, layout: SceneLayout | null
         return { kind: 'text', id: e.id, dist: 0 };
       }
     }
+    if ((opts.fills || opts.curves) && e.kind === 'shape' && !e.construction) {
+      const polys = shapeWorldPolys(doc, e);
+      if (opts.fills && e.style.fill && pointInPolys(w, polys, e.fillRule)) return { kind: 'shape', id: e.id, dist: 0 };
+      // Nähe zur Kontur (auch ohne Füllung auswählbar)
+      const tol = (opts.curveTol ?? 6) / vp.zoom;
+      for (const poly of polys) {
+        for (let k = 0; k < poly.length; k++) {
+          const a = poly[k];
+          const b = poly[(k + 1) % poly.length];
+          if (dist(closestOnSegment(w, a, b).point, w) <= tol) return { kind: 'shape', id: e.id, dist: 0 };
+        }
+      }
+    }
     if (opts.fills) {
       if (e.kind === 'path' && e.closed && (e.style.fill || e.construction === false)) {
         const vs = pathVertices(doc, e);
@@ -119,6 +136,7 @@ export function pointsOf(doc: SketchDoc, id: Id): Id[] {
     case 'circle':
       return [e.center];
     case 'text':
+    case 'shape':
       return [e.anchor];
     case 'path': {
       const out: Id[] = [];

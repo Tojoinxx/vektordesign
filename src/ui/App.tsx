@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { Settings2, Sparkles } from 'lucide-react';
+import { Layers, Settings2, Sparkles } from 'lucide-react';
 import type { AppController } from './controller';
 import { AppCtx, useUi } from './hooks';
 import { CanvasView } from './CanvasView';
 import { Ribbon } from './Ribbon';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AssistantPanel } from './AssistantPanel';
+import { LayersPanel } from './LayersPanel';
 import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
 import { buildCommands, matchKey } from './commands';
 
@@ -16,6 +17,9 @@ function SidePanel({ app }: { app: AppController }) {
       <div className="side-tabs" role="tablist">
         <button role="tab" aria-selected={side === 'props'} className={side === 'props' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'props' })} data-testid="tab-props">
           <Settings2 size={15} /> Eigenschaften
+        </button>
+        <button role="tab" aria-selected={side === 'layers'} className={side === 'layers' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'layers' })} data-testid="tab-layers">
+          <Layers size={15} /> Ebenen
         </button>
         <button
           role="tab"
@@ -30,7 +34,7 @@ function SidePanel({ app }: { app: AppController }) {
           <Sparkles size={15} /> Claude
         </button>
       </div>
-      <div className="side-body">{side === 'props' ? <PropertiesPanel /> : <AssistantPanel />}</div>
+      <div className="side-body">{side === 'props' ? <PropertiesPanel /> : side === 'layers' ? <LayersPanel /> : <AssistantPanel />}</div>
     </aside>
   );
 }

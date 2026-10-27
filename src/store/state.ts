@@ -79,6 +79,8 @@ export interface AppState {
   future: HistoryEntry[];
   selection: Id[];
   hover: Id | null;
+  /** Ebene, auf die neue Objekte kommen (null = oberste sichtbare) */
+  activeLayer: Id | null;
   view: ViewState;
   tool: ToolId;
   rectMode: 'corner' | 'center';
@@ -136,6 +138,7 @@ export function initialState(): AppState {
     future: [],
     selection: [],
     hover: null,
+    activeLayer: null,
     view: { cx: 0, cy: 0, zoom: 4 },
     tool: 'select',
     rectMode: 'corner',

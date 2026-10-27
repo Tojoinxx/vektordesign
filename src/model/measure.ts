@@ -1,5 +1,6 @@
 import type { Constraint, Dimension, SketchDoc, Vec2 } from './types';
-import { circleOf, lineOf, pt } from './doc';
+import { circleOf, entityOf, lineOf, pt } from './doc';
+import { shapeSize } from './shape';
 import { cross, dist, distToLine, dot, mid, normAngle, normAngle2pi, sub, toDeg } from './geometry';
 
 /** Aktueller Messwert einer Bemaßung in mm bzw. Grad (vorzeichenrichtig, wo sinnvoll). */
@@ -39,6 +40,13 @@ export function measureDim(doc: SketchDoc, dim: Pick<Dimension, 'kind' | 'refs'>
     case 'angleX': {
       const u = sub(pt(doc, r[1]), pt(doc, r[0]));
       return toDeg(normAngle2pi(Math.atan2(u.y, u.x)));
+    }
+    case 'width':
+    case 'height': {
+      const s = entityOf(doc, r[0], 'shape');
+      if (!s) return NaN;
+      const z = shapeSize(s);
+      return dim.kind === 'width' ? z.w : z.h;
     }
   }
 }

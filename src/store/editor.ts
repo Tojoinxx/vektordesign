@@ -4,14 +4,18 @@ import type {
   ConstraintKind,
   Dimension,
   DimensionKind,
-  Entity,
   Id,
   LineEntity,
+  Layer,
+  ShapeEntity,
   SketchDoc,
   Style,
   TextEntity,
   Vec2,
 } from '../model/types';
+import { shapeSize } from '../model/shape';
+import { DEFAULT_LAYER, groupMembers, isInert, layerIdOf, layersOf } from '../model/layers';
+import { applyXf, cloneInto, type Xf, type XfReport } from './xform';
 import { ORIGIN_ID } from '../model/types';
 import {
   addCircle,
@@ -25,6 +29,7 @@ import {
   createDoc,
   deleteIds,
   dissolvePath,
+  entityPointIds,
   fixValuesFor,
   lineOf,
   newId,
@@ -102,6 +107,8 @@ export const DIM_KIND_LABELS: Record<DimensionKind, string> = {
   diameter: 'Durchmesser',
   angle: 'Winkel',
   angleX: 'Winkel zur X-Achse',
+  width: 'Breite',
+  height: 'Höhe',
 };
 
 // ---------------------------------------------------------------------------
@@ -157,6 +164,7 @@ export class Editor {
     } catch (e) {
       return { ok: false, reason: 'invalid', message: e instanceof Error ? e.message : String(e) };
     }
+    next = this.assignNewToLayer(start, next);
 
     if (opts.skipSolve || !this.solver) {
       if (next === current) return { ok: true, doc: current, result: null };
@@ -175,6 +183,11 @@ export class Editor {
     next = produce(next, (d) => {
       for (const [id, val] of Object.entries(ev.values)) if (d.dims[id] && d.dims[id].value !== val) d.dims[id].value = val;
     });
+    // Breite/Höhe von Formen steuern deren Maßstab (außerhalb des Solvers)
+    const sized = applyShapeSizes(next);
+    if ('error' in sized) {
+      if (!opts.allowOver) return { ok: false, reason: 'over', message: sized.error, conflicting: sized.ids, redundant: [] };
+    } else next = sized.doc;
 
     let res = this.solver.solve(next);
     const auto = new Set(opts.autoIds ?? []);
@@ -213,6 +226,17 @@ export class Editor {
     }
     this.accept(current, next, label, res, opts.select);
     return { ok: true, doc: next, result: res };
+  }
+
+  /** Neu angelegte Objekte ohne Ebene landen auf der Zielebene (nur wenn es mehrere Ebenen gibt). */
+  private assignNewToLayer(prev: SketchDoc, next: SketchDoc): SketchDoc {
+    if (next === prev || !next.layers || next.layers.length < 2) return next;
+    const fresh = Object.keys(next.entities).filter((id) => !prev.entities[id] && !next.entities[id].layer);
+    if (!fresh.length) return next;
+    const target = this.targetLayer(next);
+    return produce(next, (d) => {
+      for (const id of fresh) d.entities[id].layer = target;
+    });
   }
 
   private overMessage(doc: SketchDoc, res: SolveResult): string {
@@ -1043,68 +1067,39 @@ export class Editor {
   paste(offset: Vec2 = { x: 10, y: -10 }): CommitOutcome & { ids?: Id[] } {
     const clip = this.clipboard;
     if (!clip) return { ok: false, reason: 'invalid', message: 'Zwischenablage ist leer' };
-    const created: Id[] = [];
-    const out = this.commit('Einfügen', (d) => {
-      const src = clip.doc;
-      const idMap = new Map<Id, Id>();
-      const mapId = (old: Id, prefix: string) => {
-        let n = idMap.get(old);
-        if (!n) {
-          n = newId(d, prefix);
-          idMap.set(old, n);
-        }
-        return n;
-      };
-      // Objekte samt Linien von Pfaden
-      const ents = new Set<Id>();
-      for (const id of clip.ids) {
-        const e = src.entities[id];
-        if (!e) continue;
-        ents.add(id);
-        if (e.kind === 'path') e.edges.forEach((ed) => ents.add(ed.id));
-      }
-      const pointIds = new Set<Id>();
-      for (const p of Object.values(src.points)) if (p.owner && ents.has(p.owner)) pointIds.add(p.id);
-      for (const pid of pointIds) {
-        const p = src.points[pid];
-        const nid = mapId(pid, 'p');
-        d.points[nid] = { ...p, id: nid, x: p.x + offset.x, y: p.y + offset.y, owner: p.owner ? mapId(p.owner, prefixOf(src.entities[p.owner])) : undefined };
-        if (!d.points[nid].owner) delete d.points[nid].owner;
-      }
-      for (const eid of ents) {
-        const e = src.entities[eid];
-        const nid = mapId(eid, prefixOf(e));
-        const copy = structuredClone(e) as Entity;
-        copy.id = nid;
-        if (copy.kind === 'line') {
-          copy.p1 = idMap.get(copy.p1)!;
-          copy.p2 = idMap.get(copy.p2)!;
-        } else if (copy.kind === 'circle') copy.center = idMap.get(copy.center)!;
-        else if (copy.kind === 'text') copy.anchor = idMap.get(copy.anchor)!;
-        else if (copy.kind === 'path') copy.edges = copy.edges.map((ed) => ({ ...ed, id: mapId(ed.id, 'l') }));
-        d.entities[nid] = copy;
-      }
-      for (const id of clip.ids) {
-        const nid = idMap.get(id);
-        if (nid) {
-          d.order.push(nid);
-          created.push(nid);
-        }
-      }
-      // Innere Abhängigkeiten und Bemaßungen mitnehmen (ohne Bezug nach außen)
-      const inside = (rid: Id) => idMap.has(rid);
-      for (const c of Object.values(src.constraints)) {
-        if (c.kind === 'fix' || !c.refs.every(inside)) continue;
-        const nc = addConstraint(d, c.kind, c.refs.map((r) => idMap.get(r)!));
-        void nc;
-      }
-      for (const m of Object.values(src.dims)) {
-        if (!m.refs.every(inside)) continue;
-        addDimension(d, { ...m, refs: m.refs.map((r) => idMap.get(r)!), expr: numberToExpr(m.value) });
-      }
-    }, { autoIds: [] });
+    let created: Id[] = [];
+    const out = this.commit(
+      'Einfügen',
+      (d) => {
+        created = cloneInto(d, clip.doc, clip.ids);
+        applyXf(d, created, { kind: 'move', dx: offset.x, dy: offset.y });
+      },
+      { autoIds: [] },
+    );
     if (out.ok) this.set({ selection: created });
     return { ...out, ids: created };
+  }
+
+  /**
+   * Verschieben, Drehen, Skalieren oder Spiegeln der Auswahl (mit `copy`: als Kopie).
+   * Gebundene Geometrie folgt dem Solver; Hinweise (z. B. Text nicht drehbar) als Meldung.
+   */
+  transform(xf: Xf, opts: { ids?: Id[]; copy?: boolean; label?: string } = {}): CommitOutcome & { ids?: Id[] } {
+    const doc = this.s.doc;
+    const targets = drawableTargets(doc, opts.ids ?? this.s.selection);
+    if (!targets.length) return { ok: false, reason: 'invalid', message: 'Zuerst Objekte auswählen.' };
+    const report: XfReport = { notes: new Set() };
+    let result = targets;
+    const label = opts.label ?? XF_LABELS[xf.kind] + (opts.copy ? ' (Kopie)' : '');
+    const out = this.commit(label, (d) => {
+      if (opts.copy) result = cloneInto(d, doc, targets);
+      applyXf(d, result, xf, report);
+    });
+    if (out.ok) {
+      this.set({ selection: result });
+      for (const n of report.notes) this.toast(n, 'info', 6000);
+    }
+    return { ...out, ids: result };
   }
 
   duplicate(ids: Id[] = this.s.selection): CommitOutcome & { ids?: Id[] } {
@@ -1172,8 +1167,11 @@ export class Editor {
   // Auswahl, Ansicht, Meldungen
   // -------------------------------------------------------------------------
 
-  select(ids: Id[], mode: 'replace' | 'add' | 'toggle' = 'replace'): void {
+  select(idsIn: Id[], mode: 'replace' | 'add' | 'toggle' = 'replace'): void {
     const cur = this.s.selection;
+    // Gruppen werden immer als Ganzes ausgewählt
+    const doc = this.s.doc;
+    const ids = [...new Set(idsIn.flatMap((id) => groupMembers(doc, id)))];
     let next: Id[];
     if (mode === 'replace') next = [...new Set(ids)];
     else if (mode === 'add') next = [...new Set([...cur, ...ids])];
@@ -1190,7 +1188,217 @@ export class Editor {
 
   selectAll(): void {
     const doc = this.s.doc;
-    this.set({ selection: [...doc.order] });
+    this.set({ selection: doc.order.filter((id) => !isInert(doc, id)) });
+  }
+
+  // -------------------------------------------------------------------------
+  // Ebenen und Gruppen
+  // -------------------------------------------------------------------------
+
+  /** Ebene für neue Objekte: gewählte, sonst oberste sichtbare und nicht gesperrte. */
+  targetLayer(doc: SketchDoc = this.s.doc): Id {
+    const ls = layersOf(doc);
+    const a = this.s.activeLayer;
+    const act = ls.find((l) => l.id === a && l.visible && !l.locked);
+    if (act) return act.id;
+    const top = [...ls].reverse().find((l) => l.visible && !l.locked);
+    return (top ?? ls[ls.length - 1]).id;
+  }
+
+  setActiveLayer(id: Id): void {
+    this.set({ activeLayer: id });
+  }
+
+  addLayer(name?: string): Id {
+    let id = '';
+    this.commit(
+      'Ebene hinzufügen',
+      (d) => {
+        if (!d.layers || !d.layers.length) d.layers = [{ ...DEFAULT_LAYER }];
+        id = newId(d, 'L');
+        d.layers.push({ id, name: name ?? `Ebene ${d.layers.length + 1}`, visible: true, locked: false });
+      },
+      { skipSolve: true },
+    );
+    this.set({ activeLayer: id });
+    return id;
+  }
+
+  updateLayer(id: Id, patch: Partial<Pick<Layer, 'name' | 'visible' | 'locked'>>): CommitOutcome {
+    const label = patch.name !== undefined ? 'Ebene umbenennen' : patch.visible !== undefined ? (patch.visible ? 'Ebene einblenden' : 'Ebene ausblenden') : patch.locked ? 'Ebene sperren' : 'Ebene entsperren';
+    const out = this.commit(
+      label,
+      (d) => {
+        if (!d.layers || !d.layers.length) d.layers = [{ ...DEFAULT_LAYER }];
+        const l = d.layers.find((x) => x.id === id);
+        if (l) Object.assign(l, patch);
+      },
+      { skipSolve: true },
+    );
+    // Ausgeblendetes/Gesperrtes kann nicht ausgewählt bleiben
+    const doc = this.s.doc;
+    this.set({ selection: this.s.selection.filter((x) => !isInert(doc, x)) });
+    return out;
+  }
+
+  /** Ebene nach oben (+1) oder unten (−1) schieben. */
+  moveLayer(id: Id, dir: 1 | -1): CommitOutcome {
+    return this.commit(
+      'Ebene verschieben',
+      (d) => {
+        if (!d.layers || !d.layers.length) d.layers = [{ ...DEFAULT_LAYER }];
+        const i = d.layers.findIndex((x) => x.id === id);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= d.layers.length) return;
+        [d.layers[i], d.layers[j]] = [d.layers[j], d.layers[i]];
+      },
+      { skipSolve: true },
+    );
+  }
+
+  /** Löscht eine Ebene; ihre Objekte wandern auf die Ebene darunter (bzw. darüber). */
+  deleteLayer(id: Id): CommitOutcome {
+    const ls = layersOf(this.s.doc);
+    if (ls.length < 2) return { ok: false, reason: 'invalid', message: 'Die letzte Ebene kann nicht gelöscht werden.' };
+    const i = ls.findIndex((l) => l.id === id);
+    const target = ls[i > 0 ? i - 1 : 1].id;
+    return this.commit(
+      'Ebene löschen',
+      (d) => {
+        d.layers = layersOf(d).filter((l) => l.id !== id).map((l) => ({ ...l }));
+        for (const e of Object.values(d.entities)) if (layerIdOf(this.s.doc, e) === id) e.layer = target;
+      },
+      { skipSolve: true },
+    );
+  }
+
+  moveToLayer(ids: Id[], layerId: Id): CommitOutcome {
+    const targets = drawableTargets(this.s.doc, ids);
+    if (!targets.length) return { ok: false, reason: 'invalid', message: 'Nichts ausgewählt.' };
+    return this.commit(
+      'Auf Ebene verschieben',
+      (d) => {
+        if (!d.layers || !d.layers.length) d.layers = [{ ...DEFAULT_LAYER }];
+        for (const id of targets) {
+          for (const m of groupMembers(d, id)) {
+            const e = d.entities[m];
+            if (e) e.layer = layerId;
+          }
+        }
+      },
+      { skipSolve: true },
+    );
+  }
+
+  /** Verschiebt Objekte (ihre Punkte) um je einen Versatz; gebundene Geometrie folgt dem Solver. */
+  translate(moves: Map<Id, Vec2>, label = 'Verschieben'): CommitOutcome {
+    const doc = this.s.doc;
+    const delta = new Map<Id, Vec2>();
+    for (const [id, v] of moves) {
+      for (const m of groupMembers(doc, id)) {
+        const e = doc.entities[m];
+        if (!e) continue;
+        for (const pid of entityPointIds(doc, e)) if (pid !== ORIGIN_ID && !delta.has(pid)) delta.set(pid, v);
+      }
+    }
+    if (!delta.size) return { ok: false, reason: 'invalid', message: 'Nichts zu verschieben.' };
+    return this.commit(label, (d) => {
+      for (const [pid, v] of delta) {
+        const p = d.points[pid];
+        if (!p) continue;
+        p.x += v.x;
+        p.y += v.y;
+      }
+      for (const c of Object.values(d.constraints)) {
+        if (c.kind === 'fix' && c.fixedAt && delta.has(c.refs[0])) {
+          const v = delta.get(c.refs[0])!;
+          c.fixedAt[0] += v.x;
+          c.fixedAt[1] += v.y;
+        }
+      }
+    });
+  }
+
+  /** Ausrichten an der gemeinsamen Box der Auswahl. */
+  align(how: 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom', ids: Id[] = this.s.selection): CommitOutcome {
+    const doc = this.s.doc;
+    const targets = unitTargets(doc, ids);
+    if (targets.length < 2) return { ok: false, reason: 'invalid', message: 'Zum Ausrichten mindestens zwei Objekte auswählen.' };
+    const boxes = targets.map((t) => unitBox(doc, t)).filter((b): b is NonNullable<typeof b> => !!b);
+    const all = { minX: Math.min(...boxes.map((b) => b.minX)), maxX: Math.max(...boxes.map((b) => b.maxX)), minY: Math.min(...boxes.map((b) => b.minY)), maxY: Math.max(...boxes.map((b) => b.maxY)) };
+    const moves = new Map<Id, Vec2>();
+    targets.forEach((t, i) => {
+      const b = boxes[i];
+      if (!b) return;
+      let dx = 0;
+      let dy = 0;
+      if (how === 'left') dx = all.minX - b.minX;
+      if (how === 'right') dx = all.maxX - b.maxX;
+      if (how === 'hcenter') dx = (all.minX + all.maxX) / 2 - (b.minX + b.maxX) / 2;
+      if (how === 'bottom') dy = all.minY - b.minY;
+      if (how === 'top') dy = all.maxY - b.maxY;
+      if (how === 'vcenter') dy = (all.minY + all.maxY) / 2 - (b.minY + b.maxY) / 2;
+      if (Math.abs(dx) > 1e-9 || Math.abs(dy) > 1e-9) moves.set(t[0], { x: dx, y: dy });
+    });
+    if (!moves.size) return { ok: true, doc, result: null };
+    return this.translate(moves, 'Ausrichten');
+  }
+
+  /** Gleichmäßig verteilen (gleiche Abstände zwischen den Objekten). */
+  distribute(axis: 'x' | 'y', ids: Id[] = this.s.selection): CommitOutcome {
+    const doc = this.s.doc;
+    const targets = unitTargets(doc, ids);
+    if (targets.length < 3) return { ok: false, reason: 'invalid', message: 'Zum Verteilen mindestens drei Objekte auswählen.' };
+    const items = targets.map((t) => ({ t, b: unitBox(doc, t)! })).filter((x) => x.b);
+    const lo = (b: BBoxLike) => (axis === 'x' ? b.minX : b.minY);
+    const hi = (b: BBoxLike) => (axis === 'x' ? b.maxX : b.maxY);
+    items.sort((a, b) => lo(a.b) + hi(a.b) - lo(b.b) - hi(b.b));
+    const span = hi(items[items.length - 1].b) - lo(items[0].b);
+    const sizes = items.reduce((acc, x) => acc + hi(x.b) - lo(x.b), 0);
+    const gap = (span - sizes) / (items.length - 1);
+    const moves = new Map<Id, Vec2>();
+    let cursor = lo(items[0].b);
+    for (const it of items) {
+      const shift = cursor - lo(it.b);
+      if (Math.abs(shift) > 1e-9) moves.set(it.t[0], axis === 'x' ? { x: shift, y: 0 } : { x: 0, y: shift });
+      cursor += hi(it.b) - lo(it.b) + gap;
+    }
+    if (!moves.size) return { ok: true, doc, result: null };
+    return this.translate(moves, 'Verteilen');
+  }
+
+  group(ids: Id[] = this.s.selection): CommitOutcome {
+    const targets = drawableTargets(this.s.doc, ids);
+    if (targets.length < 2) return { ok: false, reason: 'invalid', message: 'Zum Gruppieren mindestens zwei Objekte auswählen.' };
+    let gid = '';
+    return this.commit(
+      'Gruppieren',
+      (d) => {
+        gid = newId(d, 'g');
+        for (const id of targets) {
+          for (const m of groupMembers(d, id)) {
+            const e = d.entities[m];
+            if (e) e.group = gid;
+          }
+        }
+      },
+      { skipSolve: true, select: targets },
+    );
+  }
+
+  ungroup(ids: Id[] = this.s.selection): CommitOutcome {
+    const targets = drawableTargets(this.s.doc, ids).filter((id) => this.s.doc.entities[id]?.group);
+    if (!targets.length) return { ok: false, reason: 'invalid', message: 'Keine Gruppe ausgewählt.' };
+    return this.commit(
+      'Gruppierung aufheben',
+      (d) => {
+        for (const id of targets) {
+          const e = d.entities[id];
+          if (e) delete e.group;
+        }
+      },
+      { skipSolve: true },
+    );
   }
 
   setView(v: Partial<ViewState>): void {
@@ -1245,13 +1453,59 @@ export class Editor {
 // Hilfsfunktionen
 // ---------------------------------------------------------------------------
 
-export function clampZoom(z: number): number {
-  return Math.min(400, Math.max(0.02, z));
+/** Setzt den Maßstab von Formen aus ihren (treibenden) Breiten-/Höhenbemaßungen. */
+export function applyShapeSizes(doc: SketchDoc): { doc: SketchDoc } | { error: string; ids: Id[] } {
+  const byShape = new Map<Id, Dimension[]>();
+  for (const dm of Object.values(doc.dims)) {
+    if (dm.driven || (dm.kind !== 'width' && dm.kind !== 'height')) continue;
+    const list = byShape.get(dm.refs[0]) ?? [];
+    list.push(dm);
+    byShape.set(dm.refs[0], list);
+  }
+  if (!byShape.size) return { doc };
+  for (const [sid, list] of byShape) {
+    if (list.length > 1) return { error: 'Breite und Höhe einer Form legen beide ihre Größe fest. Lege eine davon als getriebene Bemaßung (Referenz) an.', ids: list.map((x) => x.id) };
+    if (!doc.entities[sid]) continue;
+  }
+  const next = produce(doc, (d) => {
+    for (const [sid, list] of byShape) {
+      const s = d.entities[sid];
+      if (!s || s.kind !== 'shape') continue;
+      const dm = list[0];
+      const local = shapeSize({ ...s, scale: 1 } as ShapeEntity);
+      const base = dm.kind === 'width' ? local.w : local.h;
+      if (base > 1e-9) {
+        const k = dm.value / base;
+        if (Math.abs(k - s.scale) > 1e-12) s.scale = k;
+      }
+    }
+  });
+  return { doc: next };
 }
 
-function prefixOf(e: Entity | undefined): string {
-  if (!e) return 'x';
-  return e.kind === 'line' ? 'l' : e.kind === 'circle' ? 'c' : e.kind === 'text' ? 't' : 'pa';
+type BBoxLike = { minX: number; minY: number; maxX: number; maxY: number };
+
+/** Auswahl als Einheiten: Gruppen zählen als ein Objekt. */
+export function unitTargets(doc: SketchDoc, ids: Id[]): Id[][] {
+  const seen = new Set<Id>();
+  const out: Id[][] = [];
+  for (const id of drawableTargets(doc, ids)) {
+    if (seen.has(id)) continue;
+    const members = groupMembers(doc, id);
+    members.forEach((m) => seen.add(m));
+    out.push(members);
+  }
+  return out;
+}
+
+export function unitBox(doc: SketchDoc, members: Id[]): BBoxLike | null {
+  return docBBox(doc, { only: new Set(members) });
+}
+
+export const XF_LABELS: Record<Xf['kind'], string> = { move: 'Verschieben', rotate: 'Drehen', scale: 'Skalieren', mirror: 'Spiegeln' };
+
+export function clampZoom(z: number): number {
+  return Math.min(400, Math.max(0.02, z));
 }
 
 export function existsIn(doc: SketchDoc, id: Id): boolean {

@@ -7,11 +7,47 @@
 use percent_encoding::percent_decode_str;
 use tauri::ipc::{InvokeBody, Request, Response};
 
+use std::sync::OnceLock;
+
+/// Schriftdatenbank des Systems (einmal geladen).
+fn font_db() -> &'static fontdb::Database {
+    static DB: OnceLock<fontdb::Database> = OnceLock::new();
+    DB.get_or_init(|| {
+        let mut db = fontdb::Database::new();
+        db.load_system_fonts();
+        db
+    })
+}
+
+/// Schriftdatei zu Familie, Stärke und Stil (für „Text in Pfade“). Antwort: 4 Byte Index der
+/// Schrift in einer Sammlung (.ttc, little endian), danach die Datei.
+#[tauri::command]
+fn font_file(family: String, weight: u16, italic: bool) -> Result<Response, String> {
+    let db = font_db();
+    let families = [fontdb::Family::Name(&family)];
+    let query = fontdb::Query {
+        families: &families,
+        weight: fontdb::Weight(weight),
+        stretch: fontdb::Stretch::Normal,
+        style: if italic { fontdb::Style::Italic } else { fontdb::Style::Normal },
+    };
+    let id = db
+        .query(&query)
+        .ok_or_else(|| format!("Schrift „{family}“ ist nicht installiert"))?;
+    db.with_face_data(id, |data, index| {
+        let mut out = Vec::with_capacity(data.len() + 4);
+        out.extend_from_slice(&index.to_le_bytes());
+        out.extend_from_slice(data);
+        out
+    })
+    .map(Response::new)
+    .ok_or_else(|| format!("Schrift „{family}“ konnte nicht gelesen werden"))
+}
+
 /// Alle installierten Schriftfamilien, alphabetisch und ohne Doppelte.
 #[tauri::command]
 fn list_fonts() -> Vec<String> {
-    let mut db = fontdb::Database::new();
-    db.load_system_fonts();
+    let db = font_db();
     let mut names: Vec<String> = db
         .faces()
         .flat_map(|face| face.families.iter().map(|(name, _)| name.clone()))
@@ -53,7 +89,7 @@ pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![list_fonts, read_file, write_file]);
+        .invoke_handler(tauri::generate_handler![list_fonts, font_file, read_file, write_file]);
 
     #[cfg(any(debug_assertions, feature = "selftest"))]
     if let Some(plugin) = selftest::plugin() {

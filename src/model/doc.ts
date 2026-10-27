@@ -69,6 +69,7 @@ export function entityPointIds(doc: SketchDoc, e: Entity): Id[] {
     case 'circle':
       return [e.center];
     case 'text':
+    case 'shape':
       return [e.anchor];
     case 'path': {
       const ids: Id[] = [];

@@ -130,5 +130,9 @@ export function dimensionPrimitives(doc: SketchDoc, d: Dimension): SketchPrimiti
       ];
     case 'angleX':
       return [{ id, type: 'p2p_angle', p1_id: r[0], p2_id: r[1], angle: d.value * DEG }];
+    case 'width':
+    case 'height':
+      // Größe einer Form: wirkt auf deren Maßstab, nicht über den Solver
+      return [];
   }
 }

@@ -71,6 +71,10 @@ interface EntityBase {
   /** Konstruktionsgeometrie: gestrichelt, wird nie exportiert. */
   construction: boolean;
   style: Style;
+  /** Ebene (fehlt = erste Ebene) */
+  layer?: Id;
+  /** Gruppe: Objekte mit derselben Gruppen-Id werden zusammen ausgewählt */
+  group?: Id;
 }
 
 export interface LineEntity extends EntityBase {
@@ -118,7 +122,49 @@ export interface PathEntity extends EntityBase {
   closed: boolean;
 }
 
-export type Entity = LineEntity | CircleEntity | TextEntity | PathEntity;
+/** Knoten einer Form: Punkt plus optionale Bézier-Griffe (absolut, lokale Koordinaten). */
+export interface ShapeNode {
+  x: number;
+  y: number;
+  /** Griff vor dem Knoten */
+  ix?: number;
+  iy?: number;
+  /** Griff nach dem Knoten */
+  ox?: number;
+  oy?: number;
+}
+
+export interface Contour {
+  closed: boolean;
+  nodes: ShapeNode[];
+}
+
+/**
+ * Freie Form (Ergebnis von „Text in Pfade“, booleschen Operationen, Versatz …).
+ * Die Kontur liegt in lokalen Koordinaten (mm, Y nach oben) um den Ankerpunkt; Lage über den
+ * Anker (vom Solver bemaßbar), Größe über `scale`, Drehung in Grad, Spiegeln über `flipX`.
+ * Mehrere Konturen bilden Löcher nach der Füllregel.
+ */
+export interface ShapeEntity extends EntityBase {
+  kind: 'shape';
+  anchor: Id;
+  contours: Contour[];
+  fillRule: 'nonzero' | 'evenodd';
+  scale: number;
+  rotation: number;
+  flipX?: boolean;
+  /** Ursprung, z. B. „Text TEAM“ */
+  name?: string;
+}
+
+export type Entity = LineEntity | CircleEntity | TextEntity | PathEntity | ShapeEntity;
+
+export interface Layer {
+  id: Id;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+}
 export type EntityKind = Entity['kind'];
 
 export type ConstraintKind =
@@ -164,6 +210,7 @@ export interface Constraint {
  * - radius / diameter: [Kreis]
  * - angle:     [A1, A2, B1, B2] (Punkte)    Winkel von A1→A2 nach B1→B2, gegen den Uhrzeigersinn
  * - angleX:    [Punkt A, Punkt B]           Winkel von A→B zur X-Achse
+ * - width / height: [Form]                  Breite/Höhe einer Form (steuert deren Maßstab, nicht der Solver)
  */
 export type DimensionKind =
   | 'distance'
@@ -174,7 +221,9 @@ export type DimensionKind =
   | 'radius'
   | 'diameter'
   | 'angle'
-  | 'angleX';
+  | 'angleX'
+  | 'width'
+  | 'height';
 
 export interface Dimension {
   id: Id;
@@ -204,8 +253,10 @@ export interface SketchDoc {
   entities: Record<Id, Entity>;
   constraints: Record<Id, Constraint>;
   dims: Record<Id, Dimension>;
-  /** Zeichenreihenfolge der sichtbaren Objekte, hinten → vorne */
+  /** Zeichenreihenfolge der sichtbaren Objekte, hinten → vorne (innerhalb der Ebenen) */
   order: Id[];
+  /** Ebenen, unten → oben. Fehlt in alten Dateien (dann eine Ebene „Motiv“). */
+  layers?: Layer[];
   /** Zähler für eindeutige Ids */
   nextId: number;
   /** Zähler für Bemaßungsnamen d0, d1 … */

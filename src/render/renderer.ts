@@ -5,6 +5,8 @@ import { measureText } from '../model/textMetrics';
 import type { Analysis } from '../solver/analysis';
 import type { Settings } from '../store/state';
 import { drawDesign } from './drawDesign';
+import { shapeWorldPolys } from '../model/shape';
+import { isHidden } from '../model/layers';
 import { dimGeometry, type DimGeom } from './dimGeometry';
 import { drawGlyphs, layoutGlyphs, type GlyphItem } from './glyphs';
 import { RULER, THEME } from './theme';
@@ -215,6 +217,7 @@ function isFree(s: SceneState, e: Entity): boolean {
     case 'circle':
       return fp.has(e.center) || a.free.circles.has(e.id);
     case 'text':
+    case 'shape':
       return fp.has(e.anchor);
     case 'path':
       return false;
@@ -228,7 +231,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
   ctx.lineCap = 'round';
   // Pfadinneres hervorheben, wenn ausgewählt/überfahren
   for (const e of Object.values(doc.entities)) {
-    if (e.kind !== 'path') continue;
+    if (e.kind !== 'path' || isHidden(doc, e.id)) continue;
     if (!(s.selection.has(e.id) || s.hover === e.id)) continue;
     ctx.beginPath();
     e.edges.forEach((ed, i) => {
@@ -255,7 +258,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     return b.path;
   };
   for (const e of Object.values(doc.entities)) {
-    if (e.kind === 'path') continue;
+    if (e.kind === 'path' || isHidden(doc, e.id)) continue;
     if (e.kind === 'text') {
       const sel = s.selection.has(e.id) || s.hover === e.id;
       if (!sel) continue;
@@ -270,6 +273,20 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
       continue;
     }
     const st = statusColor(s, e, problems);
+    if (e.kind === 'shape') {
+      // Formen: Umriss nur bei Auswahl/Überfahren (die Form selbst ist das Design)
+      if (!(s.selection.has(e.id) || s.hover === e.id)) continue;
+      const p = batch(st.color, 1.4, false);
+      for (const poly of shapeWorldPolys(doc, e)) {
+        poly.forEach((q, i) => {
+          const sq = T(q);
+          if (i === 0) p.moveTo(sq.x, sq.y);
+          else p.lineTo(sq.x, sq.y);
+        });
+        p.closePath();
+      }
+      continue;
+    }
     const path = batch(st.color, st.width, e.construction);
     if (e.kind === 'line') {
       const a = T(pt(doc, e.p1));
@@ -308,7 +325,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     return p;
   };
   for (const p of Object.values(doc.points)) {
-    if (p.id === ORIGIN_ID) continue;
+    if (p.id === ORIGIN_ID || isHidden(doc, p.id)) continue;
     const sp = T(p);
     if (sp.x < -10 || sp.y < -10 || sp.x > vp.width + 10 || sp.y > vp.height + 10) continue;
     const key = Math.round(sp.x) * 100003 + Math.round(sp.y);
@@ -322,7 +339,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     if (problems.has(p.id)) color = THEME.conflict;
     if (hov) color = THEME.hover;
     if (sel) color = THEME.selected;
-    const isCenter = owner?.kind === 'circle' || (p.construction && !owner) || owner?.kind === 'path';
+    const isCenter = owner?.kind === 'circle' || (p.construction && !owner) || owner?.kind === 'path' || owner?.kind === 'shape';
     const r = sel || hov ? 4 : 2.6;
     if (isCenter || p.construction) {
       const c = get(crosses, color);
@@ -377,6 +394,7 @@ function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>): SceneLayout
   ctx.save();
   ctx.font = DIM_FONT;
   for (const d of Object.values(doc.dims) as Dimension[]) {
+    if (d.refs.some((r) => isHidden(doc, r))) continue;
     const g = dimGeometry(doc, d, px, s.settings.dimDisplay);
     if (!g) continue;
     // Außerhalb des Bildes? (Text und Linien grob prüfen)

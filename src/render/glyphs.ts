@@ -2,6 +2,7 @@ import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
 import { circleOf, lineOf, pt } from '../model/doc';
 import { THEME } from './theme';
 import { toScreen, type Viewport } from './viewport';
+import { isHidden } from '../model/layers';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -75,6 +76,7 @@ export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>): Glyp
 
   for (const c of Object.values(doc.constraints)) {
     if (only && !c.refs.some((r) => only.has(r)) && !only.has(c.id)) continue;
+    if (c.refs.some((r) => isHidden(doc, r))) continue;
     const r = c.refs;
     const push = (targetId: Id) => {
       const f = anchorFor(targetId);

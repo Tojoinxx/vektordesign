@@ -1,5 +1,6 @@
 import type { Dimension, SketchDoc, Vec2 } from '../model/types';
-import { circleOf, lineOf, pt } from '../model/doc';
+import { circleOf, entityOf, lineOf, pt } from '../model/doc';
+import { contoursBBox, shapeWorldContours } from '../model/shape';
 import { add, dist, dot, lineIntersection, mul, norm, normAngle2pi, projectOnLine, sub } from '../model/geometry';
 import { formatNumber } from '../params/expr';
 import type { Settings } from '../store/state';
@@ -49,10 +50,23 @@ export function dimGeometry(doc: SketchDoc, d: Dimension, px: number, display: S
       case 'distanceX':
       case 'distanceY':
       case 'pointLine':
-      case 'lineLine': {
+      case 'lineLine':
+      case 'width':
+      case 'height': {
         let A: Vec2;
         let B: Vec2;
-        if (d.kind === 'pointLine') {
+        if (d.kind === 'width' || d.kind === 'height') {
+          const sh = entityOf(doc, d.refs[0], 'shape');
+          const b = sh ? contoursBBox(shapeWorldContours(doc, sh)) : null;
+          if (!b) return null;
+          if (d.kind === 'width') {
+            A = { x: b.minX, y: b.maxY };
+            B = { x: b.maxX, y: b.maxY };
+          } else {
+            A = { x: b.maxX, y: b.minY };
+            B = { x: b.maxX, y: b.maxY };
+          }
+        } else if (d.kind === 'pointLine') {
           const l = lineOf(doc, d.refs[1]);
           if (!l || !P(d.refs[0])) return null;
           B = P(d.refs[0]);
@@ -72,10 +86,10 @@ export function dimGeometry(doc: SketchDoc, d: Dimension, px: number, display: S
         }
         let u: Vec2;
         let n: Vec2;
-        if (d.kind === 'distanceX') {
+        if (d.kind === 'distanceX' || d.kind === 'width') {
           u = { x: 1, y: 0 };
           n = { x: 0, y: 1 };
-        } else if (d.kind === 'distanceY') {
+        } else if (d.kind === 'distanceY' || d.kind === 'height') {
           u = { x: 0, y: 1 };
           n = { x: 1, y: 0 };
         } else {

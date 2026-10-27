@@ -777,7 +777,7 @@ kbd {
   align-items: center;
   gap: 6px;
   height: 32px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
@@ -1263,6 +1263,62 @@ kbd {
   padding: 0 8px;
   border: 1px solid var(--line);
   border-radius: var(--r);
+}
+
+.arrange-row {
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.arrange-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+/* Ebenen */
+.layer-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+}
+.layer-row.on {
+  background: var(--tape-soft);
+  border-color: var(--tape-dark);
+}
+.layer-row.off .layer-name {
+  color: var(--muted);
+}
+.layer-name {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.layer-name-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
 }
 
 /* Claude */
