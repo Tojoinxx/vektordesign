@@ -104,6 +104,9 @@ export async function openFile(types: FileType[]): Promise<OpenResult | null> {
 export const PROJECT_TYPE: FileType = { description: 'Vektordesign-Projekt', mime: 'application/json', ext: 'vdp' };
 export const SVG_TYPE: FileType = { description: 'SVG-Grafik', mime: 'image/svg+xml', ext: 'svg' };
 export const PNG_TYPE: FileType = { description: 'PNG-Bild', mime: 'image/png', ext: 'png' };
+export const PDF_TYPE: FileType = { description: 'PDF-Dokument', mime: 'application/pdf', ext: 'pdf' };
+export const EPS_TYPE: FileType = { description: 'EPS-Grafik', mime: 'application/postscript', ext: 'eps' };
+export const DXF_TYPE: FileType = { description: 'DXF-Zeichnung', mime: 'application/dxf', ext: 'dxf' };
 
 /** Dateiname ohne verbotene Zeichen. */
 export function safeName(name: string): string {
