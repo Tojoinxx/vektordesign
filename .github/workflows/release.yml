@@ -1,0 +1,58 @@
+# Versions-Tag (z. B. v0.2.0) → Windows-Installer bauen und als GitHub-Release veröffentlichen.
+#   git tag v0.2.0 && git push origin v0.2.0
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows-Installer veröffentlichen
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Version aus dem Tag übernehmen
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node scripts/set-version.mjs "$TAG"
+
+      - name: Unit-Tests
+        run: npm test
+
+      - name: Installer bauen und an das Release hängen
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Vektordesign ${{ github.ref_name }}
+          releaseBody: |
+            **Installation unter Windows:** `Vektordesign_…_x64-setup.exe` herunterladen und starten. Das Setup braucht keine Administratorrechte und läuft danach komplett offline.
+            Für die Verteilung über die IT gibt es zusätzlich das `.msi`-Paket.
+
+            Das Programm ist (noch) nicht signiert. Zeigt Windows SmartScreen eine Warnung, auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken.
+          releaseDraft: false
+          prerelease: false
+          generateReleaseNotes: true
+          uploadUpdaterJson: false
