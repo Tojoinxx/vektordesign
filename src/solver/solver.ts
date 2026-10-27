@@ -1,4 +1,4 @@
-import { Algorithm, DebugMode, SolveStatus, type GcsWrapper, type SketchPrimitive } from '@salusoft89/planegcs';
+import { Algorithm, DebugMode, GcsWrapper, SolveStatus, init_planegcs_module, type SketchPrimitive } from '@salusoft89/planegcs';
 import type { Constraint, Dimension, Id, SketchDoc, Vec2 } from '../model/types';
 import { constraintError, dimError } from '../model/measure';
 import { circleOf, lineOf } from '../model/doc';
@@ -410,7 +410,6 @@ export function withSolution(doc: SketchDoc, points: Record<Id, Vec2>, radii: Re
 
 /** Lädt das WebAssembly-Modul. `locateFile`/`wasmBinary` je nach Umgebung. */
 export async function createSolver(moduleArgs?: Record<string, unknown>): Promise<SketchSolver> {
-  const { init_planegcs_module, GcsWrapper } = await import('@salusoft89/planegcs');
   const mod = await init_planegcs_module(moduleArgs as never);
   const wrapper = new GcsWrapper(new mod.GcsSystem(), mod);
   return new SketchSolver(wrapper);

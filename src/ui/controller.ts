@@ -268,18 +268,19 @@ export class AppController {
     this.store.setState({ exportOpen: true, exportPreset: { format, dpi } });
   }
 
-  async exportFile(req: ExportRequest): Promise<boolean> {
+  /** Exportiert die Zeichnung. Ohne `path` fragt ein Speichern-Dialog nach dem Ziel (mit `path`: nur Desktop). */
+  async exportFile(req: ExportRequest, path?: string | null): Promise<boolean> {
     const doc = this.editor.s.doc;
     const base = safeName(this.projectName());
     try {
       if (req.format === 'svg') {
         const { svg, widthMm, heightMm } = exportSvg(doc, { bounds: req.bounds, mirror: req.mirror, title: this.projectName() });
-        const res = await saveFile(svg, `${base}${req.mirror ? '_gespiegelt' : ''}.svg`, SVG_TYPE);
+        const res = await saveFile(svg, `${base}${req.mirror ? '_gespiegelt' : ''}.svg`, SVG_TYPE, path);
         if (res) this.editor.toast(`SVG exportiert (${fmtMm(widthMm)} × ${fmtMm(heightMm)} mm)`, 'success');
         return !!res;
       }
       const out = await exportPng(doc, { dpi: req.dpi, bounds: req.bounds, mirror: req.mirror });
-      const res = await saveFile(out.bytes, `${base}_${req.dpi}dpi${req.mirror ? '_gespiegelt' : ''}.png`, PNG_TYPE);
+      const res = await saveFile(out.bytes, `${base}_${req.dpi}dpi${req.mirror ? '_gespiegelt' : ''}.png`, PNG_TYPE, path);
       if (res) this.editor.toast(`PNG exportiert (${out.widthPx} × ${out.heightPx} px, ${req.dpi} dpi)`, 'success');
       return !!res;
     } catch (e) {

@@ -1,8 +1,10 @@
+import { version } from '../../package.json';
 import type { SketchDoc } from './types';
 import { ORIGIN_ID } from './types';
 
 export const APP_NAME = 'Vektordesign';
-export const APP_VERSION = '0.1.0';
+/** Version kommt aus package.json (eine Quelle für App, Installer und Projektdateien). */
+export const APP_VERSION: string = version;
 export const PROJECT_EXT = 'vdp';
 
 /** Projektdatei (.vdp) = JSON des Skizzenmodells plus Metadaten. */
