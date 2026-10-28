@@ -106,6 +106,8 @@ export interface AppState {
   starRatio: number;
   /** Neue Geometrie als Konstruktionsgeometrie zeichnen */
   constructionMode: boolean;
+  /** Symmetrie-Modus: Gezeichnetes wird am Ursprung gespiegelt (senkrechte / waagrechte Achse / beide) */
+  symmetry: 'off' | 'v' | 'h' | 'vh';
   settings: Settings;
   currentStyle: Style;
   textDefaults: TextDefaults;
@@ -168,6 +170,7 @@ export function initialState(): AppState {
     starPoints: 5,
     starRatio: 0.45,
     constructionMode: false,
+    symmetry: 'off',
     settings: { ...DEFAULT_SETTINGS },
     currentStyle: { ...DEFAULT_STYLE },
     textDefaults: { fontFamily: 'Arial', fontSize: 10, fontWeight: 700, italic: false, align: 'left' },

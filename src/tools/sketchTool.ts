@@ -78,6 +78,7 @@ export class SketchTool implements Tool {
         return;
     }
     if (out.ok) {
+      if (ed.s.symmetry !== 'off') ed.mirrorLastCreated();
       this.last = RECOGNIZED_LABELS[r.kind];
       ed.toast(`${this.last} erkannt`, 'success', 1400);
     } else if (out.message) ed.toast(out.message, 'error');

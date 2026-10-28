@@ -1123,6 +1123,30 @@ await step('Vorlagen-Generator: Badge mit Text im Ring einfügen, QR-Code-Vorsch
   results.push(`   Badge: ${info.n} Formen in einer Gruppe, 80 mm`);
 });
 
+await step('Symmetrie-Modus: Kreis wird beim Zeichnen gespiegelt (4-fach), ein Rückgängig-Schritt', async () => {
+  await newDoc();
+  await app(() => window.vektordesign.editor.setView({ cx: 0, cy: 0, zoom: 4 }));
+  await page.click('[data-testid="ribbon-sketch"]');
+  for (let i = 0; i < 3; i++) await page.click('[data-testid="symmetry"]');
+  assert((await app(() => window.vektordesign.store.getState().symmetry)) === 'vh', 'Symmetrie nicht 4-fach');
+  await page.keyboard.press('c');
+  await clickWorld(30, 20);
+  await moveWorld(38, 20);
+  await shot('42-symmetrie-vorschau');
+  await page.keyboard.type('12');
+  await page.keyboard.press('Enter');
+  await sleep(200);
+  const n = await app(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'circle').length);
+  assert(n === 4, `Kreise: ${n}`);
+  await page.keyboard.press('Escape');
+  await shot('43-symmetrie');
+  await app(() => window.vektordesign.editor.undo());
+  const m = await app(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'circle').length);
+  assert(m === 0, `nach Rückgängig: ${m}`);
+  await page.click('[data-testid="symmetry"]');
+  results.push('   Symmetrie 4-fach: 4 Kreise aus einem Klick');
+});
+
 // ---------------------------------------------------------------------------
 // Meilenstein 4: iPad (Touch, Apple Pencil, Web-App, Sync)
 // ---------------------------------------------------------------------------

@@ -387,3 +387,11 @@ export const IconBadge = (p: { size?: number }) => (
     <path d="M12 9.6 l0.8 1.6 1.7 0.2 -1.25 1.2 0.3 1.7 -1.55 -0.8 -1.55 0.8 0.3 -1.7 -1.25 -1.2 1.7 -0.2 Z" fill="currentColor" stroke="none" />
   </Icon>
 );
+export const IconSymmetry = (p: { size?: number; mode?: 'off' | 'v' | 'h' | 'vh' }) => (
+  <Icon size={p.size}>
+    {(p.mode === 'v' || p.mode === 'vh' || !p.mode || p.mode === 'off') && <path d="M12 3 V21" strokeDasharray="2.5 2" />}
+    {(p.mode === 'h' || p.mode === 'vh') && <path d="M3 12 H21" strokeDasharray="2.5 2" />}
+    <path d="M9 7 L5 12 L9 17 Z" fill="currentColor" fillOpacity="0.25" />
+    <path d="M15 7 L19 12 L15 17 Z" fill="currentColor" fillOpacity={p.mode === 'off' ? 0 : 0.25} />
+  </Icon>
+);

@@ -142,6 +142,48 @@ export function CanvasView() {
       },
       (cx, v) => {
         app.current.drawOverlay?.(cx, v);
+        const sym = s.symmetry;
+        if (sym !== 'off') {
+          // Achsen und gespiegelte Vorschau des laufenden Werkzeugs
+          const o = toScreen(v, { x: 0, y: 0 });
+          cx.save();
+          cx.strokeStyle = '#e8590c';
+          cx.globalAlpha = 0.7;
+          cx.setLineDash([8, 5]);
+          cx.lineWidth = 1;
+          cx.beginPath();
+          if (sym === 'v' || sym === 'vh') {
+            cx.moveTo(o.x, 0);
+            cx.lineTo(o.x, v.height);
+          }
+          if (sym === 'h' || sym === 'vh') {
+            cx.moveTo(0, o.y);
+            cx.lineTo(v.width, o.y);
+          }
+          cx.stroke();
+          cx.restore();
+          if (DRAW_TOOLS.has(app.current.id)) {
+            const flips: [number, number][] =
+              sym === 'v'
+                ? [[-1, 1]]
+                : sym === 'h'
+                  ? [[1, -1]]
+                  : [
+                      [-1, 1],
+                      [1, -1],
+                      [-1, -1],
+                    ];
+            for (const [fx, fy] of flips) {
+              cx.save();
+              cx.globalAlpha = 0.45;
+              cx.translate(o.x, o.y);
+              cx.scale(fx, fy);
+              cx.translate(-o.x, -o.y);
+              app.current.drawOverlay?.(cx, v);
+              cx.restore();
+            }
+          }
+        }
         drawPreflightMarks(cx, v, ui.preflight?.result ?? null);
       },
     );

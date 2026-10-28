@@ -58,6 +58,7 @@ import {
   IconIntersect,
   IconExclude,
   IconHalftone,
+  IconSymmetry,
   IconTextCircle,
   IconBadge,
   IconGrunge,
@@ -202,11 +203,15 @@ function EditRibbon() {
   );
 }
 
+const SYM_LABELS = { off: 'aus', v: 'senkrechte Achse', h: 'waagrechte Achse', vh: 'beide Achsen (4-fach)' } as const;
+const SYM_NEXT = { off: 'v', v: 'h', h: 'vh', vh: 'off' } as const;
+
 function SketchRibbon() {
   const app = useApp();
   const tool = useAppState((s) => s.tool);
   const rectMode = useAppState((s) => s.rectMode);
   const arcMode = useAppState((s) => s.arcMode);
+  const symmetry = useAppState((s) => s.symmetry);
   const polygonMode = useAppState((s) => s.polygonMode);
   const construction = useAppState((s) => s.constructionMode);
   const settings = useAppState((s) => s.settings);
@@ -309,6 +314,13 @@ function SketchRibbon() {
             label="Neue Geometrie als Konstruktion (gestrichelt, nicht exportiert)"
             active={construction}
             onClick={() => app.store.setState({ constructionMode: !construction })}
+          />
+          <Small
+            icon={<IconSymmetry size={18} mode={symmetry} />}
+            label={`Symmetrie: ${SYM_LABELS[symmetry]} – klicken wechselt (aus → senkrecht → waagrecht → beide)`}
+            active={symmetry !== 'off'}
+            onClick={() => app.store.setState({ symmetry: SYM_NEXT[symmetry] })}
+            testId="symmetry"
           />
         </div>
       </Group>

@@ -69,6 +69,8 @@ export interface CommitOptions {
   from?: SketchDoc;
   /** Auswahl nach dem Übernehmen */
   select?: Id[];
+  /** Zum letzten Rückgängig-Schritt hinzufügen statt einen neuen anzulegen */
+  amend?: boolean;
 }
 
 export interface DimensionSpec {
@@ -156,7 +158,7 @@ export class Editor {
 
     if (opts.skipSolve || !this.solver) {
       if (next === current) return { ok: true, doc: current, result: null };
-      this.accept(current, next, label, null, opts.select);
+      this.accept(current, next, label, null, opts.select, opts.amend);
       return { ok: true, doc: next, result: null };
     }
 
@@ -212,7 +214,7 @@ export class Editor {
       if (opts.select) this.set({ selection: opts.select });
       return { ok: true, doc: current, result: res };
     }
-    this.accept(current, next, label, res, opts.select);
+    this.accept(current, next, label, res, opts.select, opts.amend);
     return { ok: true, doc: next, result: res };
   }
 
@@ -234,11 +236,13 @@ export class Editor {
     return `Das würde die Skizze überbestimmen (betroffen: ${names}).`;
   }
 
-  private accept(prev: SketchDoc, next: SketchDoc, label: string, res: SolveResult | null, select?: Id[]): void {
+  private accept(prev: SketchDoc, next: SketchDoc, label: string, res: SolveResult | null, select?: Id[], amend = false): void {
     const patch: Partial<AppState> = { doc: next, dirty: true };
     if (this.tx.depth > 0) {
       if (!this.tx.startDoc) this.tx.startDoc = prev;
       this.tx.count++;
+    } else if (amend && this.s.past.length) {
+      patch.future = [];
     } else {
       patch.past = [...this.s.past, { doc: prev, label }].slice(-HISTORY_LIMIT);
       patch.future = [];
@@ -893,7 +897,16 @@ export class Editor {
       (d) => {
         const group = usable.length > 1 ? newId(d, 'g') : undefined;
         for (const p of usable) {
-          const moved = p.contours.map((c) => ({ closed: c.closed, nodes: c.nodes.map((n) => ({ ...n, x: n.x + at.x, y: n.y + at.y, ...(n.ix !== undefined ? { ix: n.ix + at.x, iy: n.iy! + at.y } : {}), ...(n.ox !== undefined ? { ox: n.ox + at.x, oy: n.oy! + at.y } : {}) })) }));
+          const moved = p.contours.map((c) => ({
+            closed: c.closed,
+            nodes: c.nodes.map((n) => ({
+              ...n,
+              x: n.x + at.x,
+              y: n.y + at.y,
+              ...(n.ix !== undefined ? { ix: n.ix + at.x, iy: n.iy! + at.y } : {}),
+              ...(n.ox !== undefined ? { ox: n.ox + at.x, oy: n.oy! + at.y } : {}),
+            })),
+          }));
           const s = addShapeFromWorld(d, moved, p.style, { name: p.name, fillRule: p.fillRule });
           if (group) s.group = group;
           ids.push(s.id);
@@ -1418,6 +1431,38 @@ export class Editor {
       for (const n of report.notes) this.toast(n, 'info', 6000);
     }
     return { ...out, ids: result };
+  }
+
+  /**
+   * Symmetrie-Modus: was der letzte Schritt neu gezeichnet hat, gespiegelt am Ursprung ergänzen
+   * (im selben Rückgängig-Schritt). Gibt die Ids der Kopien zurück.
+   */
+  mirrorLastCreated(): Id[] {
+    const mode = this.s.symmetry;
+    const last = this.s.past[this.s.past.length - 1];
+    if (mode === 'off' || !last || this.tx.depth > 0) return [];
+    const prev = last.doc;
+    const doc = this.s.doc;
+    const fresh = doc.order.filter((id) => !prev.entities[id] && doc.entities[id] && doc.entities[id].kind !== 'text');
+    if (!fresh.length) return [];
+    const xfs: Xf[] = [];
+    if (mode === 'v' || mode === 'vh') xfs.push({ kind: 'mirror', axis: 'y', cx: 0, cy: 0 });
+    if (mode === 'h' || mode === 'vh') xfs.push({ kind: 'mirror', axis: 'x', cx: 0, cy: 0 });
+    if (mode === 'vh') xfs.push({ kind: 'scale', k: -1, cx: 0, cy: 0 });
+    const created: Id[] = [];
+    const out = this.commit(
+      `${last.label} (gespiegelt)`,
+      (d) => {
+        for (const xf of xfs) {
+          const ids = cloneInto(d, doc, fresh);
+          // Abhängigkeiten zu fremden Punkten (z. B. Fang am Ursprung) kommen nicht mit; Geometrie genügt
+          applyXf(d, ids, xf);
+          created.push(...ids);
+        }
+      },
+      { amend: true, allowOver: true },
+    );
+    return out.ok ? created : [];
   }
 
   /** Stutzen: das angeklickte Stück einer Linie bis zu den nächsten Schnittpunkten entfernen. */

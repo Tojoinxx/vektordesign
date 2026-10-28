@@ -34,6 +34,8 @@ export abstract class DrawToolBase {
       this.ed.toast(out.message, 'error');
       return false;
     }
+    // Symmetrie-Modus: Neues gleich gespiegelt ergänzen (selber Rückgängig-Schritt)
+    if (this.ed.s.symmetry !== 'off') this.ed.mirrorLastCreated();
     return true;
   }
   protected value(key: string): number | null {
