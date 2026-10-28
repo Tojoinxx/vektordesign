@@ -9,7 +9,18 @@ import { useApp, useAppState } from './hooks';
 import { DimensionEditor, DynamicInput, TextEditor } from './Overlays';
 import { MarkingMenu, markingDirectionCommand } from './MarkingMenu';
 
-const DRAW_TOOLS = new Set(['line', 'rect', 'circle', 'point', 'text']);
+const DRAW_TOOLS = new Set(['line', 'rect', 'circle', 'point', 'text', 'sketch']);
+
+interface PointerLike {
+  clientX: number;
+  clientY: number;
+  button: number;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  pointerType?: string;
+}
 
 export function CanvasView() {
   const app = useApp();
@@ -19,8 +30,24 @@ export function CanvasView() {
   const size = useRef({ w: 800, h: 600, dpr: 1 });
   const frame = useRef(0);
   const pan = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
-  const touches = useRef(new Map<number, Vec2>());
-  const pinch = useRef<{ d: number; mid: Vec2; zoom: number; cx: number; cy: number } | null>(null);
+  /**
+   * Touch und Apple Pencil (iPad):
+   * - Stift zeichnet immer; sobald ein Stift benutzt wurde, zeichnen Finger nicht mehr
+   *   (Handballen-Erkennung) – ein Finger verschiebt dann, Tipp mit dem Finger öffnet das Menü.
+   * - Ohne Stift: ein Finger zeichnet (kurz verzögert, um Mehrfinger-Gesten zu erkennen).
+   * - Zwei Finger: Zoom und Verschieben; Zwei-Finger-Tipp = Rückgängig, Drei-Finger-Tipp = Wiederholen.
+   * - Langes Drücken = Kontextmenü (Markierungsmenü).
+   */
+  const touches = useRef(new Map<number, { x: number; y: number; sx: number; sy: number }>());
+  const pinch = useRef<{ d: number; mid: Vec2; zoom: number; cx: number; cy: number; active: boolean } | null>(null);
+  const gesture = useRef<'none' | 'pending' | 'tool' | 'pinch' | 'pan1' | 'menu' | 'done'>('none');
+  const pending = useRef<{ id: number; ev: PointerLike } | null>(null);
+  const timers = useRef<{ start?: number; long?: number }>({});
+  const tap = useRef<{ max: number; t0: number; moved: boolean; x: number; y: number }>({ max: 0, t0: 0, moved: false, x: 0, y: 0 });
+  const penSeen = useRef(0);
+  const penDown = useRef(false);
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
+  const lastTouchEnd = useRef(0);
   const space = useRef(false);
   const right = useRef<{ x: number; y: number } | null>(null);
   const tool = useAppState((s) => s.tool);
@@ -108,7 +135,7 @@ export function CanvasView() {
   }, [app, draw]);
 
   const toPointer = useCallback(
-    (e: { clientX: number; clientY: number; button: number; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean; pointerType?: string }): ToolPointer => {
+    (e: PointerLike): ToolPointer => {
       const r = canvasRef.current!.getBoundingClientRect();
       const screen = { x: e.clientX - r.left, y: e.clientY - r.top };
       const v = vp();
@@ -173,6 +200,178 @@ export function CanvasView() {
     };
   }, []);
 
+  // ------------------------------------------------------------------ Touch-Gesten
+  const penMode = () => Date.now() - penSeen.current < 5 * 60 * 1000;
+  const clearTimers = () => {
+    if (timers.current.start) clearTimeout(timers.current.start);
+    if (timers.current.long) clearTimeout(timers.current.long);
+    timers.current = {};
+  };
+  const resetTouch = () => {
+    clearTimers();
+    pending.current = null;
+    pinch.current = null;
+    gesture.current = 'done';
+  };
+  const startPinch = () => {
+    const pts = [...touches.current.values()];
+    const [a, b] = pts;
+    const v = app.store.getState().view;
+    pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, zoom: v.zoom, cx: v.cx, cy: v.cy, active: false };
+  };
+  const startTool = () => {
+    const p = pending.current;
+    clearTimers();
+    if (!p) return;
+    pending.current = null;
+    gesture.current = 'tool';
+    try {
+      canvasRef.current?.setPointerCapture(p.id);
+    } catch {
+      /* Zeiger schon weg */
+    }
+    app.current.pointerDown?.(toPointer(p.ev));
+  };
+  const openMenuAt = (x: number, y: number) => {
+    const r = wrapRef.current!.getBoundingClientRect();
+    app.ui.setState({ marking: { x: x - r.left, y: y - r.top } });
+  };
+  const snapshot = (e: React.PointerEvent): PointerLike => ({
+    clientX: e.clientX,
+    clientY: e.clientY,
+    button: 0,
+    shiftKey: e.shiftKey,
+    ctrlKey: e.ctrlKey,
+    metaKey: e.metaKey,
+    altKey: e.altKey,
+    pointerType: e.pointerType,
+  });
+
+  const touchDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (penDown.current) return; // Handballen, während der Stift zeichnet
+    touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+    const n = touches.current.size;
+    if (n === 1) {
+      tap.current = { max: 1, t0: Date.now(), moved: false, x: e.clientX, y: e.clientY };
+      if (penMode()) {
+        // Mit Stift: Finger verschiebt nur
+        const v = app.store.getState().view;
+        pan.current = { sx: e.clientX, sy: e.clientY, cx: v.cx, cy: v.cy };
+        gesture.current = 'pan1';
+        return;
+      }
+      gesture.current = 'pending';
+      pending.current = { id: e.pointerId, ev: snapshot(e) };
+      timers.current.start = window.setTimeout(() => {
+        if (gesture.current === 'pending' && !tap.current.moved) {
+          // Finger liegt still: erst Langdruck abwarten, wenn das Werkzeug nichts zieht
+          if (app.store.getState().tool !== 'select') startTool();
+        }
+      }, 140);
+      timers.current.long = window.setTimeout(() => {
+        if ((gesture.current === 'pending' || gesture.current === 'tool') && !tap.current.moved && touches.current.size === 1) {
+          if (gesture.current === 'tool') app.current.cancel?.();
+          pending.current = null;
+          gesture.current = 'menu';
+          openMenuAt(tap.current.x, tap.current.y);
+        }
+      }, 550);
+      return;
+    }
+    // Zwei oder drei Finger
+    tap.current.max = Math.max(tap.current.max, n);
+    if (gesture.current === 'tool') app.current.cancel?.();
+    pan.current = null;
+    clearTimers();
+    pending.current = null;
+    gesture.current = 'pinch';
+    if (n === 2) startPinch();
+  };
+
+  const touchMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const t = touches.current.get(e.pointerId);
+    if (!t) return;
+    t.x = e.clientX;
+    t.y = e.clientY;
+    if (Math.hypot(t.x - t.sx, t.y - t.sy) > 10) tap.current.moved = true;
+    switch (gesture.current) {
+      case 'pending':
+        if (tap.current.moved) {
+          startTool();
+          app.current.pointerMove?.(toPointer(snapshot(e)));
+        }
+        return;
+      case 'tool': {
+        const p = toPointer(snapshot(e));
+        app.ui.setState({ cursorWorld: p.snap.pos });
+        app.current.pointerMove?.(p);
+        return;
+      }
+      case 'pan1': {
+        const p = pan.current;
+        if (!p) return;
+        const z = app.store.getState().view.zoom;
+        app.editor.setView({ cx: p.cx - (e.clientX - p.sx) / z, cy: p.cy + (e.clientY - p.sy) / z });
+        return;
+      }
+      case 'pinch': {
+        const pc = pinch.current;
+        if (!pc || touches.current.size < 2) return;
+        const [a, b] = [...touches.current.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        if (!pc.active && Math.abs(d - pc.d) < 8 && Math.hypot(mid.x - pc.mid.x, mid.y - pc.mid.y) < 8) return;
+        pc.active = true;
+        const r = canvasRef.current!.getBoundingClientRect();
+        const m0 = { x: pc.mid.x - r.left, y: pc.mid.y - r.top };
+        const m1 = { x: mid.x - r.left, y: mid.y - r.top };
+        const { w, h } = size.current;
+        // Weltpunkt unter der Anfangsmitte bleibt unter den Fingern
+        const W = toWorld({ cx: pc.cx, cy: pc.cy, zoom: pc.zoom, width: w, height: h }, m0);
+        const zoom = clampZoom((pc.zoom * d) / Math.max(pc.d, 1));
+        app.editor.setView({ zoom, cx: W.x - (m1.x - w / 2) / zoom, cy: W.y + (m1.y - h / 2) / zoom });
+        return;
+      }
+    }
+  };
+
+  const touchUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!touches.current.has(e.pointerId)) return;
+    touches.current.delete(e.pointerId);
+    const g = gesture.current;
+    if (g === 'pending' || (g === 'tool' && !tap.current.moved && Date.now() - tap.current.t0 < 400)) {
+      // Kurzer Tipp: wie ein Klick; zwei Tipps kurz nacheinander = Doppelklick
+      if (g === 'pending') startTool();
+      const pe = toPointer(snapshot(e));
+      app.current.pointerUp?.(pe);
+      const lt = lastTap.current;
+      const now = Date.now();
+      if (lt && now - lt.t < 350 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 24) {
+        lastTap.current = null;
+        app.current.doubleClick?.(pe);
+      } else lastTap.current = { t: now, x: e.clientX, y: e.clientY };
+      gesture.current = 'done';
+    } else if (g === 'tool') {
+      app.current.pointerUp?.(toPointer(snapshot(e)));
+      gesture.current = 'done';
+    } else if (g === 'pinch' && touches.current.size === 2 && !pinch.current?.active) {
+      // von drei auf zwei Finger: Zoom neu ansetzen
+      startPinch();
+    }
+    if (touches.current.size > 0) return;
+    // Alle Finger weg: Tipp-Gesten auswerten
+    const quick = !tap.current.moved && Date.now() - tap.current.t0 < 400 && !pinch.current?.active;
+    if (quick && tap.current.max === 2) void app.editor.undo();
+    else if (quick && tap.current.max === 3) void app.editor.redo();
+    else if (quick && g === 'pan1') openMenuAt(tap.current.x, tap.current.y);
+    clearTimers();
+    pan.current = null;
+    pinch.current = null;
+    pending.current = null;
+    gesture.current = 'none';
+    lastTouchEnd.current = Date.now();
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const c = canvasRef.current!;
     // Kein mousedown-Standardverhalten: sonst holt sich die Fläche den Fokus zurück, nachdem
@@ -181,16 +380,15 @@ export function CanvasView() {
     if (document.activeElement instanceof HTMLElement && document.activeElement !== wrapRef.current) document.activeElement.blur();
     wrapRef.current?.focus({ preventScroll: true });
     if (app.ui.getState().marking) app.ui.setState({ marking: null });
+    if (e.pointerType === 'pen') {
+      penSeen.current = Date.now();
+      penDown.current = true;
+      // Stift hat Vorrang: laufende Finger-Gesten beenden
+      if (gesture.current === 'pending' || gesture.current === 'pan1') resetTouch();
+    }
     if (e.pointerType === 'touch') {
-      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touches.current.size === 2) {
-        // Zwei Finger: Zoom/Verschieben, laufende Aktion abbrechen
-        app.current.cancel?.();
-        const [a, b] = [...touches.current.values()];
-        const v = app.store.getState().view;
-        pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, zoom: v.zoom, cx: v.cx, cy: v.cy };
-        return;
-      }
+      touchDown(e);
+      return;
     }
     c.setPointerCapture(e.pointerId);
     if (e.button === 1 || (e.button === 0 && space.current)) {
@@ -208,22 +406,9 @@ export function CanvasView() {
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
-      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pinch.current && touches.current.size === 2) {
-        const [a, b] = [...touches.current.values()];
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
-        const p = pinch.current;
-        const r = canvasRef.current!.getBoundingClientRect();
-        const m0 = { x: p.mid.x - r.left, y: p.mid.y - r.top };
-        const m1 = { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top };
-        const { w, h } = size.current;
-        // Weltpunkt unter der Anfangsmitte bleibt unter den Fingern
-        const W = toWorld({ cx: p.cx, cy: p.cy, zoom: p.zoom, width: w, height: h }, m0);
-        const zoom = clampZoom((p.zoom * d) / Math.max(p.d, 1));
-        app.editor.setView({ zoom, cx: W.x - (m1.x - w / 2) / zoom, cy: W.y + (m1.y - h / 2) / zoom });
-        return;
-      }
+    if (e.pointerType === 'touch') {
+      touchMove(e);
+      return;
     }
     if (pan.current) {
       const p = pan.current;
@@ -238,12 +423,10 @@ export function CanvasView() {
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === 'pen') penDown.current = false;
     if (e.pointerType === 'touch') {
-      touches.current.delete(e.pointerId);
-      if (pinch.current) {
-        if (touches.current.size < 2) pinch.current = null;
-        return;
-      }
+      touchUp(e);
+      return;
     }
     if (pan.current) {
       pan.current = null;
@@ -288,7 +471,11 @@ export function CanvasView() {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onPointerLeave={onLeave}
-        onDoubleClick={(e) => app.current.doubleClick?.(toPointer(e))}
+        onDoubleClick={(e) => {
+          // Bei Touch erkennt touchUp den Doppeltipp selbst
+          if (Date.now() - lastTouchEnd.current < 800) return;
+          app.current.doubleClick?.(toPointer(e));
+        }}
         onContextMenu={(e) => e.preventDefault()}
       />
       <DynamicInput />

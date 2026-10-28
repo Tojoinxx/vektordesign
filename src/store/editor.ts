@@ -493,6 +493,44 @@ export class Editor {
     return { ...out, line: out.ok && line ? out.doc.entities[line.id] as LineEntity : undefined };
   }
 
+  /**
+   * Linienzug bzw. geschlossenes Vieleck als ein Rückgängig-Schritt (Freihandskizze, Assistent).
+   * Waagrechte/senkrechte Kanten bekommen die passende Abhängigkeit.
+   */
+  createPolyline(pts: Vec2[], closed: boolean, opts: { start?: PlacedPoint; end?: PlacedPoint; style?: Style; construction?: boolean } = {}): CommitOutcome & { lineIds?: Id[]; pathId?: Id } {
+    const P = pts.filter((p, i) => i === 0 || dist(p, pts[i - 1]) > 1e-6);
+    if (closed && P.length > 2 && dist(P[0], P[P.length - 1]) < 1e-6) P.pop();
+    if (P.length < 2) return { ok: false, reason: 'invalid', message: 'Zu wenige Punkte' };
+    const lineIds: Id[] = [];
+    let pathId: Id | undefined;
+    let last: CommitOutcome = { ok: true, doc: this.s.doc, result: null };
+    this.transaction(closed ? 'Vieleck' : 'Linienzug', () => {
+      let prevEnd: Id | null = null;
+      let first: Id | null = null;
+      const segs = closed ? P.length : P.length - 1;
+      for (let i = 0; i < segs; i++) {
+        const a = P[i];
+        const b = P[(i + 1) % P.length];
+        const hv = Math.abs(a.y - b.y) < 1e-9 ? 'h' : Math.abs(a.x - b.x) < 1e-9 ? 'v' : null;
+        const start: PlacedPoint = prevEnd ? { pos: a } : (opts.start ?? { pos: a });
+        let end: PlacedPoint = { pos: b };
+        if (closed && i === segs - 1 && first) end = { pos: b, snap: { kind: 'point', id: first } };
+        else if (!closed && i === segs - 1 && opts.end) end = opts.end;
+        const out = this.createLine(start, end, { prevEnd, hv, style: opts.style, construction: opts.construction });
+        last = out;
+        if (!out.ok || !out.line) return;
+        lineIds.push(out.line.id);
+        if (!first) first = out.line.p1;
+        prevEnd = out.line.p2;
+      }
+      if (closed && !opts.construction && lineIds.length >= 2) {
+        const p = this.createPathFromLines(lineIds, true, opts.style);
+        pathId = p.pathId;
+      }
+    });
+    return { ...last, lineIds, pathId };
+  }
+
   /** Fasst eine Linienkette zu einem (geschlossenen) Pfad zusammen. */
   createPathFromLines(lineIds: Id[], closed: boolean, style?: Style): CommitOutcome & { pathId?: Id } {
     let pathId: Id | undefined;

@@ -8,6 +8,7 @@ import { AppController } from './ui/controller';
 import { App } from './ui/App';
 import { createSolver } from './solver/solver';
 import { readAutosave, startAutosave } from './platform/autosave';
+import { registerServiceWorker } from './platform/pwa';
 
 const app = new AppController();
 // Für Tests und Fehlersuche im Browser erreichbar
@@ -40,4 +41,13 @@ async function boot() {
 }
 
 createRoot(document.getElementById('root')!).render(<App app={app} />);
+registerServiceWorker((apply) =>
+  app.editor.confirm({
+    title: 'Neue Version verfügbar',
+    text: 'Eine neue Version von Vektordesign ist geladen. Jetzt neu starten? Deine Zeichnung bleibt erhalten (automatisch zwischengespeichert).',
+    confirm: 'Jetzt neu starten',
+    cancel: 'Später',
+    onConfirm: apply,
+  }),
+);
 void boot();

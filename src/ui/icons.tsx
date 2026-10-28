@@ -314,3 +314,10 @@ export const IconExclude = (p: { size?: number }) => (
     {boolShapes(0, 0, 0)}
   </Icon>
 );
+
+export const IconSketch = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M3 17 C6 10 9 20 12 13 S17 6 21 9" strokeDasharray="0" />
+    <path d="M15.5 4.5 L19.5 8.5 L11 17 L7 17 L7 13 Z" fill="currentColor" fillOpacity="0.12" strokeWidth="1.4" />
+  </Icon>
+);

@@ -10,6 +10,7 @@ import { DimensionTool } from '../tools/dimensionTool';
 import { ConstraintTool } from '../tools/constraintTool';
 import { GradientTool } from '../tools/gradientTool';
 import { MeasureTool, TrimExtendTool, type MeasureResult } from '../tools/editTools';
+import { SketchTool } from '../tools/sketchTool';
 import { booleanOp, cornerOp, offsetOp, patternOp, selectionCenter, selectionSize, textToPaths, toShape } from '../store/ops';
 import type { BoolOp } from '../model/boolean';
 import { evaluate } from '../params/expr';
@@ -240,6 +241,9 @@ export class AppController {
         break;
       case 'measure':
         t = new MeasureTool(this.ctx, (r) => this.ui.setState({ measure: r }));
+        break;
+      case 'sketch':
+        t = new SketchTool(this.ctx);
         break;
       default:
         if (id.startsWith('constraint:')) t = new ConstraintTool(this.ctx, id.slice('constraint:'.length) as ConstraintKind);

@@ -17,6 +17,7 @@ import {
   IconRectCenter,
   IconSelect,
   IconText,
+  IconSketch,
   IconTrim,
   IconExtend,
   IconMeasure,
@@ -180,6 +181,7 @@ function SketchRibbon() {
         </div>
         <Big icon={<IconCircle />} label="Kreis" kbd="C" active={tool === 'circle'} onClick={() => set('circle')} testId="tool-circle" />
         <Big icon={<IconText />} label="Text" kbd="T" active={tool === 'text'} onClick={() => set('text')} testId="tool-text" />
+        <Big icon={<IconSketch />} label="Freihand" kbd="S" active={tool === 'sketch'} onClick={() => set('sketch')} testId="tool-sketch" />
         <div className="rb-col">
           <Small icon={<IconPoint size={18} />} label="Punkt" kbd="P" active={tool === 'point'} onClick={() => set('point')} />
           <Small icon={<IconConstruction size={18} />} label="Neue Geometrie als Konstruktion (gestrichelt, nicht exportiert)" active={construction} onClick={() => app.store.setState({ constructionMode: !construction })} />

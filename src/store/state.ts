@@ -15,6 +15,7 @@ export type ToolId =
   | 'trim'
   | 'extend'
   | 'measure'
+  | 'sketch'
   | `constraint:${string}`;
 
 export type ExportFormat = 'svg' | 'pdf' | 'eps' | 'dxf' | 'png';

@@ -116,6 +116,7 @@ export function buildCommands(): Command[] {
     { id: 'tool.circle', label: 'Kreis', group: 'Zeichnen', shortcut: 'C', keys: [{ key: 'c' }], run: (a) => a.setTool('circle') },
     { id: 'tool.text', label: 'Text', group: 'Zeichnen', shortcut: 'T', keys: [{ key: 't' }], run: (a) => a.setTool('text') },
     { id: 'tool.point', label: 'Punkt', group: 'Zeichnen', shortcut: 'P', keys: [{ key: 'p' }], run: (a) => a.setTool('point') },
+    { id: 'tool.sketch', label: 'Freihandskizze mit Formerkennung', group: 'Zeichnen', shortcut: 'S', keys: [{ key: 's' }], keywords: 'freihand stift pencil skizze erkennung', run: (a) => a.setTool('sketch') },
     {
       id: 'draw.constructionMode',
       label: 'Neue Geometrie als Konstruktion',
