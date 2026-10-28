@@ -1,4 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { importSvg } from '../platform/svgImport';
+import { importDxf } from '../platform/dxfImport';
 import { separate } from '../model/separation';
 import { addShapeFromWorld } from '../model/shape';
 import { polysToContours } from '../model/boolean';
@@ -1026,6 +1028,61 @@ export class AppController {
       return !!saved;
     } catch (e) {
       this.ui.setState({ busy: null });
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
+      return false;
+    }
+  }
+
+  /** SVG oder DXF als bearbeitbare Vektoren importieren (Mitte auf den Ursprung). */
+  async importVector(file?: { name: string; data: Uint8Array }): Promise<boolean> {
+    const f = file ?? (await openFile([SVG_TYPE, DXF_TYPE]));
+    if (!f) return false;
+    try {
+      const text = new TextDecoder().decode(f.data);
+      const isDxf = /\.dxf$/i.test(f.name) || /^\s*0\s*\r?\n\s*SECTION/m.test(text.slice(0, 200));
+      let g: Parameters<Editor['insertImported']>[0];
+      let warnings: string[];
+      let info = '';
+      if (isDxf) {
+        const r = importDxf(text);
+        g = {
+          lines: r.lines,
+          circles: r.circles,
+          arcs: r.arcs,
+          shapes: r.shapes.map((c) => ({ contours: [c], style: { fill: null, stroke: '#1e2328', strokeWidth: 0.25, opacity: 1 }, name: 'DXF-Kontur' })),
+        };
+        warnings = r.warnings;
+        info = `Einheit ${r.unit}`;
+      } else {
+        const r = importSvg(text);
+        g = { lines: [], circles: [], arcs: [], shapes: r.shapes };
+        warnings = r.warnings;
+      }
+      // Mitte auf den Ursprung
+      const pts: Vec2[] = [
+        ...g.lines.flat(),
+        ...g.circles.flatMap((c) => [
+          { x: c.c.x - c.r, y: c.c.y - c.r },
+          { x: c.c.x + c.r, y: c.c.y + c.r },
+        ]),
+        ...g.arcs.map((a) => a.c),
+        ...g.shapes.flatMap((s) => s.contours.flatMap((c) => c.nodes)),
+      ];
+      if (!pts.length) throw new Error('Die Datei enthält keine unterstützte Geometrie.');
+      const minX = Math.min(...pts.map((p) => p.x));
+      const maxX = Math.max(...pts.map((p) => p.x));
+      const minY = Math.min(...pts.map((p) => p.y));
+      const maxY = Math.max(...pts.map((p) => p.y));
+      const out = this.editor.insertImported(g, `${f.name} importieren`, { x: -(minX + maxX) / 2, y: -(minY + maxY) / 2 });
+      if (!out.ok) throw new Error(out.message);
+      this.editor.zoomToFit();
+      this.editor.toast(
+        `${f.name}: ${out.ids?.length ?? 0} Objekte importiert, ${(maxX - minX).toFixed(1).replace('.', ',')} × ${(maxY - minY).toFixed(1).replace('.', ',')} mm${info ? ` (${info})` : ''}${warnings.length ? ` – ${warnings.join(' ')}` : ''}`,
+        warnings.length ? 'info' : 'success',
+        warnings.length ? 9000 : 5000,
+      );
+      return true;
+    } catch (e) {
       this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
       return false;
     }

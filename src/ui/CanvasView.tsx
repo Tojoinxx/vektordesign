@@ -611,6 +611,12 @@ export function CanvasView() {
         if ([...e.dataTransfer.items].some((i) => i.kind === 'file')) e.preventDefault();
       }}
       onDrop={(e) => {
+        const vec = [...e.dataTransfer.files].find((x) => /\.(svg|dxf)$/i.test(x.name));
+        if (vec) {
+          e.preventDefault();
+          void vec.arrayBuffer().then((b) => app.importVector({ name: vec.name, data: new Uint8Array(b) }));
+          return;
+        }
         const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'));
         if (!f) return;
         e.preventDefault();

@@ -7,6 +7,7 @@ import {
   Command as CommandIcon,
   FilePlus2,
   FolderOpen,
+  FileInput,
   Menu,
   Moon,
   PanelRightClose,
@@ -208,6 +209,7 @@ function FileMenu() {
       {item('Speichern', 'Strg+S', <Save size={15} />, () => void app.saveDocument())}
       {item('Speichern unter …', 'Strg+Umschalt+S', <Save size={15} />, () => void app.saveDocument(true))}
       <hr />
+      {item('Importieren (SVG, DXF) …', '', <FileInput size={15} />, () => void app.importVector())}
       {item('Als SVG exportieren …', 'Strg+E', <Download size={15} />, () => app.openExport('svg'))}
       {item('Als PNG exportieren …', '', <Download size={15} />, () => app.openExport('png', 300))}
       <hr />

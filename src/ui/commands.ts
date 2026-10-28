@@ -38,6 +38,7 @@ export function buildCommands(): Command[] {
     // Datei
     { id: 'file.new', label: 'Neue Zeichnung', group: 'Datei', shortcut: 'Strg+N', keys: [{ key: 'n', ctrl: true }], run: (a) => a.newDocument() },
     { id: 'file.open', label: 'Öffnen …', group: 'Datei', shortcut: 'Strg+O', keys: [{ key: 'o', ctrl: true }], run: (a) => void a.openDocument() },
+    { id: 'file.import', label: 'Importieren (SVG, DXF) …', group: 'Datei', keywords: 'import svg dxf illustrator inkscape cad schnittmuster öffnen einfügen', run: (a) => void a.importVector() },
     { id: 'file.save', label: 'Speichern', group: 'Datei', shortcut: 'Strg+S', keys: [{ key: 's', ctrl: true }], run: (a) => void a.saveDocument() },
     { id: 'file.saveAs', label: 'Speichern unter …', group: 'Datei', shortcut: 'Strg+Umschalt+S', keys: [{ key: 's', ctrl: true, shift: true }], run: (a) => void a.saveDocument(true) },
     { id: 'file.export', label: 'Exportieren …', group: 'Datei', shortcut: 'Strg+E', keys: [{ key: 'e', ctrl: true }], keywords: 'svg png datei', run: (a) => a.openExport('svg') },

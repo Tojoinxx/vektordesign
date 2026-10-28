@@ -1210,6 +1210,27 @@ await step('Bibliothek, Paletten, Format übertragen', async () => {
   results.push(`   Bibliothek: 1 Element, ${pals.length} Paletten; Format übertragen`);
 });
 
+await step('Import: SVG (aus Illustrator/Inkscape) und DXF (CAD/Schnittmuster) als bearbeitbare Vektoren', async () => {
+  await newDoc();
+  const res = await app(async () => {
+    const a = window.vektordesign;
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="60mm" height="30mm" viewBox="0 0 60 30"><rect width="60" height="30" rx="6" fill="#2f9e5b"/><path d="M10 25 C20 0 40 0 50 25" fill="none" stroke="#ffffff" stroke-width="3"/></svg>';
+    const ok1 = await a.importVector({ name: 'logo.svg', data: new TextEncoder().encode(svg) });
+    const b1 = a.bbox();
+    const dxf = ['0', 'SECTION', '2', 'ENTITIES', '0', 'LINE', '8', '0', '10', '0', '20', '0', '11', '100', '21', '0', '0', 'ARC', '8', '0', '10', '50', '20', '0', '40', '50', '50', '0', '51', '180', '0', 'ENDSEC', '0', 'EOF'].join('\n');
+    a.editor.newDocument();
+    const ok2 = await a.importVector({ name: 'schnitt.dxf', data: new TextEncoder().encode(dxf) });
+    const kinds = Object.values(a.store.getState().doc.entities).map((e) => e.kind).sort();
+    return { ok1, ok2, w: b1.maxX - b1.minX, h: b1.maxY - b1.minY, kinds };
+  });
+  assert(res.ok1 && Math.abs(res.w - 60) < 0.01 && Math.abs(res.h - 30) < 0.01, `SVG-Import: ${JSON.stringify(res)}`);
+  assert(res.ok2 && res.kinds.join(',') === 'arc,line', `DXF-Import: ${res.kinds}`);
+  await page.keyboard.press('f');
+  await sleep(200);
+  await shot('46-dxf-import');
+  results.push('   Import: SVG 60 × 30 mm, DXF Linie + Bogen als Skizzengeometrie');
+});
+
 // ---------------------------------------------------------------------------
 // Meilenstein 4: iPad (Touch, Apple Pencil, Web-App, Sync)
 // ---------------------------------------------------------------------------

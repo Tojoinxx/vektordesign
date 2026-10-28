@@ -904,6 +904,57 @@ export class Editor {
     return { ...out, ids };
   }
 
+  /**
+   * Importierte Geometrie einfügen: Linien, Kreise und Bögen als Skizzenelemente (bemaßbar),
+   * übrige Konturen als Formen. `shift` verschiebt alles (z. B. Mitte auf den Ursprung).
+   */
+  insertImported(
+    g: {
+      lines: [Vec2, Vec2][];
+      circles: { c: Vec2; r: number }[];
+      arcs: { c: Vec2; r: number; a0: number; a1: number }[];
+      shapes: { contours: Contour[]; style: Style; fillRule?: 'nonzero' | 'evenodd'; name?: string }[];
+    },
+    label: string,
+    shift: Vec2 = { x: 0, y: 0 },
+  ): CommitOutcome & { ids?: Id[] } {
+    const ids: Id[] = [];
+    const line: Style = { fill: null, stroke: '#1e2328', strokeWidth: 0.25, opacity: 1 };
+    const S = (p: Vec2) => ({ x: p.x + shift.x, y: p.y + shift.y });
+    const out = this.commit(
+      label,
+      (d) => {
+        for (const [a, b] of g.lines) if (Math.hypot(b.x - a.x, b.y - a.y) > 1e-9) ids.push(addLine(d, S(a), S(b), line).id);
+        for (const c of g.circles) if (c.r > 1e-9) ids.push(addCircle(d, S(c.c), c.r, line).id);
+        for (const a of g.arcs) {
+          if (!(a.r > 1e-9)) continue;
+          const r0 = (a.a0 * Math.PI) / 180;
+          const r1 = (a.a1 * Math.PI) / 180;
+          const p0 = { x: a.c.x + a.r * Math.cos(r0), y: a.c.y + a.r * Math.sin(r0) };
+          const p1 = { x: a.c.x + a.r * Math.cos(r1), y: a.c.y + a.r * Math.sin(r1) };
+          ids.push(addArc(d, S(a.c), S(p0), S(p1), line).id);
+        }
+        for (const s of g.shapes) {
+          const moved = s.contours.map((c) => ({
+            closed: c.closed,
+            nodes: c.nodes.map((n) => ({
+              ...n,
+              x: n.x + shift.x,
+              y: n.y + shift.y,
+              ...(n.ix !== undefined ? { ix: n.ix + shift.x, iy: n.iy! + shift.y } : {}),
+              ...(n.ox !== undefined ? { ox: n.ox + shift.x, oy: n.oy! + shift.y } : {}),
+            })),
+          }));
+          ids.push(addShapeFromWorld(d, moved, s.style, { name: s.name, fillRule: s.fillRule }).id);
+        }
+        if (!ids.length) throw new Error('Die Datei enthält keine unterstützte Geometrie.');
+      },
+      { skipSolve: true },
+    );
+    if (out.ok) this.select(ids);
+    return { ...out, ids };
+  }
+
   /** Fertige Formen (Generatoren) als Gruppe einfügen, verschoben um `at`. */
   insertParts(parts: { name: string; contours: Contour[]; style: Style; fillRule?: 'nonzero' | 'evenodd' }[], label: string, at: Vec2 = { x: 0, y: 0 }): CommitOutcome & { ids?: Id[] } {
     const usable = parts.filter((p) => p.contours.length);

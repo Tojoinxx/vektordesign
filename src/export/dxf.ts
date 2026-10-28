@@ -89,6 +89,19 @@ export function exportDxf(scene: ExportScene, opts: { mirror?: boolean; toleranc
         g(51, n(((end % 360) + 360) % 360));
         continue;
       }
+      // Einzelne gerade Linie als LINE (CAD-Programme können sie dann direkt bemaßen)
+      if (it.contours.length === 1 && !it.contours[0].closed && it.contours[0].nodes.length === 2 && it.contours[0].nodes.every((n) => n.ox === undefined && n.ix === undefined)) {
+        const [a, b] = it.contours[0].nodes;
+        g(0, 'LINE');
+        g(8, ln);
+        g(10, n(X(a.x)));
+        g(20, n(Y(a.y)));
+        g(30, 0);
+        g(11, n(X(b.x)));
+        g(21, n(Y(b.y)));
+        g(31, 0);
+        continue;
+      }
       for (const c of it.contours) {
         const pts = flattenContour(c, tol);
         if (pts.length < 2) continue;
