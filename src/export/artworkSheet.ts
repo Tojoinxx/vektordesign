@@ -93,15 +93,7 @@ function fabricLine(fabric: string): string {
 }
 
 /** Kleidungsstück-Skizze mit Motiv(en) in ein Feld zeichnen. Liefert Maßstab und Ursprung. */
-function garmentSketch(
-  ctx: Ctx,
-  page: PdfPage,
-  view: GarmentView,
-  variant: Variant,
-  frame: { x: number; y: number; w: number; h: number },
-  motifs: Motif[],
-  annotate: Motif | null,
-): void {
+function garmentSketch(ctx: Ctx, page: PdfPage, view: GarmentView, variant: Variant, frame: { x: number; y: number; w: number; h: number }, motifs: Motif[], annotate: Motif | null): void {
   const g = garmentOf(ctx.p.garment);
   const drawing: GarmentDrawing = g.draw(view);
   const tpl = ctx.p.templates?.[view];
@@ -158,13 +150,23 @@ function garmentSketch(
       // Abstand Kragen → Oberkante
       const dimX = m.placement.x >= 0 ? bx + 10 : ax - 10;
       dimV(page, dimX, ry, ay, mmText(m.placement.y), m.placement.x >= 0 ? 'right' : 'left');
-      page.save().stroke('#e8590c', 0.4).dash(1, 1.5).line(rx - 6, ry, dimX + (m.placement.x >= 0 ? 4 : -4), ry).restore();
+      page
+        .save()
+        .stroke('#e8590c', 0.4)
+        .dash(1, 1.5)
+        .line(rx - 6, ry, dimX + (m.placement.x >= 0 ? 4 : -4), ry)
+        .restore();
       // Abstand Mittellinie → Motivmitte
       if (Math.abs(m.placement.x) > 0.5) {
         const [mx] = P(m.placement.x, 0);
         dimH(page, rx, mx, oy - 10, mmText(Math.abs(m.placement.x)), true);
       }
-      page.save().stroke('#e8590c', 0.35).dash(3, 2).line(rx, ry + 8, rx, oy - 20).restore();
+      page
+        .save()
+        .stroke('#e8590c', 0.35)
+        .dash(3, 2)
+        .line(rx, ry + 8, rx, oy - 20)
+        .restore();
     }
   }
 }
@@ -277,6 +279,7 @@ function motifPage(ctx: Ctx, m: Motif, n: number, total: number) {
   y = kv(page, rx, y, 'Veredelung', techniqueName(m.technique), rw);
   y = kv(page, rx, y, 'Druckbereich', area ? `${area.name} (max. ${area.w} × ${area.h} mm)` : 'frei platziert', rw);
   if (size) y = kv(page, rx, y, 'Größe', `${mmText(size.w)} × ${mmText(size.h)}`, rw);
+  if (size && p.sizes?.length) y = kv(page, rx, y, 'Größenstaffel', p.sizes.map((g) => `${g.name}: ${mmText((size.w * g.pct) / 100)} breit`).join(' · '), rw);
   y = kv(page, rx, y, 'Stofffarbe', `${v0.fabricName ? `${v0.fabricName}, ` : ''}${v0.fabric.toUpperCase()}`, rw);
   if (m.note) y = kv(page, rx, y, 'Hinweis', m.note, rw);
 
@@ -338,7 +341,16 @@ function variantsPage(ctx: Ctx, n: number, total: number) {
       }
     }
   });
-  if (vs.length > 4) page.text(M, bottom, `Weitere Varianten: ${vs.slice(4).map((v) => v.name).join(', ')} (siehe Motivdateien)`, { size: 8, color: MUTED });
+  if (vs.length > 4)
+    page.text(
+      M,
+      bottom,
+      `Weitere Varianten: ${vs
+        .slice(4)
+        .map((v) => v.name)
+        .join(', ')} (siehe Motivdateien)`,
+      { size: 8, color: MUTED },
+    );
   void g;
   page.finish({ compress: true });
 }

@@ -10,6 +10,8 @@ import { exportPdf } from './pdf';
 import { exportEps } from './eps';
 import { exportDxf } from './dxf';
 import { buildArtworkSheet, type SheetOptions } from './artworkSheet';
+import type { SizeGrade } from '../model/types';
+import { gradedMotifDoc, gradedSize, sizeSuffix } from '../model/sizes';
 
 /**
  * Ein-Klick-Paket (ZIP) für den Produzenten: alle Motive in allen Varianten und Formaten
@@ -45,35 +47,52 @@ export async function buildPackage(doc: SketchDoc, p: Production, profile: Expor
   }
 
   opts.onProgress?.('Schriften in Pfade umwandeln …');
-  const { outlines, substituted } = await textOutlines(doc);
+  const { outlines: baseOutlines, substituted } = await textOutlines(doc);
   if (substituted.length) warnings.push(`Schrift ersetzt (nicht verfügbar): ${substituted.join(', ')}`);
 
   const many = p.variants.length > 1;
+  // Größenstaffel: je Größe eigene Dateien (Text je Größe neu in Pfade, da er mitskaliert)
+  const grades: (SizeGrade | null)[] = p.sizes?.length ? p.sizes : [null];
+  const outlineCache = new Map<string, Map<string, import('../model/types').Contour[]>>();
   for (const m of p.motifs) {
     if (!motifSize(doc, m)) continue;
-    for (const v of p.variants) {
-      const md = applyVariant(motifDoc(doc, m), v);
-      const name = `${base}_${fileSafe(m.name)}${many || p.variants[0].name !== 'Variante A' ? `_${fileSafe(v.name)}` : ''}${profile.mirror ? '_gespiegelt' : ''}`;
-      const title = `${p.article} – ${m.name} – ${v.name}`;
-      opts.onProgress?.(`${m.name}, ${v.name} …`);
-      for (const f of profile.formats) {
-        const path = `Motive/${name}.${f}`;
-        if (f === 'svg') put(path, exportSvg(md, { bounds: profile.bounds, mirror: profile.mirror, title, outlines }).svg);
-        else if (f === 'png') {
-          if (!opts.renderPng) {
-            warnings.push('PNG kann hier nicht erzeugt werden (keine Zeichenfläche).');
-            continue;
+    for (const g of grades) {
+      let outlines = baseOutlines;
+      let gdoc = doc;
+      if (g && Math.abs(g.pct - 100) > 1e-9) {
+        gdoc = gradedMotifDoc(doc, m, g.pct);
+        const key = `${m.id}/${g.pct}`;
+        let o = outlineCache.get(key);
+        if (!o) {
+          o = (await textOutlines(gdoc)).outlines;
+          outlineCache.set(key, o);
+        }
+        outlines = o;
+      }
+      for (const v of p.variants) {
+        const md = applyVariant(g ? motifDoc(gdoc, m) : motifDoc(doc, m), v);
+        const name = `${base}_${fileSafe(m.name)}${many || p.variants[0].name !== 'Variante A' ? `_${fileSafe(v.name)}` : ''}${g ? `_${sizeSuffix(g)}` : ''}${profile.mirror ? '_gespiegelt' : ''}`;
+        const title = `${p.article} – ${m.name} – ${v.name}${g ? ` – Größe ${g.name}` : ''}`;
+        opts.onProgress?.(`${m.name}, ${v.name}${g ? `, ${g.name}` : ''} …`);
+        for (const f of profile.formats) {
+          const path = `Motive/${name}.${f}`;
+          if (f === 'svg') put(path, exportSvg(md, { bounds: profile.bounds, mirror: profile.mirror, title, outlines }).svg);
+          else if (f === 'png') {
+            if (!opts.renderPng) {
+              warnings.push('PNG kann hier nicht erzeugt werden (keine Zeichenfläche).');
+              continue;
+            }
+            put(path, await opts.renderPng(md, profile.pngDpi, profile.mirror, profile.bounds));
+          } else {
+            const scene = buildScene(md, { bounds: profile.bounds, outlines });
+            if (f === 'pdf' && opts.decodeImage) await attachImagePixels(scene, opts.decodeImage);
+            if (f === 'pdf') put(path, exportPdf(scene, { colorMode: profile.colorMode, mirror: profile.mirror, title }));
+            else if (f === 'eps') {
+              const r = exportEps(scene, { colorMode: profile.colorMode, mirror: profile.mirror, title });
+              if (r.lostTransparency && !warnings.some((w) => w.startsWith('EPS'))) warnings.push('EPS kennt keine Transparenz – Deckkraft und Verblassen fehlen dort.');
+              put(path, r.bytes);
+            } else if (f === 'dxf') put(path, exportDxf(scene, { mirror: profile.mirror }));
           }
-          put(path, await opts.renderPng(md, profile.pngDpi, profile.mirror, profile.bounds));
-        } else {
-          const scene = buildScene(md, { bounds: profile.bounds, outlines });
-          if (f === 'pdf' && opts.decodeImage) await attachImagePixels(scene, opts.decodeImage);
-          if (f === 'pdf') put(path, exportPdf(scene, { colorMode: profile.colorMode, mirror: profile.mirror, title }));
-          else if (f === 'eps') {
-            const r = exportEps(scene, { colorMode: profile.colorMode, mirror: profile.mirror, title });
-            if (r.lostTransparency && !warnings.some((w) => w.startsWith('EPS'))) warnings.push('EPS kennt keine Transparenz – Deckkraft und Verblassen fehlen dort.');
-            put(path, r.bytes);
-          } else if (f === 'dxf') put(path, exportDxf(scene, { mirror: profile.mirror }));
         }
       }
     }
@@ -85,7 +104,16 @@ export async function buildPackage(doc: SketchDoc, p: Production, profile: Expor
   }
   put('Farben.csv', colorsCsv(doc, p));
   if (profile.project) put(`${base}.vdp`, serializeDoc(doc));
-  put('LIESMICH.txt', readme(doc, p, profile, Object.keys(files).map((f) => f.slice(base.length + 1)), warnings));
+  put(
+    'LIESMICH.txt',
+    readme(
+      doc,
+      p,
+      profile,
+      Object.keys(files).map((f) => f.slice(base.length + 1)),
+      warnings,
+    ),
+  );
 
   const zip = zipSync(files, { level: 6, mtime: opts.date ?? new Date() });
   return { zip, fileName: `${base}.zip`, files: Object.keys(files), warnings };
@@ -102,7 +130,17 @@ export function colorsCsv(doc: SketchDoc, p: Production): string {
       for (const orig of motifColors(doc, m)) {
         const c = variantColor(v, orig);
         const spec = p.colorSpecs[c];
-        rows.push([v.name, `${v.fabricName ? `${v.fabricName} ` : ''}${v.fabric.toUpperCase()}`, m.name, techniqueName(m.technique), orig.toUpperCase(), c.toUpperCase(), cmykText(cmykOf(c, spec)), spec?.pantone ?? '', spec?.name ?? '']);
+        rows.push([
+          v.name,
+          `${v.fabricName ? `${v.fabricName} ` : ''}${v.fabric.toUpperCase()}`,
+          m.name,
+          techniqueName(m.technique),
+          orig.toUpperCase(),
+          c.toUpperCase(),
+          cmykText(cmykOf(c, spec)),
+          spec?.pantone ?? '',
+          spec?.name ?? '',
+        ]);
       }
   // BOM, damit Excel Umlaute richtig liest
   return `﻿${rows.map((r) => r.map(csvCell).join(';')).join('\r\n')}\r\n`;
@@ -125,6 +163,18 @@ function readme(doc: SketchDoc, p: Production, profile: ExportProfile, files: st
     lines.push(
       `- ${m.name}: ${s ? `${fmt(s.w)} × ${fmt(s.h)} mm` : 'leer'}, ${techniqueName(m.technique)}, ${a ? a.name : 'frei platziert'}; Oberkante ${fmt(m.placement.y)} mm unter ${g.reference[m.placement.view]}, Mitte ${fmt(Math.abs(m.placement.x))} mm ${m.placement.x > 0 ? 'rechts' : m.placement.x < 0 ? 'links' : 'auf'} der Mittellinie (Bildansicht).`,
     );
+  }
+  if (p.sizes?.length) {
+    lines.push('', 'Größenstaffel (Motivgröße je Kleidergröße, eigene Dateien mit „_Gr-…“):');
+    for (const m of p.motifs)
+      lines.push(
+        `- ${m.name}: ${p.sizes
+          .map((g) => {
+            const s = gradedSize(doc, m, g);
+            return s ? `${g.name} ${fmt(s.w)} × ${fmt(s.h)} mm (${fmt(g.pct)} %)` : g.name;
+          })
+          .join(' · ')}`,
+      );
   }
   lines.push('', 'Varianten:');
   for (const v of p.variants) lines.push(`- ${v.name}: Stoff ${v.fabricName ? `${v.fabricName} ` : ''}${v.fabric.toUpperCase()}`);

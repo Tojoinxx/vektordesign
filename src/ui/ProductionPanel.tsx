@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Shirt, LayoutGrid, Layers3, Copy, FileArchive, FileText, MapPin, Plus, Settings2, Trash2, TriangleAlert } from 'lucide-react';
-import type { Motif, Production, Technique, Variant } from '../model/types';
+import type { Motif, Production, SizeGrade, Technique, Variant } from '../model/types';
 import { GARMENTS, TECHNIQUES, areaOf, garmentOf } from '../model/garments';
 import { allColors, cmykOf, cmykText, motifColors, motifSize, motifWarnings, nextListId, productionOf, variantColor } from '../model/production';
 import { layersOf } from '../model/layers';
+import { SIZE_PRESETS, presetSizes } from '../model/sizes';
 import { normalizeHex } from '../model/color';
 import { formatNumber } from '../params/expr';
 import { BUILTIN_PROFILES, FORMAT_LABELS, type ExportProfile, type PackageFormat } from '../model/profiles';
@@ -148,6 +149,8 @@ export function ProductionPanel() {
       </section>
 
       <VariantsSection p={p} upd={upd} />
+
+      <SizesSection p={p} upd={upd} />
 
       <ColorsSection p={p} upd={upd} />
 
@@ -349,7 +352,12 @@ function VariantsSection({ p, upd }: { p: Production; upd: (l: string, fn: (p: P
             <Field value={v.name} label="Name der Variante" testId={`variant-name-${i}`} onCommit={(x) => setV(v.id, 'Variantenname', (t) => void (t.name = x.trim() || t.name))} />
             <span className="spacer" />
             {p.variants.length > 1 && (
-              <button className="icon-btn" title="Variante entfernen" aria-label="Variante entfernen" onClick={() => upd('Variante entfernen', (q) => void (q.variants = q.variants.filter((x) => x.id !== v.id)))}>
+              <button
+                className="icon-btn"
+                title="Variante entfernen"
+                aria-label="Variante entfernen"
+                onClick={() => upd('Variante entfernen', (q) => void (q.variants = q.variants.filter((x) => x.id !== v.id)))}
+              >
                 <Trash2 size={15} />
               </button>
             )}
@@ -359,7 +367,13 @@ function VariantsSection({ p, upd }: { p: Production; upd: (l: string, fn: (p: P
               Stoff
             </span>
             <ColorButton value={v.fabric} label="Stofffarbe" testId={`variant-fabric-${i}`} onChange={(hex) => setV(v.id, 'Stofffarbe', (t) => void (t.fabric = hex))} />
-            <Field value={v.fabricName ?? ''} placeholder="Name, z. B. Navy" label="Name der Stofffarbe" width={130} onCommit={(x) => setV(v.id, 'Stofffarbe', (t) => void (t.fabricName = x.trim() || undefined))} />
+            <Field
+              value={v.fabricName ?? ''}
+              placeholder="Name, z. B. Navy"
+              label="Name der Stofffarbe"
+              width={130}
+              onCommit={(x) => setV(v.id, 'Stofffarbe', (t) => void (t.fabricName = x.trim() || undefined))}
+            />
           </div>
           {colors.map((orig) => {
             const cur = variantColor(v, orig);
@@ -390,6 +404,114 @@ function VariantsSection({ p, upd }: { p: Production; upd: (l: string, fn: (p: P
   );
 }
 
+function SizesSection({ p, upd }: { p: Production; upd: (l: string, fn: (p: Production) => void) => void }) {
+  const doc = useAppState((s) => s.doc);
+  const sizes = p.sizes ?? [];
+  const m = p.motifs[0];
+  const base = m ? motifSize(doc, m) : null;
+  const fmtMm = (v: number) => (Math.round(v * 10) / 10).toLocaleString('de-DE');
+  const setG = (id: string, label: string, fn: (g: SizeGrade) => void) =>
+    upd(label, (q) => {
+      const g = q.sizes?.find((x) => x.id === id);
+      if (g) fn(g);
+    });
+  return (
+    <section className="props-section" data-testid="sizes-section">
+      <div className="row">
+        <h3 className="spacer">Größenstaffel</h3>
+        {sizes.length > 0 && (
+          <button className="btn small" onClick={() => upd('Größenstaffel entfernen', (q) => void delete q.sizes)} data-testid="sizes-clear">
+            Aus
+          </button>
+        )}
+      </div>
+      {!sizes.length ? (
+        <>
+          <p className="muted small">Motivgröße je Kleidergröße – das Paket enthält dann je Größe eigene Dateien. 100 % ist die gezeichnete Größe.</p>
+          <div className="swatch-row">
+            {SIZE_PRESETS.map((x) => (
+              <button key={x.id} className="btn small" onClick={() => upd('Größenstaffel', (q) => void (q.sizes = presetSizes(x.id)))} data-testid={`sizes-preset-${x.id}`}>
+                {x.name}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <table className="color-table sizes-table">
+            <thead>
+              <tr>
+                <th>Größe</th>
+                <th>%</th>
+                <th>Breite{m ? ` (${m.name})` : ''}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {sizes.map((g, i) => (
+                <tr key={g.id}>
+                  <td>
+                    <Field value={g.name} label="Größe" width={64} testId={`size-name-${i}`} onCommit={(x) => setG(g.id, 'Größe umbenennen', (t) => void (t.name = x.trim() || t.name))} />
+                  </td>
+                  <td>
+                    <Field
+                      value={String(g.pct).replace('.', ',')}
+                      label="Prozent"
+                      width={56}
+                      numeric
+                      testId={`size-pct-${i}`}
+                      onCommit={(x) => {
+                        const n = Number(x.replace(',', '.'));
+                        if (n > 5 && n < 500) setG(g.id, 'Größe skalieren', (t) => void (t.pct = Math.round(n * 100) / 100));
+                      }}
+                    />
+                  </td>
+                  <td>
+                    {base ? (
+                      <Field
+                        value={fmtMm((base.w * g.pct) / 100)}
+                        label="Breite in mm"
+                        width={70}
+                        numeric
+                        testId={`size-width-${i}`}
+                        onCommit={(x) => {
+                          const n = Number(x.replace(',', '.'));
+                          if (n > 0 && base.w > 0) setG(g.id, 'Größe skalieren', (t) => void (t.pct = Math.round((n / base.w) * 10000) / 100));
+                        }}
+                      />
+                    ) : (
+                      '–'
+                    )}
+                  </td>
+                  <td>
+                    <button className="icon-btn" aria-label={`Größe ${g.name} entfernen`} onClick={() => upd('Größe entfernen', (q) => void (q.sizes = (q.sizes ?? []).filter((x) => x.id !== g.id)))}>
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button
+            className="btn small"
+            onClick={() =>
+              upd('Größe hinzufügen', (q) => {
+                const list = q.sizes ?? [];
+                const last = list[list.length - 1];
+                list.push({ id: nextListId('gr', list), name: 'Neu', pct: last ? Math.round(last.pct + 5) : 100 });
+                q.sizes = list;
+              })
+            }
+          >
+            <Plus size={14} /> Größe
+          </button>
+          <p className="muted small">Skaliert wird um die obere Mitte – der Abstand zum Kragen bleibt gleich. Breite eintippen rechnet die Prozente aus.</p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function ColorsSection({ p, upd }: { p: Production; upd: (l: string, fn: (p: Production) => void) => void }) {
   const doc = useAppState((s) => s.doc);
   const used = new Set<string>();
@@ -399,7 +521,9 @@ function ColorsSection({ p, upd }: { p: Production; upd: (l: string, fn: (p: Pro
   return (
     <section className="props-section">
       <h3>Farbangaben</h3>
-      <p className="muted small">CMYK wird aus der Farbe berechnet und kann überschrieben werden. Pantone-Codes sind Freitext – eine Pantone-Bibliothek ist lizenzpflichtig und daher nicht eingebaut.</p>
+      <p className="muted small">
+        CMYK wird aus der Farbe berechnet und kann überschrieben werden. Pantone-Codes sind Freitext – eine Pantone-Bibliothek ist lizenzpflichtig und daher nicht eingebaut.
+      </p>
       <table className="color-table">
         <thead>
           <tr>
@@ -499,7 +623,15 @@ export function ProfileEditor() {
           </select>
           <span>Mindestauflösung</span>
           <span className="row">
-            <input type="number" min={0} step={50} value={draft.minDpi} onChange={(e) => set({ minDpi: Math.max(0, Number(e.target.value) || 0) })} style={{ width: 80 }} aria-label="Mindestauflösung in dpi" />
+            <input
+              type="number"
+              min={0}
+              step={50}
+              value={draft.minDpi}
+              onChange={(e) => set({ minDpi: Math.max(0, Number(e.target.value) || 0) })}
+              style={{ width: 80 }}
+              aria-label="Mindestauflösung in dpi"
+            />
             dpi
           </span>
           <span>Rand</span>

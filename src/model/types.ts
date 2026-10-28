@@ -333,6 +333,13 @@ export interface Motif {
   note?: string;
 }
 
+/** Größenstaffel: Motivbreite je Kleidergröße in Prozent der gezeichneten Größe. */
+export interface SizeGrade {
+  id: Id;
+  name: string;
+  pct: number;
+}
+
 /** Farbvariante: Stofffarbe und Ersetzung der Motivfarben (Originalfarbe → neue Farbe). */
 export interface Variant {
   id: Id;
@@ -376,6 +383,8 @@ export interface Production {
   note?: string;
   /** DTF-/Transfer-Sammelbogen (siehe model/gangsheet) */
   gangSheet?: import('./gangsheet').GangSheetSpec;
+  /** Größenstaffel (leer/fehlt = nur gezeichnete Größe) */
+  sizes?: SizeGrade[];
   /** Einstellungen fürs Siebdruck-Paket */
   screenPrint?: { underbase?: 'auto' | 'on' | 'off'; choke?: number; trap?: number; dropFabricColor?: boolean; marks?: boolean; mirror?: boolean };
 }

@@ -917,6 +917,26 @@ await step('Siebdruck-Paket: Separation mit weißer Unterlage auf schwarzem Hood
   await page.click('[data-testid="screen-close"]');
 });
 
+await step('Größenstaffel: Vorlage S–XL, Breiten je Größe, Breite eintippen rechnet Prozent', async () => {
+  await page.click('[data-testid="tab-production"]');
+  await page.click('[data-testid="sizes-preset-s-xl"]');
+  await page.waitForSelector('[data-testid="size-width-3"]');
+  const w = await page.$eval('[data-testid="size-width-3"]', (e) => e.value);
+  assert(w === '115', `XL-Breite: ${w}`);
+  await page.$eval('[data-testid="size-width-0"]', (el) => {
+    el.scrollIntoView();
+    el.focus();
+    el.select();
+  });
+  await page.keyboard.type('90');
+  await page.keyboard.press('Enter');
+  await waitFor(async () => (await page.$eval('[data-testid="size-pct-0"]', (e) => e.value)) === '90', 'Prozent nicht übernommen');
+  await page.$eval('[data-testid="sizes-section"]', (e) => e.scrollIntoView());
+  await shot('36-groessenstaffel');
+  await page.click('[data-testid="sizes-clear"]');
+  results.push('   Größenstaffel S 90 mm … XL 115 mm');
+});
+
 await step('Neue Zeichenwerkzeuge: Bogen (3 Punkte und Mittelpunkt), Vieleck, Stern, Ellipse, Zeichenstift', async () => {
   await newDoc();
   await app(() => window.vektordesign.editor.setView({ cx: 15, cy: 20, zoom: 4 }));
