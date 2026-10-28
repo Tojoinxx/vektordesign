@@ -41,6 +41,8 @@ html = html.replace(/<link rel="stylesheet" crossorigin href="([^"]+)">/, (_, hr
 const favicon = readFileSync(join(root, 'public', 'favicon.svg')).toString('base64');
 html = html.replace('href="./favicon.svg"', `href="data:image/svg+xml;base64,${favicon}"`);
 html = html.replace(/\s*<link rel="modulepreload"[^>]*>/g, '');
+// Web-App-Angaben (Manifest, Home-Bildschirm-Symbol) braucht die Einzeldatei nicht
+html = html.replace(/\s*<link rel="(?:manifest|apple-touch-icon)"[^>]*>/g, '');
 
 const leftover = html.match(/(?:src|href)="\.\/[^"]+"/);
 if (leftover) throw new Error(`Nicht eingebettet: ${leftover[0]}`);
