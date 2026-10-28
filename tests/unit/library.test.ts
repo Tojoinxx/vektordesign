@@ -42,3 +42,48 @@ describe('Bibliothek', () => {
     expect(() => libraryFromJson('{"x":1}')).toThrow();
   });
 });
+
+import { reduceColorMap } from '../../src/model/library';
+import { reduceColorsOp, shadowOp } from '../../src/store/ops';
+import { perColorFiles } from '../../src/ui/controller';
+
+describe('Farbreduktion, Schatten, je Farbe exportieren', () => {
+  it('fasst ähnliche Farben zusammen (häufigste gewinnt)', () => {
+    const map = reduceColorMap(
+      [
+        { color: '#c8102e', weight: 100 },
+        { color: '#d01530', weight: 10 },
+        { color: '#1f3a93', weight: 50 },
+        { color: '#203b95', weight: 5 },
+      ],
+      2,
+    );
+    expect(map.get('#d01530')).toBe('#c8102e');
+    expect(map.get('#203b95')).toBe('#1f3a93');
+  });
+
+  it('Befehle: Farben reduzieren, Schatten hinter dem Original', async () => {
+    const ed = await makeEditor();
+    const a = ed.createCircle({ pos: { x: 0, y: 0 } }, 5, { style: { fill: '#c8102e', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    ed.createCircle({ pos: { x: 20, y: 0 } }, 5, { style: { fill: '#d01530', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    ed.createCircle({ pos: { x: 40, y: 0 } }, 5, { style: { fill: '#1f3a93', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    const r = reduceColorsOp(ed, 2);
+    expect(r.ok).toBe(true);
+    expect(docColors(ed.s.doc).length).toBe(2);
+    const s = shadowOp(ed, 1, -1, '#000000', [a.circleId!]);
+    expect(s.ok).toBe(true);
+    const order = ed.s.doc.order;
+    expect(order.indexOf(s.ids![0])).toBeLessThan(order.indexOf(a.circleId!));
+    expect(ed.s.doc.entities[s.ids![0]].style.fill).toBe('#000000');
+  });
+
+  it('je Farbe eine Datei: gleiche Größe', async () => {
+    const ed = await makeEditor();
+    ed.createCircle({ pos: { x: 0, y: 0 } }, 5, { style: { fill: '#c8102e', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    ed.createCircle({ pos: { x: 30, y: 0 } }, 5, { style: { fill: '#1f3a93', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    const files = perColorFiles(ed.s.doc, { format: 'svg', dpi: 300, bounds: 'geometry', mirror: false, weeding: { margin: 3, lines: false } }, undefined, 'Test');
+    expect(files.length).toBe(2);
+    const w = files.map((f) => new TextDecoder().decode(f.data).match(/width="([\d.]+)mm"/)![1]);
+    expect(w).toEqual(['46', '46']);
+  });
+});

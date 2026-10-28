@@ -11,6 +11,7 @@ import { docBBox } from '../model/bounds';
 import { loadFont, makeShaper, textContours } from '../platform/fontOutline';
 import { bendText } from '../model/generators';
 import { roundOf } from '../model/arc';
+import { reduceColorMap } from '../model/library';
 import { drawableTargets, type CommitOutcome, type Editor } from './editor';
 import { applyXf, cloneInto } from './xform';
 
@@ -419,4 +420,74 @@ export async function textOnCircleOp(ed: Editor, side: 'top' | 'bottom', offset:
   if (out.ok && id) ed.select([id]);
   if (f.substitute) ed.toast(`Schrift ${text.fontFamily} ist hier nicht verfügbar – ersetzt durch IBM Plex Sans.`, 'info', 6000);
   return { ...out, ids: id ? [id] : [] };
+}
+
+/** Farben der ganzen Zeichnung auf höchstens `n` reduzieren (ähnliche zusammenfassen). */
+export function reduceColorsOp(ed: Editor, n: number): Outcome & { map?: Map<string, string> } {
+  const doc = ed.s.doc;
+  const weights = new Map<string, number>();
+  const add = (c: string, w: number) => weights.set(c.toLowerCase(), (weights.get(c.toLowerCase()) ?? 0) + w);
+  for (const e of Object.values(doc.entities)) {
+    if (e.construction) continue;
+    const area = Math.max(
+      1,
+      (() => {
+        const b = entityBBox(doc, e);
+        return Number.isFinite(b.minX) ? (b.maxX - b.minX) * (b.maxY - b.minY) : 1;
+      })(),
+    );
+    const f = e.style.fill;
+    if (f) {
+      if (isGradient(f)) f.stops.forEach((s) => add(s.color, area / f.stops.length));
+      else add(f, area);
+    }
+    if (e.style.stroke && e.style.strokeWidth > 0) add(e.style.stroke, Math.max(1, area * 0.1));
+  }
+  const before = weights.size;
+  if (before <= n) return fail(`Die Zeichnung hat schon nur ${before} Farbe${before === 1 ? '' : 'n'}.`);
+  const map = reduceColorMap(
+    [...weights].map(([color, weight]) => ({ color, weight })),
+    Math.max(1, Math.round(n)),
+  );
+  const m = (c: string) => map.get(c.toLowerCase()) ?? c;
+  const styles: Record<Id, Style> = {};
+  for (const e of Object.values(doc.entities)) {
+    const s = structuredClone(e.style);
+    if (s.fill) {
+      if (isGradient(s.fill)) s.fill.stops.forEach((st) => (st.color = m(st.color)));
+      else s.fill = m(s.fill);
+    }
+    if (s.stroke) s.stroke = m(s.stroke);
+    if (JSON.stringify(s) !== JSON.stringify(e.style)) styles[e.id] = s;
+  }
+  const out = ed.setStyles(styles, `Farben auf ${n} reduziert`);
+  return { ...out, map };
+}
+
+/**
+ * Schatten: Kopie der Auswahl versetzt hinter das Original, in einer Farbe (Füllung und Kontur).
+ * Klassischer Textil-Effekt für Schrift und Logos.
+ */
+export function shadowOp(ed: Editor, dx: number, dy: number, color: string, ids: Id[] = ed.s.selection): Outcome {
+  const doc = ed.s.doc;
+  const targets = drawableTargets(doc, ids);
+  if (!targets.length) return fail('Zuerst Objekte auswählen.');
+  const created: Id[] = [];
+  const out = ed.commit('Schatten', (d) => {
+    for (const id of targets) {
+      const [copy] = cloneInto(d, doc, [id]);
+      if (!copy) continue;
+      applyXf(d, [copy], { kind: 'move', dx, dy });
+      const e = d.entities[copy];
+      e.style = { ...e.style, fill: e.style.fill ? color : null, stroke: e.style.stroke ? color : null, opacity: 1 };
+      if (e.kind === 'text' && !e.style.fill) e.style.fill = color;
+      // direkt hinter das Original
+      d.order = d.order.filter((x) => x !== copy);
+      const at = d.order.indexOf(id);
+      d.order.splice(at < 0 ? 0 : at, 0, copy);
+      created.push(copy);
+    }
+  });
+  if (out.ok) ed.select(created);
+  return { ...out, ids: created };
 }

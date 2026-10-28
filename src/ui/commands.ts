@@ -223,6 +223,8 @@ export function buildCommands(): Command[] {
     { id: 'design.format', label: 'Format übertragen', group: 'Gestalten', keywords: 'pinsel stil kopieren farbe kontur übernehmen format painter', run: (a) => a.setTool('format') },
     { id: 'insert.generator', label: 'Vorlagen-Generator (Badge, Wappen, Banner, Rahmen, QR-Code, Nackendruck) …', group: 'Zeichnen', keywords: 'vorlage generator badge emblem wappen schild banner band rahmen qr code nacken etikett label', run: (a) => a.ui.setState({ generator: true }) },
     { id: 'edit.textcircle', label: 'Text auf Kreis …', group: 'Textil', keywords: 'text kreis bogen biegen rund badge', run: (a) => a.editCommand('text-circle') },
+    { id: 'edit.shadow', label: 'Schatten …', group: 'Textil', keywords: 'schlagschatten drop shadow versatz kopie', run: (a) => a.editCommand('shadow') },
+    { id: 'edit.reduce', label: 'Farben reduzieren …', group: 'Textil', keywords: 'farbreduktion weniger farben siebe sparen zusammenfassen', run: (a) => a.editCommand('reduce-colors') },
     { id: 'edit.halftone', label: 'Halbtonraster …', group: 'Textil', keywords: 'halbton raster punkte verlauf siebdruck transparenz', run: (a) => a.editCommand('halftone') },
     { id: 'edit.grunge', label: 'Used-Look / Vintage …', group: 'Textil', keywords: 'used vintage grunge kratzer textur alt', run: (a) => a.editCommand('grunge') },
     { id: 'edit.rapport', label: 'Rapport (Allover-Kachel) …', group: 'Textil', keywords: 'rapport allover muster kachel nahtlos pattern', run: (a) => a.editCommand('rapport') },

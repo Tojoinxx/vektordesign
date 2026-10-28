@@ -1,7 +1,12 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { separate } from '../model/separation';
+import { addShapeFromWorld } from '../model/shape';
+import { polysToContours } from '../model/boolean';
+import { docColors } from '../model/library';
+import { normalizeHex } from '../model/color';
 import { FormatTool } from '../tools/formatTool';
 import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
-import type { ConstraintKind, Id, Vec2 } from '../model/types';
+import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
 import { createAppStore, type AppStore, type ToolId } from '../store/state';
 import { Editor, type PlacedPoint } from '../store/editor';
 import type { SceneLayout } from '../render/renderer';
@@ -14,14 +19,29 @@ import { GradientTool } from '../tools/gradientTool';
 import { CalibrateImageTool, MeasureTool, TrimExtendTool, type MeasureResult } from '../tools/editTools';
 import { readImageFile } from '../model/image';
 import { vectorize, type VectorizeDetail } from '../model/vectorize';
-import { addShapeFromWorld } from '../model/shape';
-import { newId } from '../model/doc';
+import { polygonContour } from '../model/shape';
+import { createDoc, newId } from '../model/doc';
 import { buildBridgePrompt, parseScript, runScript } from '../assistant/bridge';
 import type { AgentHost } from '../assistant/tools';
 import { preflightTargetFor, runPreflight, type PreflightResult, type PreflightTarget } from '../model/preflight';
 import { layersOf } from '../model/layers';
 import { SketchTool } from '../tools/sketchTool';
-import { booleanOp, cornerOp, grungeOp, halftoneOp, offsetOp, patternOp, rapportOp, selectionCenter, textOnCircleOp, selectionSize, textToPaths, toShape } from '../store/ops';
+import {
+  booleanOp,
+  cornerOp,
+  grungeOp,
+  halftoneOp,
+  offsetOp,
+  patternOp,
+  rapportOp,
+  reduceColorsOp,
+  selectionCenter,
+  shadowOp,
+  textOnCircleOp,
+  selectionSize,
+  textToPaths,
+  toShape,
+} from '../store/ops';
 import type { BoolOp } from '../model/boolean';
 import { evaluate, numberToExpr } from '../params/expr';
 import { docBBox } from '../model/bounds';
@@ -166,6 +186,8 @@ export type EditCommand =
   | 'grunge'
   | 'rapport'
   | 'text-circle'
+  | 'shadow'
+  | 'reduce-colors'
   | BoolOp;
 
 export interface ExportRequest {
@@ -179,6 +201,8 @@ export interface ExportRequest {
   outlines?: boolean;
   /** Entgitterungsrahmen (Plotter): Abstand in mm, Linien durch freie Streifen */
   weeding?: { margin: number; lines: boolean } | null;
+  /** Je Druck-/Folienfarbe eine eigene Datei (gleiche Größe und Lage), als ZIP */
+  perColor?: boolean;
 }
 
 export class AppController {
@@ -839,6 +863,43 @@ export class AppController {
         });
         return;
       }
+      case 'shadow':
+        if (needSel()) return;
+        open({
+          title: 'Schatten',
+          text: 'Legt eine einfarbige Kopie versetzt hinter die Auswahl – z. B. als Schlagschatten für Schrift. Die Kopie ist eine eigene Druckfarbe.',
+          fields: [
+            { key: 'dx', label: 'Versatz rechts', unit: 'mm', value: '1' },
+            { key: 'dy', label: 'Versatz unten', unit: 'mm', value: '1' },
+            { key: 'color', label: 'Farbe (HEX)', value: '#1e2328' },
+          ],
+          ok: 'Schatten anlegen',
+          run: (v) => {
+            const c = normalizeHex(v.color.trim());
+            if (!c) throw new Error('Farbe bitte als HEX angeben, z. B. #1E2328.');
+            const out = shadowOp(ed, num(v.dx, 'Versatz'), -num(v.dy, 'Versatz'), c);
+            if (!out.ok) ed.toast(out.message, 'error');
+          },
+        });
+        return;
+      case 'reduce-colors': {
+        const used = docColors(doc).length;
+        open({
+          title: 'Farben reduzieren',
+          text: `Die Zeichnung hat ${used} Farbe${used === 1 ? '' : 'n'}. Ähnliche Farben werden zusammengefasst; jede Gruppe übernimmt ihre häufigste Farbe – das spart Siebe bzw. Folien.`,
+          fields: [{ key: 'n', label: 'Höchstens', unit: 'Farben', value: String(Math.max(1, Math.min(used - 1, 3))) }],
+          ok: 'Reduzieren',
+          run: (v) => {
+            const out = reduceColorsOp(ed, Math.max(1, Math.round(num(v.n, 'Anzahl'))));
+            if (!out.ok) ed.toast(out.message, 'info');
+            else if (out.map) {
+              const changed = [...out.map].filter(([a, b]) => a !== b);
+              ed.toast(changed.length ? `Zusammengefasst: ${changed.map(([a, b]) => `${a.toUpperCase()} → ${b.toUpperCase()}`).join(', ')}` : 'Keine Änderung', 'success', 7000);
+            }
+          },
+        });
+        return;
+      }
       case 'text-circle':
         if (needSel()) return;
         open({
@@ -1337,6 +1398,21 @@ export class AppController {
   }
 
   /** Exportiert die Zeichnung. Ohne `path` fragt ein Speichern-Dialog nach dem Ziel (mit `path`: nur Desktop). */
+  private async exportPerColor(
+    doc: SketchDoc,
+    req: ExportRequest,
+    outlines: Map<string, import('../model/types').Contour[]> | undefined,
+    base: string,
+    suffix: string,
+    path?: string | null,
+  ): Promise<boolean> {
+    const files = perColorFiles(doc, req, outlines, base);
+    const zip = zipSync(Object.fromEntries(files.map((f) => [f.name, f.data])));
+    const res = await saveFile(zip, `${base}_je_Farbe${suffix}.zip`, ZIP_TYPE, path);
+    if (res) this.editor.toast(`${files.length} Farbdateien exportiert (gleicher Rahmen, passgenau übereinander)`, 'success', 6000);
+    return !!res;
+  }
+
   async exportFile(req: ExportRequest, path?: string | null): Promise<boolean> {
     let doc = this.editor.s.doc;
     const base = safeName(this.projectName());
@@ -1350,6 +1426,7 @@ export class AppController {
           outlines = t.outlines;
           if (t.substituted.length) this.editor.toast(`Schrift nicht gefunden, ersetzt: ${t.substituted.join(', ')}`, 'info', 6000);
         }
+        if (req.perColor) return await this.exportPerColor(doc, req, outlines, base, suffix, path);
         if (req.weeding) doc = withWeeding(doc, req.weeding, outlines);
         const title = this.projectName();
         let data: Uint8Array | string;
@@ -1395,6 +1472,56 @@ export class AppController {
       return false;
     }
   }
+}
+
+export interface PerColorFile {
+  name: string;
+  data: Uint8Array;
+}
+
+/**
+ * Je Farbe eine Datei: Farbflächen aus der Separation (obere Farben sparen untere aus, keine
+ * Unterlage/Überfüllung), alle Dateien mit demselben Rahmen – passgenau übereinander plotbar.
+ */
+export function perColorFiles(doc: SketchDoc, req: ExportRequest, outlines: Map<string, import('../model/types').Contour[]> | undefined, base: string): PerColorFile[] {
+  const sep = separate(doc, { outlines, underbase: 'off', trap: 0, dropFabricColor: false });
+  const plates = sep.plates.filter((p) => p.kind === 'color');
+  if (!plates.length || !sep.box) throw new Error('Keine Farbflächen zu exportieren.');
+  const m = req.weeding ? Math.max(0, req.weeding.margin) : 0;
+  const frame = { minX: sep.box.minX - m, minY: sep.box.minY - m, maxX: sep.box.maxX + m, maxY: sep.box.maxY + m };
+  const files: PerColorFile[] = [];
+  plates.forEach((pl, i) => {
+    const d = createDoc(`${base} ${pl.color}`);
+    addShapeFromWorld(d, polysToContours(pl.polys), { fill: pl.color, stroke: null, strokeWidth: 0.5, opacity: 1 }, { fillRule: 'evenodd', name: `Farbe ${pl.color.toUpperCase()}` });
+    if (req.weeding) {
+      d.layers = [
+        { id: 'L1', name: 'Motiv', visible: true, locked: false },
+        { id: 'weed', name: 'Entgitterung', visible: true, locked: false },
+      ];
+      addShapeFromWorld(
+        d,
+        [
+          polygonContour([
+            { x: frame.minX, y: frame.minY },
+            { x: frame.maxX, y: frame.minY },
+            { x: frame.maxX, y: frame.maxY },
+            { x: frame.minX, y: frame.maxY },
+          ]),
+        ],
+        { fill: null, stroke: '#000000', strokeWidth: 0.25, opacity: 1 },
+        { layer: 'weed', name: 'Entgitterungsrahmen' },
+      );
+    }
+    const name = `${base}_Farbe${i + 1}_${pl.color.slice(1).toUpperCase()}${req.mirror ? '_gespiegelt' : ''}`;
+    if (req.format === 'svg') files.push({ name: `${name}.svg`, data: new TextEncoder().encode(exportSvg(d, { mirror: req.mirror, title: name, frame }).svg) });
+    else {
+      const scene = buildScene(d, { frame });
+      if (req.format === 'pdf') files.push({ name: `${name}.pdf`, data: exportPdf(scene, { colorMode: req.colorMode, mirror: req.mirror, title: name }) });
+      else if (req.format === 'eps') files.push({ name: `${name}.eps`, data: exportEps(scene, { colorMode: req.colorMode, mirror: req.mirror, title: name }).bytes });
+      else files.push({ name: `${name}.dxf`, data: exportDxf(scene, { mirror: req.mirror }) });
+    }
+  });
+  return files;
 }
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 2 });

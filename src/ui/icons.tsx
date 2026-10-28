@@ -395,3 +395,18 @@ export const IconSymmetry = (p: { size?: number; mode?: 'off' | 'v' | 'h' | 'vh'
     <path d="M15 7 L19 12 L15 17 Z" fill="currentColor" fillOpacity={p.mode === 'off' ? 0 : 0.25} />
   </Icon>
 );
+export const IconShadow = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M8 8 H19 V19 H8 Z" fill="currentColor" fillOpacity="0.35" stroke="none" />
+    <path d="M5 5 H16 V16 H5 Z" />
+  </Icon>
+);
+export const IconReduce = (p: { size?: number }) => (
+  <Icon {...p}>
+    <circle cx="6" cy="7" r="2.5" fill="currentColor" fillOpacity="0.3" />
+    <circle cx="12" cy="7" r="2.5" fill="currentColor" fillOpacity="0.6" />
+    <circle cx="18" cy="7" r="2.5" fill="currentColor" />
+    <path d="M12 12 V15 M9.5 13.5 L12 16 L14.5 13.5" />
+    <circle cx="12" cy="19.5" r="2.5" fill="currentColor" />
+  </Icon>
+);

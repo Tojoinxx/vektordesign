@@ -969,7 +969,19 @@ await step('Kostenschätzung und Entgitterungsrahmen beim Export', async () => {
   const svg = readFileSync(f, 'utf8');
   const w = Number(svg.match(/width="([\d.]+)mm"/)[1]);
   assert(Math.abs(w - 106) < 1e-6 && svg.includes('Entgitterung'), `SVG-Breite mit Rahmen: ${w}`);
-  results.push(`   Kosten: ${rows.map((r) => r.split('€')[0]).length} Verfahren verglichen; Rahmen-SVG ${w} mm breit`);
+  // Je Farbe eine Datei (mehrfarbig plotten)
+  for (const f of readdirSync(DL)) rmSync(join(DL, f), { force: true });
+  await app(() => window.vektordesign.openExport('svg'));
+  await page.waitForSelector('[data-testid="export-dialog"]');
+  await page.click('[data-testid="format-svg"]');
+  await page.click('[data-testid="export-percolor"]');
+  await page.click('[data-testid="export-run"]');
+  const z = await waitDownload('zip', []);
+  await sleep(150);
+  const { unzipSync } = await import('fflate');
+  const parts = Object.keys(unzipSync(readFileSync(z)));
+  assert(parts.length === 2 && parts.every((n) => n.endsWith('.svg')), `Farbdateien: ${parts.join(', ')}`);
+  results.push(`   Kosten: ${rows.map((r) => r.split('€')[0]).length} Verfahren verglichen; Rahmen-SVG ${w} mm breit; ${parts.length} Farbdateien`);
 });
 
 await step('Neue Zeichenwerkzeuge: Bogen (3 Punkte und Mittelpunkt), Vieleck, Stern, Ellipse, Zeichenstift', async () => {

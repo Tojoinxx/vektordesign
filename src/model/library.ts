@@ -157,3 +157,73 @@ export function mergeLibrary(a: Library, b: Library): Library {
   for (const p of b.palettes) pa.set(p.id, p);
   return { version: 1, elements: [...el.values()], palettes: [...pa.values()] };
 }
+
+/**
+ * Farbreduktion: ähnliche Farben zu höchstens `n` Farben zusammenfassen (k-Means im RGB-Raum,
+ * gewichtet nach Häufigkeit). Jede Gruppe übernimmt ihre häufigste Farbe. Ergebnis: alt → neu.
+ */
+export function reduceColorMap(colors: { color: string; weight: number }[], n: number): Map<string, string> {
+  const list = colors.filter((c) => c.weight > 0).map((c) => ({ ...c, color: c.color.toLowerCase(), rgb: hexToRgb(c.color) }));
+  const out = new Map<string, string>();
+  if (list.length <= n) {
+    for (const c of list) out.set(c.color, c.color);
+    return out;
+  }
+  const d2 = (a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }) => (a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2;
+  // Start: häufigste Farbe, dann jeweils die entfernteste
+  const sorted = [...list].sort((a, b) => b.weight - a.weight);
+  const centers = [{ ...sorted[0].rgb }];
+  while (centers.length < n) {
+    let best = sorted[0];
+    let bd = -1;
+    for (const c of sorted) {
+      const d = Math.min(...centers.map((x) => d2(x, c.rgb))) * Math.sqrt(c.weight);
+      if (d > bd) {
+        bd = d;
+        best = c;
+      }
+    }
+    centers.push({ ...best.rgb });
+  }
+  let assign = new Array<number>(list.length).fill(0);
+  for (let it = 0; it < 12; it++) {
+    assign = list.map((c) => {
+      let k = 0;
+      let bd = Infinity;
+      centers.forEach((x, i) => {
+        const d = d2(x, c.rgb);
+        if (d < bd) {
+          bd = d;
+          k = i;
+        }
+      });
+      return k;
+    });
+    centers.forEach((x, i) => {
+      let w = 0;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      list.forEach((c, j) => {
+        if (assign[j] !== i) return;
+        w += c.weight;
+        r += c.rgb.r * c.weight;
+        g += c.rgb.g * c.weight;
+        b += c.rgb.b * c.weight;
+      });
+      if (w) {
+        x.r = r / w;
+        x.g = g / w;
+        x.b = b / w;
+      }
+    });
+  }
+  // Vertreter: häufigste Originalfarbe je Gruppe (keine Mischfarben, die es vorher nicht gab)
+  const rep = new Map<number, { color: string; weight: number }>();
+  list.forEach((c, j) => {
+    const r = rep.get(assign[j]);
+    if (!r || c.weight > r.weight) rep.set(assign[j], { color: c.color, weight: c.weight });
+  });
+  list.forEach((c, j) => out.set(c.color, rep.get(assign[j])!.color));
+  return out;
+}

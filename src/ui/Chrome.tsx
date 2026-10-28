@@ -364,6 +364,7 @@ export function ExportDialog() {
   const [cmyk, setCmyk] = useState(false);
   const [outlines, setOutlines] = useState(true);
   const [weed, setWeed] = useState(false);
+  const [perColor, setPerColor] = useState(false);
   const [weedMargin, setWeedMargin] = useState('3');
   const [weedLines, setWeedLines] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -387,6 +388,7 @@ export function ExportDialog() {
       mirror,
       colorMode: cmyk ? 'cmyk' : 'rgb',
       outlines,
+      perColor: perColor && format !== 'png',
       weeding: weed && format !== 'png' ? { margin: Math.max(0, Number(weedMargin.replace(',', '.')) || 0), lines: weedLines } : null,
     });
     setBusy(false);
@@ -438,6 +440,12 @@ export function ExportDialog() {
           <input type="checkbox" checked={mirror} onChange={(e) => setMirror(e.target.checked)} />
           Spiegeln (für Flexfolie / Transferdruck)
         </label>
+        {format !== 'png' && (
+          <label className="check">
+            <input type="checkbox" checked={perColor} onChange={(e) => setPerColor(e.target.checked)} data-testid="export-percolor" />
+            Je Farbe eine Datei (Folienfarben, Siebe) – alle mit gleichem Rahmen, als ZIP
+          </label>
+        )}
         {format !== 'png' && (
           <div className="weed-row">
             <label className="check">

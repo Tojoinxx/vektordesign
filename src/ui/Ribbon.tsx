@@ -63,6 +63,8 @@ import {
   IconHalftone,
   IconSymmetry,
   IconTextCircle,
+  IconShadow,
+  IconReduce,
   IconBadge,
   IconGrunge,
   IconRapport,
@@ -188,6 +190,10 @@ function EditRibbon() {
         <Big icon={<IconGrunge />} label="Used-Look" onClick={cmd('grunge')} testId="edit-grunge" />
         <Big icon={<IconRapport />} label="Rapport" onClick={cmd('rapport')} testId="edit-rapport" />
         <Big icon={<IconTextCircle />} label="Text auf Kreis" onClick={cmd('text-circle')} testId="edit-text-circle" />
+        <div className="rb-col">
+          <Small icon={<IconShadow size={18} />} label="Schatten" onClick={cmd('shadow')} testId="edit-shadow" />
+          <Small icon={<IconReduce size={18} />} label="Farben reduzieren" onClick={cmd('reduce-colors')} testId="edit-reduce" />
+        </div>
       </Group>
       <Group title="Messen und Prüfen">
         <Big icon={<IconMeasure />} label="Messen" kbd="M" active={tool === 'measure'} onClick={() => app.setTool('measure')} testId="tool-measure" />
