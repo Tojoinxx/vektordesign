@@ -237,6 +237,7 @@ export function buildCommands(): Command[] {
         a.ui.setState({ placement: d.production?.motifs[0]?.id ?? 'm1' });
       },
     },
+    { id: 'prod.screen', label: 'Siebdruck-Paket (Farbseparation, Filme)', group: 'Produktion', keywords: 'siebdruck sieb film separation unterlage unterdruck überfüllung trapping passer passermarken farbauszug', run: (a) => a.ui.setState({ screenPrint: true }) },
     { id: 'prod.gangsheet', label: 'DTF-Sammelbogen (Namen und Nummern)', group: 'Produktion', keywords: 'dtf transfer gang sheet bogen rolle trikot namen nummern flock', run: (a) => a.ui.setState({ gangSheet: true }) },
     { id: 'prod.mockup', label: 'Mockup-Vorschau', group: 'Produktion', keywords: 'shirt hoodie tasche vorschau stofffarbe kontrast', run: (a) => a.ui.setState({ mockup: true }) },
     { id: 'prod.package', label: 'ZIP-Paket für LabwearOS exportieren', group: 'Produktion', keywords: 'export zip paket labwearos', run: (a) => void a.exportPackage() },

@@ -376,4 +376,6 @@ export interface Production {
   note?: string;
   /** DTF-/Transfer-Sammelbogen (siehe model/gangsheet) */
   gangSheet?: import('./gangsheet').GangSheetSpec;
+  /** Einstellungen fürs Siebdruck-Paket */
+  screenPrint?: { underbase?: 'auto' | 'on' | 'off'; choke?: number; trap?: number; dropFabricColor?: boolean; marks?: boolean; mirror?: boolean };
 }

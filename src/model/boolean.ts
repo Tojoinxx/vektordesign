@@ -99,3 +99,41 @@ export function polysToContours(polys: Vec2[][]): Contour[] {
 export function areaOf(polys: Vec2[][]): number {
   return Math.abs(polys.reduce((s, p) => s + polyArea(p), 0));
 }
+
+/**
+ * Kontur (Strich) als Fläche: offene Linien mit Linienende, geschlossene als Ring.
+ * Für Farbseparation und Plotter, wo nur Flächen zählen.
+ */
+export function strokeArea(contours: Contour[], width: number, cap: 'butt' | 'round' | 'square' = 'butt'): Vec2[][] {
+  if (!(width > 0)) return [];
+  const co = new CL.ClipperOffset(4, 0.002 * SCALE);
+  const endOpen = cap === 'round' ? CL.EndType.etOpenRound : cap === 'square' ? CL.EndType.etOpenSquare : CL.EndType.etOpenButt;
+  for (const c of contours) {
+    const pts = flattenContour(c, CURVE_TOL);
+    if (pts.length < 2) continue;
+    const path = pts.map((p) => ({ X: Math.round(p.x * SCALE), Y: Math.round(p.y * SCALE) }));
+    co.AddPath(path, CL.JoinType.jtMiter, c.closed ? CL.EndType.etClosedLine : endOpen);
+  }
+  const out: Paths = [];
+  co.Execute(out, (width / 2) * SCALE);
+  return fromPaths(exec(CL.ClipType.ctUnion, out, [], CL.PolyFillType.pftNonZero));
+}
+
+/** Fläche ohne die zweite (a − b). */
+export function subtractArea(a: Vec2[][], b: Vec2[][]): Vec2[][] {
+  if (!a.length || !b.length) return a;
+  return fromPaths(exec(CL.ClipType.ctDifference, toPaths(a), toPaths(b), CL.PolyFillType.pftNonZero));
+}
+
+/** Gemeinsame Fläche. */
+export function intersectArea(a: Vec2[][], b: Vec2[][]): Vec2[][] {
+  if (!a.length || !b.length) return [];
+  return fromPaths(exec(CL.ClipType.ctIntersection, toPaths(a), toPaths(b), CL.PolyFillType.pftNonZero));
+}
+
+/** Vereinigte Fläche. */
+export function unionArea(...areas: Vec2[][][]): Vec2[][] {
+  const all = areas.flat();
+  if (!all.length) return [];
+  return fromPaths(exec(CL.ClipType.ctUnion, toPaths(all), [], CL.PolyFillType.pftNonZero));
+}

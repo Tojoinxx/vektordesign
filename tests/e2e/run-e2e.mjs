@@ -894,6 +894,29 @@ await step('DTF-Sammelbogen: Logos und Trikotnamen auf 560-mm-Rolle, PDF mit Sch
   assert(saved.includes('Yilmaz'), 'Einstellungen nicht im Projekt gespeichert');
 });
 
+await step('Siebdruck-Paket: Separation mit weißer Unterlage auf schwarzem Hoodie, Filme je Farbe als ZIP', async () => {
+  await page.click('[data-testid="tab-production"]');
+  await page.click('[data-testid="screen-open"]');
+  await page.waitForSelector('[data-testid="screenprint"]');
+  await waitFor(async () => (await page.$eval('[data-testid="screen-summary"]', (e) => e.textContent)).includes('Sieb'), 'Separation fertig');
+  const summary = await page.$eval('[data-testid="screen-summary"]', (e) => e.textContent);
+  await sleep(300);
+  await shot('35-siebdruck');
+  for (const f of readdirSync(DL)) rmSync(join(DL, f), { force: true });
+  await page.click('[data-testid="screen-export"]');
+  const zip = await waitDownload('zip', []);
+  await sleep(200);
+  const { unzipSync } = await import('fflate');
+  const files = unzipSync(readFileSync(zip));
+  const names = Object.keys(files);
+  const films = names.filter((n) => /_Film\d+_/.test(n));
+  assert(films.length >= 2, `Filme: ${names.join(', ')}`);
+  assert(names.some((n) => n.endsWith('_Andruck.pdf')) && names.some((n) => n.endsWith('LIESMICH.txt')), `Inhalt: ${names.join(', ')}`);
+  copyFileSync(zip, join(OUT, 'm5-siebdruck.zip'));
+  results.push(`   Siebdruck: ${summary}, ${films.length} Filme`);
+  await page.click('[data-testid="screen-close"]');
+});
+
 await step('Neue Zeichenwerkzeuge: Bogen (3 Punkte und Mittelpunkt), Vieleck, Stern, Ellipse, Zeichenstift', async () => {
   await newDoc();
   await app(() => window.vektordesign.editor.setView({ cx: 15, cy: 20, zoom: 4 }));

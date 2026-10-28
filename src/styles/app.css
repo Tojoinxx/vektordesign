@@ -2481,3 +2481,50 @@ body {
 .gang-side .warn {
   color: var(--danger, #c8102e);
 }
+
+/* Siebdruck-Filme */
+.screen-stage {
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-content: flex-start;
+}
+.screen-proof,
+.screen-plate {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  font-size: 12px;
+}
+.screen-proof canvas,
+.screen-plate canvas {
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.screen-plates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-content: flex-start;
+  flex: 1 1 360px;
+}
+.screen-plate figcaption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.screen-plate .swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.screen-warn {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--danger, #c8102e);
+}

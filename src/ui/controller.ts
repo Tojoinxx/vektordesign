@@ -40,6 +40,7 @@ import { attachImagePixels, buildScene, sceneHasImages, textOutlines } from '../
 import { exportPdf } from '../export/pdf';
 import { gangPieces, layoutGang, type GangSheetSpec } from '../model/gangsheet';
 import { buildSheetDocs, withoutCutLayer } from '../export/gangSheetExport';
+import { buildScreenPrint, type ScreenPrintOptions } from '../export/screenPrint';
 import { zipSync } from 'fflate';
 import { exportEps } from '../export/eps';
 import { exportDxf } from '../export/dxf';
@@ -99,6 +100,8 @@ export interface UiState {
   mockup: boolean;
   /** DTF-/Transfer-Sammelbogen offen */
   gangSheet: boolean;
+  /** Siebdruck-Paket offen */
+  screenPrint: boolean;
   /** iPad: fertige Datei, die per Knopf geteilt wird */
   shareReady: { name: string; share: () => Promise<void> } | null;
 }
@@ -206,6 +209,7 @@ export class AppController {
       preflight: null,
       mockup: false,
       gangSheet: false,
+      screenPrint: false,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -815,6 +819,36 @@ export class AppController {
       this.ui.setState({ busy: null });
       const saved = await saveFile(bytes, `${articleBase(p)}_Artwork-Blatt.pdf`, PDF_TYPE, path);
       if (saved) this.editor.toast('Artwork-Blatt exportiert', 'success');
+      return !!saved;
+    } catch (e) {
+      this.ui.setState({ busy: null });
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
+      return false;
+    }
+  }
+
+  /** Siebdruck-Paket (Filme je Farbe, Andruck) als ZIP speichern. */
+  async exportScreenPrint(motifId: string, variantId: string, opts: Partial<ScreenPrintOptions>, path?: string | null): Promise<boolean> {
+    const doc = this.editor.s.doc;
+    const p = productionOf(doc);
+    const m = p.motifs.find((x) => x.id === motifId) ?? p.motifs[0];
+    const v = p.variants.find((x) => x.id === variantId) ?? p.variants[0];
+    if (!m || !v) {
+      this.editor.toast('Kein Motiv vorhanden.', 'error');
+      return false;
+    }
+    const cur = JSON.stringify(p.screenPrint ?? null);
+    const next = { underbase: opts.underbase, choke: opts.choke, trap: opts.trap, dropFabricColor: opts.dropFabricColor, marks: opts.marks, mirror: opts.mirror };
+    if (cur !== JSON.stringify(next))
+      this.editor.updateProduction('Siebdruck-Einstellungen', (q) => {
+        q.screenPrint = next;
+      });
+    try {
+      this.ui.setState({ busy: 'Siebdruck-Filme werden erstellt …' });
+      const r = await buildScreenPrint(doc, p, m, v, opts);
+      this.ui.setState({ busy: null });
+      const saved = await saveFile(r.zip, r.fileName, ZIP_TYPE, path);
+      if (saved) this.editor.toast(`Siebdruck-Paket gespeichert: ${r.separation.plates.length} Filme${r.warnings.length ? ` – ${r.warnings.length} Hinweis${r.warnings.length === 1 ? '' : 'e'} in LIESMICH.txt` : ''}`, 'success', 6000);
       return !!saved;
     } catch (e) {
       this.ui.setState({ busy: null });
