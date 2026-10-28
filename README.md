@@ -121,6 +121,41 @@ Die Tech-Packs entstehen in LabwearOS. Vektordesign liefert die passenden Artwor
 3. **Variante** hinzufügen, Stofffarbe und Druckfarben der zweiten Variante ändern, Pantone-Code als Freitext eintragen.
 4. **ZIP-Paket exportieren**: Das Paket enthält je Variante PDF, SVG und PNG (300 dpi) sowie das Artwork-Blatt.
 
+### Weitere Zeichenwerkzeuge
+
+- **Bogen** (`A`): Start, Ende, Wölbung – oder vom Mittelpunkt. Bögen bemaßt man wie Kreise (Radius), legt sie tangential an Linien und macht aus Linien und Bögen mit **Geschlossene Fläche** (Rechtsklick oder Leiste) eine füllbare Kontur – z. B. ein vollständig bemaßtes Langloch.
+- **Vieleck** (`N`) und **Stern**: Mittelpunkt, Ecke bzw. Spitze; Eckenzahl und Durchmesser direkt eintippen. Die Geometrie bleibt parametrisch (Konstruktionskreise mit Durchmesserbemaßung).
+- **Ellipse** und **Zeichenstift** (`B`): erzeugen Formen; beim Zeichenstift setzt Klicken eine Ecke, Ziehen eine Kurve, Klick auf den Start schließt.
+- **Symmetrie-Modus** (Knopf in der Zeichnen-Gruppe): Gezeichnetes erscheint gespiegelt an der senkrechten, waagrechten oder an beiden Achsen durch den Ursprung – mit Vorschau, im selben Rückgängig-Schritt.
+- **Vorlagen** (Zeichnen-Gruppe): Generatoren für Badge (Text im Ring), Wappen, Banner, Rahmen, QR-Code und Nackendruck – mit Vorschau, eingefügt als Gruppe.
+- **Import** (Datei-Menü oder Datei aufs Fenster ziehen): SVG aus Illustrator, Inkscape oder Cricut sowie DXF aus CAD-/Schnittmuster-Programmen. Linien, Kreise und Bögen aus DXF lassen sich danach bemaßen.
+- **Druckbereich** (Ansicht-Gruppe): blendet den Druckbereich des Kleidungsstücks (z. B. Brust links 100 × 100 mm, Front A4/A3) in echten Maßen ein; rot, wenn das Motiv zu groß ist.
+
+### Textil-Funktionen
+
+Bearbeiten-Leiste, Gruppe **Textil**:
+
+- **Halbton**: Verläufe und Transparenz werden zu druckbaren Punkten (Rasterweite in lpi, Winkel, kleinster Punkt) – je Farbe ein Raster.
+- **Used-Look**: zufällige Sprenkel, Ausbrüche und Kratzer werden aus den Flächen entfernt (echte Vektorlöcher).
+- **Rapport**: macht aus der Auswahl eine nahtlos kachelbare Allover-Kachel (gerade, halber Versatz, Ziegel).
+- **Text auf Kreis**, **Schatten** (versetzte einfarbige Kopie) und **Farben reduzieren** (ähnliche Farben zusammenfassen – spart Siebe und Folien).
+
+Produktion-Bereich:
+
+- **Mockup** mit Kontrastprüfung und Vergleich aller Farbvarianten nebeneinander.
+- **Prüfen (Preflight)** je Veredelung: zu feine Linien und Zwischenräume, kleine Schrift, Verläufe, Transparenz, offene Konturen.
+- **Siebdruck-Filme**: Farbseparation mit weißer Unterlage (Rückzug) für dunkle Stoffe, Überfüllung, Flächen in Stofffarbe aussparen; ZIP mit einem Film je Farbe (schwarz, 1:1, Passer- und Schnittmarken, Beschriftung), allen Filmen in einer PDF, Andruck und LIESMICH.
+- **DTF-Sammelbogen**: Motive mit Stückzahlen und Namen/Nummern (aus Excel kopiert) platzsparend auf die Rolle (300–600 mm), Export als PDF mit Schnittlinien-Ebene, PNG 300 dpi oder SVG.
+- **Größenstaffel**: Motivgröße je Kleidergröße (S–XL, XS–3XL, Gruppen, Kinder oder eigene); das ZIP-Paket enthält dann je Größe eigene Dateien.
+- **Kostenschätzung**: Siebdruck, DTF, Flex/Flock und Stick für eine Stückzahl im Vergleich, mit Rechenweg und eigenen Preisen.
+- Das **ZIP-Paket** ist zugleich der Stapel-Export: alle Motive, Varianten, Größen und Formate in einem Rutsch.
+
+Export-Dialog: **Je Farbe eine Datei** (für mehrfarbiges Plotten und Siebe, alle mit gleichem Rahmen) und **Entgitterungsrahmen** mit Linien zwischen Motivteilen.
+
+### Bibliothek
+
+Im Bereich **Bibliothek** der Seitenleiste: Auswahl als Element oder Logo speichern und in jedem Projekt per Klick einfügen; Farbpaletten aus der Zeichnung, aus einem Bild oder als Farbharmonie anlegen; ein Farbfeld färbt die Auswahl (Alt oder Rechtsklick: Kontur). **Format übertragen** (Gestalten-Gruppe) überträgt Füllung, Kontur und Linienart per Klick. Die Bibliothek lässt sich als `.vdlib`-Datei sichern und auf anderen Geräten laden.
+
 ### iPad, Apple Pencil und Sync
 
 | Geste | Wirkung |
@@ -133,9 +168,6 @@ Die Tech-Packs entstehen in LabwearOS. Vektordesign liefert die passenden Artwor
 | langes Drücken | Kontextmenü |
 | Doppeltipp | wie Doppelklick (z. B. Bemaßung ändern) |
 
-- **Bogen** (`A`): Start, Ende, Wölbung – oder vom Mittelpunkt. Bögen bemaßt man wie Kreise (Radius), legt sie tangential an Linien und macht aus Linien und Bögen mit **Geschlossene Fläche** (Rechtsklick oder Leiste) eine füllbare Kontur – z. B. ein vollständig bemaßtes Langloch.
-- **Vieleck** (`N`) und **Stern**: Mittelpunkt, Ecke bzw. Spitze; Eckenzahl und Durchmesser direkt eintippen. Die Geometrie bleibt parametrisch (Konstruktionskreise mit Durchmesserbemaßung).
-- **Ellipse** und **Zeichenstift** (`B`): erzeugen Formen; beim Zeichenstift setzt Klicken eine Ecke, Ziehen eine Kurve, Klick auf den Start schließt.
 - **Freihand** (`S`, auch im Markierungsmenü): grob zeichnen, beim Absetzen entsteht saubere Geometrie – Linie (fast waagrecht/senkrecht wird exakt), Kreis, Rechteck, Dreieck/Vieleck oder Linienzug. Danach wie gewohnt bemaßen.
 - **Ziffernblock:** Auf Touch-Geräten erscheint beim Bemaßen ein großer Ziffernblock statt der Bildschirmtastatur (Ausdrücke wie `30+5` gehen auch).
 - **Teilen-Menü:** Exporte und „Speichern“ öffnen auf dem iPad das Teilen-Menü – „In Dateien sichern“ (iCloud Drive, OneDrive), AirDrop, Mail oder direkt die Cricut-App.
@@ -172,7 +204,7 @@ Im Tab **Claude** (`Strg+I`) beschreibst du, was entstehen soll – Claude zeich
 | SVG | Maße in mm (`width`/`height` in mm, `viewBox` in mm), benannte Ebenen, Text wahlweise als Pfade (Standard), ohne Bemaßungen, Glyphen und Konstruktionslinien – passt für Illustrator, Inkscape, Cricut Design Space und Silhouette Studio |
 | PDF | Vektor-PDF in Originalgröße (Seite = Motiv), Ebenen als PDF-Ebenen (in Illustrator/Acrobat sichtbar), Verläufe und Verblassen, Deckkraft, RGB oder CMYK, Text als Pfade |
 | EPS | PostScript Level 3 für ältere Programme, RGB oder CMYK, Verläufe; ohne Transparenz (wird beim Export angezeigt) |
-| DXF | R12, Einheit mm, Ebenen als Layer, Kreise als echte Kreise, Kurven fein angenähert – für Plotter und Schnittmuster-Software; ohne Farben |
+| DXF | R12, Einheit mm, Ebenen als Layer, Linien, Kreise und Bögen als echte Objekte, Kurven fein angenähert – für Plotter und Schnittmuster-Software; ohne Farben |
 | PNG | 300, 360, 600, 720 oder 1200 dpi, transparenter Hintergrund, Auflösung im Dateikopf (pHYs) |
 | Projekt (`.vdp`) | Geometrie, Bemaßungen, Abhängigkeiten und Stile; wird zusätzlich automatisch zwischengespeichert |
 
@@ -264,7 +296,7 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 2. ✅ Gestaltung und Bearbeiten: Ebenen, Gruppen, Ausrichten, boolesche Operationen, Stutzen/Dehnen/Abrunden/Versatz, Muster, Messen, Text in Pfade, PDF/EPS/DXF
 3. ✅ LabwearOS-Export: Vorlagen-Import, Platzierung auf dem Kleidungsstück, Artwork-Blatt, Export-Profile, ZIP-Paket
 4. ✅ iPad: installierbare Web-App, Touch- und Apple-Pencil-Bedienung, Formerkennung, Sync über iCloud Drive/OneDrive
-5. Textil- und Komfortfunktionen: Mockups, Farbseparation, Plotter-Prüfung, Rapport, Größenstaffel, Kostenschätzung
+5. ✅ Textil- und Komfortfunktionen: Preflight, Mockups, Vektorisieren, DTF-Sammelbogen, Siebdruck-Filme, Größenstaffel, Halbton, Used-Look, Rapport, Kostenschätzung, Generatoren, Symmetrie, Bibliothek, SVG-/DXF-Import
 
 ## Lizenz
 

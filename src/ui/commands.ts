@@ -258,7 +258,7 @@ export function buildCommands(): Command[] {
     { id: 'prod.costs', label: 'Kostenschätzung (Siebdruck, DTF, Flex, Stick)', group: 'Produktion', keywords: 'kosten preis kalkulation angebot stückzahl folie siebe stiche', run: (a) => a.ui.setState({ costs: true }) },
     { id: 'prod.gangsheet', label: 'DTF-Sammelbogen (Namen und Nummern)', group: 'Produktion', keywords: 'dtf transfer gang sheet bogen rolle trikot namen nummern flock', run: (a) => a.ui.setState({ gangSheet: true }) },
     { id: 'prod.mockup', label: 'Mockup-Vorschau', group: 'Produktion', keywords: 'shirt hoodie tasche vorschau stofffarbe kontrast', run: (a) => a.ui.setState({ mockup: true }) },
-    { id: 'prod.package', label: 'ZIP-Paket für LabwearOS exportieren', group: 'Produktion', keywords: 'export zip paket labwearos', run: (a) => void a.exportPackage() },
+    { id: 'prod.package', label: 'ZIP-Paket / Stapel-Export (alle Motive, Varianten, Größen, Formate)', group: 'Produktion', keywords: 'export zip paket labwearos stapel stapelexport alle varianten größen formate batch', run: (a) => void a.exportPackage() },
     { id: 'prod.sheet', label: 'Artwork-Blatt exportieren (PDF)', group: 'Produktion', keywords: 'pdf blatt platzierung', run: (a) => void a.exportArtworkSheet() },
     { id: 'prod.template', label: 'LabwearOS-Vorlage importieren (PDF/AI) …', group: 'Produktion', keywords: 'vorlage import pdf ai illustrator', run: (a) => void a.importTemplate('front') },
 
