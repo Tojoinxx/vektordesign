@@ -374,3 +374,16 @@ export const IconRapport = (p: { size?: number }) => (
     <path d="M10 8 l4 4 l-4 4" />
   </Icon>
 );
+export const IconTextCircle = (p: { size?: number }) => (
+  <Icon {...p}>
+    <circle cx="12" cy="13" r="5" strokeOpacity="0.5" />
+    <path d="M4.5 10 A8.5 8.5 0 0 1 19.5 10" strokeWidth="2.4" strokeDasharray="2.2 1.4" />
+  </Icon>
+);
+export const IconBadge = (p: { size?: number }) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5.5" />
+    <path d="M12 9.6 l0.8 1.6 1.7 0.2 -1.25 1.2 0.3 1.7 -1.55 -0.8 -1.55 0.8 0.3 -1.7 -1.25 -1.2 1.7 -0.2 Z" fill="currentColor" stroke="none" />
+  </Icon>
+);

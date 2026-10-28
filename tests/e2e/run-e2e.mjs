@@ -1098,6 +1098,31 @@ await step('Textil-Effekte: Halbton aus Verlauf, Used-Look über die Leiste', as
   results.push('   Halbton und Used-Look als Vektorflächen erzeugt');
 });
 
+await step('Vorlagen-Generator: Badge mit Text im Ring einfügen, QR-Code-Vorschau', async () => {
+  await newDoc();
+  await page.click('[data-testid="ribbon-sketch"]');
+  await page.click('[data-testid="insert-generator"]');
+  await page.waitForSelector('[data-testid="generator"]');
+  await sleep(600);
+  await shot('39-generator-badge');
+  await page.click('[data-testid="gen-qr"]');
+  await sleep(300);
+  await shot('40-generator-qr');
+  await page.click('[data-testid="gen-badge"]');
+  await sleep(300);
+  await page.click('[data-testid="gen-insert"]');
+  await sleep(300);
+  const info = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    const shapes = Object.values(d.entities).filter((e) => e.kind === 'shape');
+    return { n: shapes.length, groups: new Set(shapes.map((e) => e.group)).size, box: window.vektordesign.bbox() };
+  });
+  assert(info.n >= 4 && info.groups === 1, `Badge: ${JSON.stringify(info)}`);
+  assert(Math.abs(info.box.maxX - info.box.minX - 80) < 0.01, `Badge-Breite ${info.box.maxX - info.box.minX}`);
+  await shot('41-badge-eingefuegt');
+  results.push(`   Badge: ${info.n} Formen in einer Gruppe, 80 mm`);
+});
+
 // ---------------------------------------------------------------------------
 // Meilenstein 4: iPad (Touch, Apple Pencil, Web-App, Sync)
 // ---------------------------------------------------------------------------

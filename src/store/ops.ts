@@ -8,7 +8,9 @@ import { addShapeFromWorld, polygonContour } from '../model/shape';
 import { BOOL_LABELS, booleanAreas, entityArea, offsetArea, polysToContours, roundCorners, type BoolOp } from '../model/boolean';
 import { groupMembers, layeredOrder } from '../model/layers';
 import { docBBox } from '../model/bounds';
-import { loadFont, textContours } from '../platform/fontOutline';
+import { loadFont, makeShaper, textContours } from '../platform/fontOutline';
+import { bendText } from '../model/generators';
+import { roundOf } from '../model/arc';
 import { drawableTargets, type CommitOutcome, type Editor } from './editor';
 import { applyXf, cloneInto } from './xform';
 
@@ -393,4 +395,28 @@ export async function rapportOp(ed: Editor, tile: Tile, mode: RapportMode, ids: 
   } finally {
     if (ed.endTransaction() > 0 && !ok) ed.undo();
   }
+}
+
+/**
+ * Text auf Kreis: gewählter Text wird um einen gewählten Kreis (oder Bogen) gebogen – oben im
+ * Uhrzeigersinn oder unten lesbar von links nach rechts. Ergebnis ist eine Form (Umrisse).
+ */
+export async function textOnCircleOp(ed: Editor, side: 'top' | 'bottom', offset: number, ids: Id[] = ed.s.selection): Promise<Outcome> {
+  const doc = ed.s.doc;
+  const text = ids.map((id) => doc.entities[id]).find((e): e is TextEntity => e?.kind === 'text');
+  const round = ids.map((id) => roundOf(doc, id)).find((r) => !!r);
+  if (!text || !round) return fail('Einen Text und einen Kreis (oder Bogen) auswählen.');
+  const f = await loadFont(text.fontFamily, text.fontWeight, text.italic);
+  const shape = makeShaper(f.font);
+  const t = shape(text.text, text.fontSize);
+  const c = pt(doc, round.center);
+  const r = side === 'top' ? round.r + offset : round.r + offset + t.capHeight;
+  const contours = bendText(t.contours, t.width, c, r, side);
+  let id: Id | undefined;
+  const out = ed.commit('Text auf Kreis', (d) => {
+    id = replaceWithShape(d, [text.id], contours, text.style, { like: text, name: `Text „${text.text}“ auf Kreis` });
+  });
+  if (out.ok && id) ed.select([id]);
+  if (f.substitute) ed.toast(`Schrift ${text.fontFamily} ist hier nicht verfügbar – ersetzt durch IBM Plex Sans.`, 'info', 6000);
+  return { ...out, ids: id ? [id] : [] };
 }

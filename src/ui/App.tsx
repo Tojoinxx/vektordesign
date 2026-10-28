@@ -13,6 +13,7 @@ import { MockupView } from './MockupView';
 import { GangSheetView } from './GangSheetView';
 import { ScreenPrintView } from './ScreenPrintView';
 import { CostView } from './CostView';
+import { GeneratorView } from './GeneratorView';
 import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, MeasureCard, PreflightCard, ParamDialog, ShareReadyDialog, SyncConflictDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
 import { buildCommands, matchKey } from './commands';
 
@@ -59,7 +60,7 @@ function Shell({ app }: { app: AppController }) {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
       const s = app.store.getState();
-      if (typing || s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().paramDialog || app.ui.getState().placement || app.ui.getState().mockup || app.ui.getState().gangSheet || app.ui.getState().screenPrint || app.ui.getState().costs || app.ui.getState().profileEditor || app.ui.getState().syncConflict || app.ui.getState().shareReady) return;
+      if (typing || s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().paramDialog || app.ui.getState().placement || app.ui.getState().mockup || app.ui.getState().gangSheet || app.ui.getState().screenPrint || app.ui.getState().costs || app.ui.getState().generator || app.ui.getState().profileEditor || app.ui.getState().syncConflict || app.ui.getState().shareReady) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         app.escape();
@@ -148,6 +149,7 @@ function Shell({ app }: { app: AppController }) {
       <GangSheetView />
       <ScreenPrintView />
       <CostView />
+      <GeneratorView />
       <SyncConflictDialog />
       <ShareReadyDialog />
       <ProfileEditor />

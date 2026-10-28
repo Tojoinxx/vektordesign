@@ -20,7 +20,7 @@ import type { AgentHost } from '../assistant/tools';
 import { preflightTargetFor, runPreflight, type PreflightResult, type PreflightTarget } from '../model/preflight';
 import { layersOf } from '../model/layers';
 import { SketchTool } from '../tools/sketchTool';
-import { booleanOp, cornerOp, grungeOp, halftoneOp, offsetOp, patternOp, rapportOp, selectionCenter, selectionSize, textToPaths, toShape } from '../store/ops';
+import { booleanOp, cornerOp, grungeOp, halftoneOp, offsetOp, patternOp, rapportOp, selectionCenter, textOnCircleOp, selectionSize, textToPaths, toShape } from '../store/ops';
 import type { BoolOp } from '../model/boolean';
 import { evaluate, numberToExpr } from '../params/expr';
 import { docBBox } from '../model/bounds';
@@ -123,6 +123,8 @@ export interface UiState {
   screenPrint: boolean;
   /** Kostenschätzung offen */
   costs: boolean;
+  /** Vorlagen-Generator offen */
+  generator: boolean;
   /** iPad: fertige Datei, die per Knopf geteilt wird */
   shareReady: { name: string; share: () => Promise<void> } | null;
 }
@@ -146,7 +148,22 @@ export interface ParamDialogSpec {
 }
 
 export type EditCommand =
-  'move' | 'rotate' | 'scale' | 'mirror' | 'pattern-rect' | 'pattern-circ' | 'offset' | 'fillet' | 'chamfer' | 'text-to-paths' | 'to-shape' | 'halftone' | 'grunge' | 'rapport' | BoolOp;
+  | 'move'
+  | 'rotate'
+  | 'scale'
+  | 'mirror'
+  | 'pattern-rect'
+  | 'pattern-circ'
+  | 'offset'
+  | 'fillet'
+  | 'chamfer'
+  | 'text-to-paths'
+  | 'to-shape'
+  | 'halftone'
+  | 'grunge'
+  | 'rapport'
+  | 'text-circle'
+  | BoolOp;
 
 export interface ExportRequest {
   format: ExportFormat;
@@ -223,6 +240,7 @@ export class AppController {
       gangSheet: false,
       screenPrint: false,
       costs: false,
+      generator: false,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -814,6 +832,28 @@ export class AppController {
         });
         return;
       }
+      case 'text-circle':
+        if (needSel()) return;
+        open({
+          title: 'Text auf Kreis',
+          text: 'Biegt den gewählten Text um den gewählten Kreis oder Bogen. Der Text wird dabei in Pfade umgewandelt (danach nicht mehr als Text bearbeitbar).',
+          fields: [
+            {
+              key: 'side',
+              label: 'Lage',
+              value: 'top',
+              kind: 'choice',
+              options: [
+                { value: 'top', label: 'Oben (im Uhrzeigersinn)' },
+                { value: 'bottom', label: 'Unten (von links lesbar)' },
+              ],
+            },
+            { key: 'offset', label: 'Abstand zum Kreis', unit: 'mm', value: '1' },
+          ],
+          ok: 'Biegen',
+          run: (v) => void this.runOp(textOnCircleOp(ed, v.side === 'bottom' ? 'bottom' : 'top', num(v.offset, 'Abstand'))),
+        });
+        return;
       case 'fillet':
       case 'chamfer':
         if (needSel()) return;

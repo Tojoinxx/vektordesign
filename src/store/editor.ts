@@ -883,6 +883,28 @@ export class Editor {
     return { ...out, shapeId };
   }
 
+  /** Fertige Formen (Generatoren) als Gruppe einfügen, verschoben um `at`. */
+  insertParts(parts: { name: string; contours: Contour[]; style: Style; fillRule?: 'nonzero' | 'evenodd' }[], label: string, at: Vec2 = { x: 0, y: 0 }): CommitOutcome & { ids?: Id[] } {
+    const usable = parts.filter((p) => p.contours.length);
+    if (!usable.length) return { ok: false, reason: 'invalid', message: 'Nichts zu erzeugen – Eingaben prüfen.' };
+    const ids: Id[] = [];
+    const out = this.commit(
+      label,
+      (d) => {
+        const group = usable.length > 1 ? newId(d, 'g') : undefined;
+        for (const p of usable) {
+          const moved = p.contours.map((c) => ({ closed: c.closed, nodes: c.nodes.map((n) => ({ ...n, x: n.x + at.x, y: n.y + at.y, ...(n.ix !== undefined ? { ix: n.ix + at.x, iy: n.iy! + at.y } : {}), ...(n.ox !== undefined ? { ox: n.ox + at.x, oy: n.oy! + at.y } : {}) })) }));
+          const s = addShapeFromWorld(d, moved, p.style, { name: p.name, fillRule: p.fillRule });
+          if (group) s.group = group;
+          ids.push(s.id);
+        }
+      },
+      { skipSolve: true },
+    );
+    if (out.ok) this.select(ids);
+    return { ...out, ids };
+  }
+
   /** Freie Bézierform aus Knoten (Zeichenstift). Offene Pfade bekommen keine Füllung. */
   createBezier(nodes: ShapeNode[], closed: boolean, opts: { style?: Style } = {}): CommitOutcome & { shapeId?: Id } {
     if (nodes.length < 2) return { ok: false, reason: 'invalid', message: 'Mindestens zwei Punkte setzen' };

@@ -58,6 +58,8 @@ import {
   IconIntersect,
   IconExclude,
   IconHalftone,
+  IconTextCircle,
+  IconBadge,
   IconGrunge,
   IconRapport,
   IconArc3,
@@ -181,6 +183,7 @@ function EditRibbon() {
         <Big icon={<IconHalftone />} label="Halbton" onClick={cmd('halftone')} testId="edit-halftone" />
         <Big icon={<IconGrunge />} label="Used-Look" onClick={cmd('grunge')} testId="edit-grunge" />
         <Big icon={<IconRapport />} label="Rapport" onClick={cmd('rapport')} testId="edit-rapport" />
+        <Big icon={<IconTextCircle />} label="Text auf Kreis" onClick={cmd('text-circle')} testId="edit-text-circle" />
       </Group>
       <Group title="Messen und Prüfen">
         <Big icon={<IconMeasure />} label="Messen" kbd="M" active={tool === 'measure'} onClick={() => app.setTool('measure')} testId="tool-measure" />
@@ -288,6 +291,7 @@ function SketchRibbon() {
         <Big icon={<IconText />} label="Text" kbd="T" active={tool === 'text'} onClick={() => set('text')} testId="tool-text" />
         <Big icon={<IconSketch />} label="Freihand" kbd="S" active={tool === 'sketch'} onClick={() => set('sketch')} testId="tool-sketch" />
         <Big icon={<ImagePlus size={24} strokeWidth={1.75} />} label="Bild" onClick={() => void app.insertImage()} testId="insert-image" />
+        <Big icon={<IconBadge />} label="Vorlagen" onClick={() => app.ui.setState({ generator: true })} testId="insert-generator" />
         <div className="rb-col">
           <Small icon={<IconPoint size={18} />} label="Punkt" kbd="P" active={tool === 'point'} onClick={() => set('point')} />
           <Small

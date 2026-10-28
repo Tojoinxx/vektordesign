@@ -174,3 +174,14 @@ export function textContours(font: Font, t: Pick<TextEntity, 'text' | 'fontSize'
   close();
   return contours;
 }
+
+/** Text → Umrisse für Generatoren (Grundlinie y = 0, links bei x = 0), mit Breite und Versalhöhe. */
+export function makeShaper(font: Font): (text: string, size: number) => { contours: Contour[]; width: number; capHeight: number } {
+  const os2 = (font.tables as { os2?: { sCapHeight?: number } }).os2;
+  const capRatio = os2?.sCapHeight ? os2.sCapHeight / font.unitsPerEm : 0.7;
+  return (text, size) => ({
+    contours: textContours(font, { text, fontSize: size, align: 'left' }, { x: 0, y: 0 }),
+    width: font.getAdvanceWidth(text, size, { kerning: true }),
+    capHeight: capRatio * size,
+  });
+}

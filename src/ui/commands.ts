@@ -212,6 +212,8 @@ export function buildCommands(): Command[] {
     { id: 'edit.mirror', label: 'Spiegeln …', group: 'Ändern', run: (a) => a.editCommand('mirror') },
     { id: 'edit.patternRect', label: 'Rechteckiges Muster …', group: 'Ändern', keywords: 'anordnung reihe raster', run: (a) => a.editCommand('pattern-rect') },
     { id: 'edit.patternCirc', label: 'Kreisförmiges Muster …', group: 'Ändern', keywords: 'polar rund', run: (a) => a.editCommand('pattern-circ') },
+    { id: 'insert.generator', label: 'Vorlagen-Generator (Badge, Wappen, Banner, Rahmen, QR-Code, Nackendruck) …', group: 'Zeichnen', keywords: 'vorlage generator badge emblem wappen schild banner band rahmen qr code nacken etikett label', run: (a) => a.ui.setState({ generator: true }) },
+    { id: 'edit.textcircle', label: 'Text auf Kreis …', group: 'Textil', keywords: 'text kreis bogen biegen rund badge', run: (a) => a.editCommand('text-circle') },
     { id: 'edit.halftone', label: 'Halbtonraster …', group: 'Textil', keywords: 'halbton raster punkte verlauf siebdruck transparenz', run: (a) => a.editCommand('halftone') },
     { id: 'edit.grunge', label: 'Used-Look / Vintage …', group: 'Textil', keywords: 'used vintage grunge kratzer textur alt', run: (a) => a.editCommand('grunge') },
     { id: 'edit.rapport', label: 'Rapport (Allover-Kachel) …', group: 'Textil', keywords: 'rapport allover muster kachel nahtlos pattern', run: (a) => a.editCommand('rapport') },
