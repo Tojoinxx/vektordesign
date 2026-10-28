@@ -11,6 +11,9 @@ import { ConstraintTool } from '../tools/constraintTool';
 import { GradientTool } from '../tools/gradientTool';
 import { CalibrateImageTool, MeasureTool, TrimExtendTool, type MeasureResult } from '../tools/editTools';
 import { readImageFile } from '../model/image';
+import { vectorize, type VectorizeDetail } from '../model/vectorize';
+import { addShapeFromWorld } from '../model/shape';
+import { newId } from '../model/doc';
 import { buildBridgePrompt, parseScript, runScript } from '../assistant/bridge';
 import type { AgentHost } from '../assistant/tools';
 import { preflightTargetFor, runPreflight, type PreflightResult, type PreflightTarget } from '../model/preflight';
@@ -950,6 +953,90 @@ export class AppController {
         },
       },
     });
+  }
+
+  /** Vektorisieren-Dialog für ein Bild. */
+  vectorizeImageDialog(id: string): void {
+    this.ui.setState({
+      paramDialog: {
+        title: 'Bild vektorisieren',
+        text: 'Erzeugt je Farbe eine Form in genau der Größe und Lage des Bildes. Für Logos und Grafiken mit klaren Flächen; Fotos werden stark vereinfacht.',
+        fields: [
+          { key: 'colors', label: 'Farben', value: '4', hint: '2–16 (Hintergrund zählt mit)' },
+          {
+            key: 'detail',
+            label: 'Details',
+            value: 'medium',
+            kind: 'choice',
+            options: [
+              { value: 'fine', label: 'Fein (genau, mehr Punkte)' },
+              { value: 'medium', label: 'Mittel' },
+              { value: 'coarse', label: 'Grob (glatt, wenige Punkte)' },
+            ],
+          },
+          { key: 'bg', label: 'Hintergrund weglassen', value: '1', kind: 'check' },
+          { key: 'hide', label: 'Bild danach ausblenden', value: '1', kind: 'check' },
+        ],
+        ok: 'Vektorisieren',
+        run: (v) => {
+          const n = Math.round(Number(v.colors));
+          if (!(n >= 2 && n <= 16)) throw new Error('Bitte 2 bis 16 Farben angeben.');
+          void this.vectorizeImage(id, { colors: n, detail: v.detail as VectorizeDetail, removeBackground: !!v.bg, hideImage: !!v.hide });
+        },
+      },
+    });
+  }
+
+  async vectorizeImage(id: string, o: { colors: number; detail: VectorizeDetail; removeBackground: boolean; hideImage: boolean }): Promise<boolean> {
+    const doc = this.editor.s.doc;
+    const e = doc.entities[id];
+    if (!e || e.kind !== 'image') return false;
+    this.ui.setState({ busy: 'Vektorisiere …' });
+    this.editor.toast('Bild wird vektorisiert …', 'info', 2500);
+    await new Promise((r) => setTimeout(r, 30));
+    try {
+      const px = await decodeImage(e.src, o.detail === 'fine' ? 1600 : o.detail === 'medium' ? 1000 : 600);
+      if (!px) throw new Error('Bild konnte nicht gelesen werden.');
+      const c = doc.points[e.anchor];
+      const a = (e.rotation * Math.PI) / 180;
+      const cos = Math.cos(a);
+      const sin = Math.sin(a);
+      const map = (x: number, y: number) => {
+        let lx = (x / px.width - 0.5) * e.width;
+        const ly = (0.5 - y / px.height) * e.height;
+        if (e.flipX) lx = -lx;
+        return { x: c.x + lx * cos - ly * sin, y: c.y + lx * sin + ly * cos };
+      };
+      const layers = vectorize({ width: px.width, height: px.height, data: px.rgba as Uint8ClampedArray }, o, map);
+      if (!layers.length) throw new Error('Keine Flächen gefunden – mehr Farben oder „Hintergrund weglassen“ abschalten.');
+      const ls = layersOf(doc);
+      const imgLayer = e.layer ?? ls[0].id;
+      let target = this.editor.targetLayer(doc);
+      const tl = ls.find((l) => l.id === target);
+      if (target === imgLayer || !tl || tl.name === 'Vorlage' || tl.locked) target = [...ls].reverse().find((l) => l.id !== imgLayer && l.name !== 'Vorlage' && !l.locked)?.id ?? target;
+      const created: string[] = [];
+      const out = this.editor.commit('Bild vektorisieren', (d) => {
+        const g = newId(d, 'g');
+        for (const l of layers) {
+          const sh = addShapeFromWorld(d, l.contours, { fill: l.color, stroke: null, strokeWidth: 0.3, opacity: 1 }, { name: `Vektor ${l.color.toUpperCase()}`, fillRule: 'evenodd', layer: target });
+          sh.group = g;
+          created.push(sh.id);
+        }
+        if (o.hideImage) {
+          const il = d.layers?.find((x) => x.id === imgLayer);
+          if (il && il.name === 'Vorlage') il.visible = false;
+        }
+      });
+      if (!out.ok) throw new Error(out.message);
+      this.editor.select(created);
+      this.editor.toast(`${layers.length} Form${layers.length === 1 ? '' : 'en'} erzeugt (${layers.map((l) => l.color.toUpperCase()).join(', ')}). Strg+Z macht es rückgängig.`, 'success', 6000);
+      return true;
+    } catch (err) {
+      this.editor.toast(err instanceof Error ? err.message : String(err), 'error', 6000);
+      return false;
+    } finally {
+      this.ui.setState({ busy: null });
+    }
   }
 
   /** Bild fixieren: Ebene sperren (nicht mehr versehentlich verschieben). */

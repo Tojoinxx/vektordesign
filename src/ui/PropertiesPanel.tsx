@@ -456,6 +456,9 @@ function ImageProps({ image }: { image: ImageEntity }) {
         Nur Vorlage zum Nachzeichnen (wird nicht exportiert)
       </label>
       <div className="stack">
+ <button className="btn accent" onClick={() => app.vectorizeImageDialog(image.id)} data-testid="image-vectorize" title="Aus dem Bild saubere Vektorformen machen (je Farbe eine Form)">
+          Vektorisieren …
+        </button>
         <button className="btn" onClick={() => app.calibrateImage(image.id)} data-testid="image-calibrate" title="Zwei Punkte einer bekannten Strecke anklicken und das echte Maß eingeben">
           Maßstab über bekannte Strecke festlegen
         </button>

@@ -1308,7 +1308,7 @@ export class Editor {
       'Ebene hinzufügen',
       (d) => {
         if (!d.layers || !d.layers.length) d.layers = [{ ...DEFAULT_LAYER }];
-        id = newId(d, 'L');
+        id = newLayerId(d);
         d.layers.push({ id, name: name ?? `Ebene ${d.layers.length + 1}`, visible: true, locked: false });
       },
       { skipSolve: true },
@@ -1339,7 +1339,7 @@ export class Editor {
         const bottom = d.layers[0].id;
         const known = new Set(d.layers.map((l) => l.id));
         for (const e of Object.values(d.entities)) if (!e.layer || !known.has(e.layer)) e.layer = bottom;
-        layer = { id: newId(d, 'L'), name: 'Vorlage', visible: true, locked: false };
+        layer = { id: newLayerId(d), name: 'Vorlage', visible: true, locked: false };
         d.layers.unshift(layer);
       }
       const id = newId(d, 'img');
@@ -1626,6 +1626,15 @@ export class Editor {
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
 // ---------------------------------------------------------------------------
+
+/** Eindeutige Ebenen-Id (die Standardebene heißt „L1“ und belegt keinen Zähler). */
+function newLayerId(d: SketchDoc): Id {
+  const used = new Set((d.layers ?? []).map((l) => l.id));
+  used.add(DEFAULT_LAYER.id);
+  let id = newId(d, 'L');
+  while (used.has(id)) id = newId(d, 'L');
+  return id;
+}
 
 /** Setzt den Maßstab von Formen aus ihren (treibenden) Breiten-/Höhenbemaßungen. */
 export function applyShapeSizes(doc: SketchDoc): { doc: SketchDoc } | { error: string; ids: Id[] } {

@@ -1182,6 +1182,52 @@ await step('Bild als Vorlage: einfügen, auf Maß bringen, fixieren, nachzeichne
   assert(!svg.includes('<image') && /width="50mm" height="50mm"/.test(svg), `Export enthält Vorlage oder falsche Größe: ${svg.match(/width="[^"]+" height="[^"]+"/)?.[0]}`);
 });
 
+await step('Bild vektorisieren: Logo-Bild wird zu Formen je Farbe in Originalgröße', async () => {
+  await newDoc();
+  await app(() => window.vektordesign.editor.setView({ cx: 0, cy: 0, zoom: 3 }));
+  await app(async () => {
+    const c = document.createElement('canvas');
+    c.width = 400;
+    c.height = 200;
+    const x = c.getContext('2d');
+    x.fillStyle = '#ffffff';
+    x.fillRect(0, 0, 400, 200);
+    x.fillStyle = '#1f3a93';
+    x.beginPath();
+    x.arc(100, 100, 80, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#c8102e';
+    x.fillRect(220, 40, 160, 120);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    await window.vektordesign.insertImage({ name: 'logo.png', data: new Uint8Array(await blob.arrayBuffer()), mime: 'image/png' }, { x: 0, y: 0 });
+    const img = Object.values(window.vektordesign.store.getState().doc.entities).find((e) => e.kind === 'image');
+    window.vektordesign.editor.updateImage(img.id, { width: 100 });
+    window.vektordesign.editor.select([img.id]);
+  });
+  await page.waitForSelector('[data-testid="image-vectorize"]');
+  await page.click('[data-testid="image-vectorize"]');
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await page.$eval('[data-testid="param-colors"]', (el) => {
+    el.focus();
+    el.select();
+  });
+  await page.keyboard.type('3');
+  await page.click('[data-testid="param-ok"]');
+  await page.waitForFunction(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'shape').length >= 2, { timeout: 15000 });
+  const shapes = await app(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'shape').map((e) => e.style.fill));
+  assert(shapes.length === 2, `Formen: ${shapes}`);
+  const dbg = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return JSON.stringify({ layers: d.layers, shapes: Object.values(d.entities).filter((e) => e.kind === 'shape').map((e) => ({ l: e.layer, n: e.contours.length, nodes: e.contours[0]?.nodes.length, a: d.points[e.anchor] })) });
+  });
+  const b = await app(() => window.vektordesign.bbox());
+  assert(b, `kein Rahmen: ${dbg}`);
+  assert(Math.abs(b.maxX - b.minX - 90) < 2, `Breite der Formen ${b.maxX - b.minX} statt ≈ 90 mm`);
+  await page.keyboard.press('f');
+  await sleep(200);
+  await shot('51-vektorisiert');
+});
+
 await step('Preflight: feine Linie für Stick und Plotter markiert, Logo für DTF in Ordnung', async () => {
   await newDoc();
   await app(() => {

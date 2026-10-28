@@ -27,6 +27,7 @@
     "@tauri-apps/plugin-dialog": "^2.8.3",
     "clipper-lib": "^6.4.2",
     "fflate": "^0.8.2",
+    "imagetracerjs": "^1.2.6",
     "immer": "^11.2.9",
     "lucide-react": "^1.62.0",
     "opentype.js": "^2.0.0",

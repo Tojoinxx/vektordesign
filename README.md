@@ -78,6 +78,8 @@ Inventor-Weg: Rechteck irgendwo grob aufziehen, mit `D` die Breite (80) und Höh
 4. **Fixieren** sperrt die Ebene „Vorlage“, damit das Bild beim Nachzeichnen nicht verrutscht.
 5. Mit Linie, Kreis, Freihand oder Bemaßung darüber zeichnen. Deckkraft nach Geschmack anpassen.
 
+**Vektorisieren:** Bild auswählen → *Eigenschaften* → **Vektorisieren …** → Anzahl Farben und Detailgrad wählen. Daraus entsteht je Farbe eine Form in genau der Größe und Lage des Bildes (Hintergrund wird weggelassen). Ideal für Logos mit klaren Flächen; danach mit Bearbeiten-Werkzeugen und Bemaßungen nacharbeiten.
+
 Soll das Bild selbst ins Motiv (z. B. für DTF), das Häkchen „Nur Vorlage“ entfernen: Dann ist es in PNG, SVG und PDF enthalten (EPS und DXF enthalten keine Pixelbilder).
 
 ### Ebenen, Bearbeiten und Messen

@@ -48,3 +48,13 @@ describe('Bilder als Vorlage zum Nachzeichnen', () => {
     expect(svg).toMatch(/width="180mm"/);
   });
 });
+
+describe('Ebenen-Ids', () => {
+  it('neue Ebene in frischer Zeichnung kollidiert nicht mit der Standardebene', async () => {
+    const ed = await makeEditor();
+    const id = ed.addLayer('Zweite');
+    const ids = layersOf(ed.s.doc).map((l) => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(id).not.toBe('L1');
+  });
+});

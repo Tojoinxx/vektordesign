@@ -13,6 +13,7 @@ Vektordesign selbst steht unter der MIT-Lizenz (siehe [LICENSE](LICENSE)). In de
 | [opentype.js](https://github.com/opentypejs/opentype.js) | Schriftumrisse für „Text in Pfade“ | MIT |
 | [PDF.js](https://github.com/mozilla/pdf.js) (pdfjs-dist) | Import von PDF-/AI-Vorlagen | Apache-2.0 |
 | [fflate](https://github.com/101arrowz/fflate) | ZIP-Paket, PDF-Kompression | MIT |
+| [ImageTracer.js](https://github.com/jankovicsandras/imagetracerjs) | Bilder vektorisieren | Unlicense (gemeinfrei) |
 | [IBM Plex Sans](https://github.com/IBM/plex) über Fontsource | Schrift der Oberfläche; Ersatzschrift für „Text in Pfade“, wenn eine Schrift nicht verfügbar ist | SIL Open Font License 1.1 |
 | [Tauri](https://tauri.app), tauri-plugin-dialog | Desktop-App, Datei-Dialoge | MIT oder Apache-2.0 |
 | [fontdb](https://github.com/RazrFalcon/fontdb) | Liste der installierten Schriftarten | MIT |
