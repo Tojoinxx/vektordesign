@@ -1071,6 +1071,33 @@ await step('Neue Zeichenwerkzeuge: Bogen (3 Punkte und Mittelpunkt), Vieleck, St
   results.push(`   Bögen ${info.sweeps.map((s) => s.toFixed(0) + '°').join(', ')}, Vieleck, Stern, Ellipse, geschlossener Bézierpfad`);
 });
 
+await step('Textil-Effekte: Halbton aus Verlauf, Used-Look über die Leiste', async () => {
+  await newDoc();
+  const ids = await app(() => {
+    const ed = window.vektordesign.editor;
+    const fade = { kind: 'linear', stops: [{ offset: 0, color: '#1f3a93', opacity: 1 }, { offset: 1, color: '#1f3a93', opacity: 0 }], from: { x: 0, y: 0.5 }, to: { x: 1, y: 0.5 } };
+    const a = ed.createRectangle({ pos: { x: -40, y: -15 } }, { pos: { x: 40, y: 15 } }, 'corner', { style: { fill: fade, stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    const b = ed.createRectangle({ pos: { x: -40, y: -45 } }, { pos: { x: 40, y: -22 } }, 'corner', { style: { fill: '#c8102e', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    return [a.pathId, b.pathId];
+  });
+  await page.click('[data-testid="ribbon-edit"]');
+  await app((id) => window.vektordesign.editor.select([id]), ids[0]);
+  await page.click('[data-testid="edit-halftone"]');
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await page.click('[data-testid="param-ok"]');
+  await waitFor(() => app(() => Object.values(window.vektordesign.store.getState().doc.entities).some((e) => e.name === 'Halbton')), 'kein Halbton');
+  await app((id) => window.vektordesign.editor.select([id]), ids[1]);
+  await page.click('[data-testid="edit-grunge"]');
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await page.click('[data-testid="param-ok"]');
+  await waitFor(() => app(() => Object.values(window.vektordesign.store.getState().doc.entities).some((e) => e.name === 'Used-Look')), 'kein Used-Look');
+  await app(() => window.vektordesign.editor.select([]));
+  await page.keyboard.press('f');
+  await sleep(250);
+  await shot('38-halbton-usedlook');
+  results.push('   Halbton und Used-Look als Vektorflächen erzeugt');
+});
+
 // ---------------------------------------------------------------------------
 // Meilenstein 4: iPad (Touch, Apple Pencil, Web-App, Sync)
 // ---------------------------------------------------------------------------

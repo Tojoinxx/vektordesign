@@ -57,6 +57,9 @@ import {
   IconSubtract,
   IconIntersect,
   IconExclude,
+  IconHalftone,
+  IconGrunge,
+  IconRapport,
   IconArc3,
   IconArcCenter,
   IconEllipse,
@@ -173,6 +176,11 @@ function EditRibbon() {
           <Small icon={<IconIntersect size={18} />} label="Schnittmenge" onClick={cmd('intersect')} testId="bool-intersect" />
           <Small icon={<IconExclude size={18} />} label="Ausschließen" onClick={cmd('exclude')} testId="bool-exclude" />
         </div>
+      </Group>
+      <Group title="Textil">
+        <Big icon={<IconHalftone />} label="Halbton" onClick={cmd('halftone')} testId="edit-halftone" />
+        <Big icon={<IconGrunge />} label="Used-Look" onClick={cmd('grunge')} testId="edit-grunge" />
+        <Big icon={<IconRapport />} label="Rapport" onClick={cmd('rapport')} testId="edit-rapport" />
       </Group>
       <Group title="Messen und Prüfen">
         <Big icon={<IconMeasure />} label="Messen" kbd="M" active={tool === 'measure'} onClick={() => app.setTool('measure')} testId="tool-measure" />

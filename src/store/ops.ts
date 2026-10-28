@@ -1,6 +1,9 @@
 import type { Contour, Entity, Id, SketchDoc, Style, TextEntity, Vec2 } from '../model/types';
 import { pathContour, pathHasArcs } from '../model/arc';
-import { deleteIds, pt } from '../model/doc';
+import { deleteIds, newId, pt } from '../model/doc';
+import { applyGrunge, colorWeight, gradientT, halftone, rapportTile, type GrungeOptions, type HalftoneOptions, type RapportMode, type Tile } from '../model/textile';
+import { gradientToWorld, isGradient } from '../model/paint';
+import { entityBBox } from '../model/bounds';
 import { addShapeFromWorld, polygonContour } from '../model/shape';
 import { BOOL_LABELS, booleanAreas, entityArea, offsetArea, polysToContours, roundCorners, type BoolOp } from '../model/boolean';
 import { groupMembers, layeredOrder } from '../model/layers';
@@ -265,3 +268,129 @@ export function selectionSize(doc: SketchDoc, ids: Id[]): { w: number; h: number
 }
 
 export { polygonContour };
+
+/** Ziele mit Flächen; Texte werden vorher in Pfade gewandelt. */
+async function areaTargets(ed: Editor, ids: Id[]): Promise<{ targets: Entity[] } | { error: string }> {
+  let doc = ed.s.doc;
+  let targets = drawableTargets(doc, ids);
+  const texts = targets.filter((id) => doc.entities[id]?.kind === 'text');
+  if (texts.length) {
+    const t = await textToPaths(ed, texts);
+    if (!t.ok) return { error: t.message };
+    doc = ed.s.doc;
+    targets = [...targets.filter((id) => !texts.includes(id)), ...(t.ids ?? [])];
+  }
+  const ents = targets.map((id) => doc.entities[id]).filter((e): e is Entity => !!e && !!entityArea(doc, e));
+  if (!ents.length) return { error: 'Nur geschlossene Flächen lassen sich so bearbeiten (Kreise, Rechtecke, geschlossene Linienzüge, Formen, Texte).' };
+  return { targets: ents };
+}
+
+/**
+ * Halbtonraster: Verläufe (je Farbe eine Rasterebene, Winkel um 30° versetzt) bzw. Deckkraft
+ * unter 100 % werden zu Punkten in voller Farbe – druckbar im Siebdruck und plotbar.
+ */
+export async function halftoneOp(ed: Editor, opts: HalftoneOptions, ids: Id[] = ed.s.selection): Promise<Outcome> {
+  if (!ids.length) return fail('Zuerst Flächen mit Verlauf oder Transparenz auswählen.');
+  ed.beginTransaction('Halbtonraster');
+  let ok = false;
+  try {
+    const t = await areaTargets(ed, ids);
+    if ('error' in t) return fail(t.error);
+    const doc = ed.s.doc;
+    const jobs: { src: Entity; layers: { color: string; polys: Vec2[][] }[] }[] = [];
+    for (const e of t.targets) {
+      const area = entityArea(doc, e)!;
+      const fill = e.style.fill;
+      const op = Math.min(1, Math.max(0, e.style.opacity ?? 1));
+      const layers: { color: string; polys: Vec2[][] }[] = [];
+      if (fill && isGradient(fill)) {
+        const box = entityBBox(doc, e);
+        const { from, to } = gradientToWorld(fill, box);
+        const colors = [...new Set(fill.stops.map((s) => s.color.toLowerCase()))];
+        colors.forEach((c, k) => {
+          const polys = halftone(area, (p) => colorWeight(fill, c, gradientT(fill, from, to, p)) * op, { ...opts, angle: opts.angle + k * 30 });
+          if (polys.length) layers.push({ color: c, polys });
+        });
+      } else if (typeof fill === 'string' && op < 0.999) {
+        const polys = halftone(area, () => op, opts);
+        if (polys.length) layers.push({ color: fill, polys });
+      }
+      if (layers.length) jobs.push({ src: e, layers });
+    }
+    if (!jobs.length) return fail('Halbton braucht eine Fläche mit Verlauf oder mit Deckkraft unter 100 %.');
+    const created: Id[] = [];
+    const out = ed.commit('Halbtonraster', (d) => {
+      for (const j of jobs) {
+        const base = { ...j.src.style, stroke: null, opacity: 1 };
+        const group = j.layers.length > 1 ? newId(d, 'g') : undefined;
+        j.layers.forEach((l, i) => {
+          const style = { ...base, fill: l.color };
+          const id =
+            i === 0
+              ? replaceWithShape(d, [j.src.id], polysToContours(l.polys), style, { fillRule: 'evenodd', like: j.src, name: 'Halbton' })
+              : addShapeFromWorld(d, polysToContours(l.polys), style, { fillRule: 'evenodd', layer: j.src.layer, name: 'Halbton' }).id;
+          if (group) d.entities[id].group = group;
+          created.push(id);
+        });
+      }
+    });
+    if (out.ok) {
+      ok = true;
+      ed.select(created);
+    }
+    return { ...out, ids: created };
+  } finally {
+    if (ed.endTransaction() > 0 && !ok) ed.undo();
+  }
+}
+
+/** Used-/Vintage-Look: zufällige Ausbrüche und Kratzer werden aus den Flächen entfernt. */
+export async function grungeOp(ed: Editor, opts: GrungeOptions, ids: Id[] = ed.s.selection): Promise<Outcome> {
+  return shapeEdit(ed, ids, 'Used-Look', (polys) => applyGrunge(polys, opts), false);
+}
+
+/**
+ * Rapport für Allover: die Auswahl wird auf eine Kachel beschnitten, Überstände erscheinen auf der
+ * Gegenseite. Ein unsichtbarer Kachelrahmen legt die Exportgröße fest.
+ */
+export async function rapportOp(ed: Editor, tile: Tile, mode: RapportMode, ids: Id[] = ed.s.selection): Promise<Outcome> {
+  if (!(tile.w > 0 && tile.h > 0)) return fail('Kachelbreite und -höhe müssen größer als 0 sein.');
+  if (!ids.length) return fail('Zuerst die Motive für den Rapport auswählen.');
+  ed.beginTransaction('Rapport');
+  let ok = false;
+  try {
+    const t = await areaTargets(ed, ids);
+    if ('error' in t) return fail(t.error);
+    const doc = ed.s.doc;
+    const results = t.targets.map((e) => ({ src: e, polys: rapportTile(entityArea(doc, e)!, tile, mode) }));
+    const created: Id[] = [];
+    const out = ed.commit('Rapport', (d) => {
+      for (const r of results) {
+        if (r.polys.length) created.push(replaceWithShape(d, [r.src.id], polysToContours(r.polys), r.src.style, { fillRule: 'evenodd', like: r.src, name: 'Rapport' }));
+        else deleteIds(d, [r.src.id]);
+      }
+      const frame = addShapeFromWorld(
+        d,
+        [
+          polygonContour([
+            { x: tile.x, y: tile.y },
+            { x: tile.x + tile.w, y: tile.y },
+            { x: tile.x + tile.w, y: tile.y + tile.h },
+            { x: tile.x, y: tile.y + tile.h },
+          ]),
+        ],
+        { fill: null, stroke: null, strokeWidth: 0, opacity: 1 },
+        { name: 'Rapport-Kachel', layer: results[0]?.src.layer },
+      );
+      d.order = [frame.id, ...d.order.filter((x) => x !== frame.id)];
+      created.push(frame.id);
+    });
+    if (out.ok) {
+      ok = true;
+      ed.select(created);
+    }
+    return { ...out, ids: created };
+  } finally {
+    if (ed.endTransaction() > 0 && !ok) ed.undo();
+  }
+}

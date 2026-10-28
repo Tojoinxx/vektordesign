@@ -20,9 +20,9 @@ import type { AgentHost } from '../assistant/tools';
 import { preflightTargetFor, runPreflight, type PreflightResult, type PreflightTarget } from '../model/preflight';
 import { layersOf } from '../model/layers';
 import { SketchTool } from '../tools/sketchTool';
-import { booleanOp, cornerOp, offsetOp, patternOp, selectionCenter, selectionSize, textToPaths, toShape } from '../store/ops';
+import { booleanOp, cornerOp, grungeOp, halftoneOp, offsetOp, patternOp, rapportOp, selectionCenter, selectionSize, textToPaths, toShape } from '../store/ops';
 import type { BoolOp } from '../model/boolean';
-import { evaluate } from '../params/expr';
+import { evaluate, numberToExpr } from '../params/expr';
 import { docBBox } from '../model/bounds';
 import { loadProfiles, profileById, saveProfiles, type ExportProfile } from '../model/profiles';
 import { productionOf, articleBase, motifEntities, contrastWarnings } from '../model/production';
@@ -35,7 +35,25 @@ import type { DynamicInputSpec, Tool, ToolContext } from '../tools/types';
 import { exportSvg } from '../export/svg';
 import { exportPng, renderPreviewPng } from '../export/png';
 import { parseDoc, serializeDoc, PROJECT_EXT } from '../model/serialize';
-import { isTauri, setShareFallback, IMAGE_JPG_TYPE, IMAGE_PNG_TYPE, IMAGE_WEBP_TYPE, AI_TYPE, DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, TEMPLATE_TYPE, ZIP_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
+import {
+  isTauri,
+  setShareFallback,
+  IMAGE_JPG_TYPE,
+  IMAGE_PNG_TYPE,
+  IMAGE_WEBP_TYPE,
+  AI_TYPE,
+  DXF_TYPE,
+  EPS_TYPE,
+  openFile,
+  PDF_TYPE,
+  TEMPLATE_TYPE,
+  ZIP_TYPE,
+  PNG_TYPE,
+  PROJECT_TYPE,
+  safeName,
+  saveFile,
+  SVG_TYPE,
+} from '../platform/files';
 import { attachImagePixels, buildScene, sceneHasImages, textOutlines } from '../export/scene';
 import { exportPdf } from '../export/pdf';
 import { gangPieces, layoutGang, type GangSheetSpec } from '../model/gangsheet';
@@ -128,18 +146,7 @@ export interface ParamDialogSpec {
 }
 
 export type EditCommand =
-  | 'move'
-  | 'rotate'
-  | 'scale'
-  | 'mirror'
-  | 'pattern-rect'
-  | 'pattern-circ'
-  | 'offset'
-  | 'fillet'
-  | 'chamfer'
-  | 'text-to-paths'
-  | 'to-shape'
-  | BoolOp;
+  'move' | 'rotate' | 'scale' | 'mirror' | 'pattern-rect' | 'pattern-circ' | 'offset' | 'fillet' | 'chamfer' | 'text-to-paths' | 'to-shape' | 'halftone' | 'grunge' | 'rapport' | BoolOp;
 
 export interface ExportRequest {
   format: ExportFormat;
@@ -246,15 +253,12 @@ export class AppController {
       openExport: (format, dpi) => this.openExport(format, dpi),
       fitView: () => this.editor.zoomToFit(),
     };
-    this.agent = new Agent(
-      this.agentHost,
-      {
-        apiKey: loadApiKey,
-        model: loadModel,
-        onEntry: (e) => this.ui.setState({ chat: [...this.ui.getState().chat, e] }),
-        onBusy: (b) => this.ui.setState({ chatBusy: b }),
-      },
-    );
+    this.agent = new Agent(this.agentHost, {
+      apiKey: loadApiKey,
+      model: loadModel,
+      onEntry: (e) => this.ui.setState({ chat: [...this.ui.getState().chat, e] }),
+      onBusy: (b) => this.ui.setState({ chatBusy: b }),
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -442,7 +446,9 @@ export class AppController {
       this.sync.attach(f.link ?? null, meta, f.mtime ?? 0);
       this.editor.loadDocument(doc, f.name, null);
       this.watchFile();
-      const by = meta?.savedBy ? `, zuletzt gespeichert auf ${meta.savedBy}${meta.savedAt ? ` (${new Date(meta.savedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })})` : ''}` : '';
+      const by = meta?.savedBy
+        ? `, zuletzt gespeichert auf ${meta.savedBy}${meta.savedAt ? ` (${new Date(meta.savedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })})` : ''}`
+        : '';
       this.editor.toast(`„${f.name}“ geöffnet${by}`, 'success', 3500);
       return true;
     } catch (e) {
@@ -492,7 +498,12 @@ export class AppController {
     }
     // Beide behalten: eigene Fassung als Kopie sichern, dann fremde laden
     const copyName = `${safeName(this.projectName())} (Konflikt ${deviceName()}).${PROJECT_EXT}`;
-    const res = await saveFile(serializeDoc({ ...this.editor.s.doc, name: this.projectName() }, { revision: this.sync.revision, savedBy: deviceName(), projectId: this.sync.projectId }), copyName, PROJECT_TYPE, null);
+    const res = await saveFile(
+      serializeDoc({ ...this.editor.s.doc, name: this.projectName() }, { revision: this.sync.revision, savedBy: deviceName(), projectId: this.sync.projectId }),
+      copyName,
+      PROJECT_TYPE,
+      null,
+    );
     if (!res) {
       this.ui.setState({ syncConflict: c });
       return;
@@ -536,7 +547,12 @@ export class AppController {
       }
       // Ohne Dateizugriff (iPad/Safari): Teilen-Menü bzw. Download – „In Dateien sichern“ → ersetzen
       const rev = this.sync.revision + 1;
-      const res = await saveFile(serializeDoc({ ...s.doc, name: this.projectName() }, { revision: rev, savedBy: deviceName(), projectId: this.sync.projectId }), s.fileName ?? name, PROJECT_TYPE, null);
+      const res = await saveFile(
+        serializeDoc({ ...s.doc, name: this.projectName() }, { revision: rev, savedBy: deviceName(), projectId: this.sync.projectId }),
+        s.fileName ?? name,
+        PROJECT_TYPE,
+        null,
+      );
       if (!res) return;
       await this.sync.saved(rev);
       this.store.setState({ fileName: res.name, filePath: res.path, dirty: false });
@@ -580,7 +596,7 @@ export class AppController {
         throw new Error(`${name}: „${v}“ ist keine Zahl.`);
       }
     };
-    const pivot = (v: string) => (v === 'origin' ? { x: 0, y: 0 } : selectionCenter(this.editor.s.doc, sel) ?? { x: 0, y: 0 });
+    const pivot = (v: string) => (v === 'origin' ? { x: 0, y: 0 } : (selectionCenter(this.editor.s.doc, sel) ?? { x: 0, y: 0 }));
     const pivotField: ParamField = {
       key: 'pivot',
       label: 'Bezugspunkt',
@@ -634,12 +650,7 @@ export class AppController {
         open({
           title: 'Skalieren',
           text: size ? `Aktuelle Größe: ${fmt(size.w)} × ${fmt(size.h)} mm. Entweder Faktor oder neue Breite angeben.` : undefined,
-          fields: [
-            { key: 'factor', label: 'Faktor', unit: '%', value: '100' },
-            { key: 'width', label: 'Neue Breite', unit: 'mm', value: '', hint: 'leer = Faktor gilt' },
-            pivotField,
-            copyField,
-          ],
+          fields: [{ key: 'factor', label: 'Faktor', unit: '%', value: '100' }, { key: 'width', label: 'Neue Breite', unit: 'mm', value: '', hint: 'leer = Faktor gilt' }, pivotField, copyField],
           ok: 'Skalieren',
           run: (v) => {
             let k = num(v.factor, 'Faktor') / 100;
@@ -694,7 +705,11 @@ export class AppController {
         if (needSel()) return;
         open({
           title: 'Kreisförmiges Muster',
-          fields: [{ key: 'n', label: 'Anzahl', value: '6' }, { key: 'angle', label: 'Gesamtwinkel', unit: '°', value: '360' }, { ...pivotField, label: 'Mittelpunkt', value: 'origin' }],
+          fields: [
+            { key: 'n', label: 'Anzahl', value: '6' },
+            { key: 'angle', label: 'Gesamtwinkel', unit: '°', value: '360' },
+            { ...pivotField, label: 'Mittelpunkt', value: 'origin' },
+          ],
           ok: 'Muster erzeugen',
           run: (v) => {
             const c = pivot(v.pivot);
@@ -724,6 +739,81 @@ export class AppController {
           run: (v) => void this.runOp(offsetOp(ed, num(v.d, 'Abstand'), v.join === 'miter' ? 'miter' : 'round')),
         });
         return;
+      case 'halftone':
+        if (needSel()) return;
+        open({
+          title: 'Halbtonraster',
+          text: 'Verläufe und Transparenz werden zu Punkten in voller Farbe – so lassen sie sich im Siebdruck mit einem Sieb je Farbe drucken. Bei mehrfarbigen Verläufen entsteht je Farbe ein Raster (Winkel um 30° versetzt).',
+          fields: [
+            { key: 'lpi', label: 'Rasterweite', unit: 'lpi', value: '30', hint: 'Textil üblich 25–45; kleiner = gröbere Punkte' },
+            { key: 'angle', label: 'Winkel', unit: '°', value: '22,5' },
+            { key: 'min', label: 'Kleinster Punkt', unit: 'mm', value: '0,15', hint: 'Feinere Punkte laufen im Druck zu und werden weggelassen' },
+          ],
+          ok: 'Raster erzeugen',
+          run: (v) =>
+            void this.runOp(
+              halftoneOp(ed, {
+                lpi: Math.max(5, num(v.lpi.replace(',', '.'), 'Rasterweite')),
+                angle: num(v.angle.replace(',', '.'), 'Winkel'),
+                minDot: Math.max(0, num(v.min.replace(',', '.'), 'Kleinster Punkt')),
+              }),
+            ),
+        });
+        return;
+      case 'grunge':
+        if (needSel()) return;
+        open({
+          title: 'Used-Look',
+          text: 'Zufällige Ausbrüche und Kratzer werden aus den Flächen entfernt (echte Vektorlöcher, druck- und plotbar). Eine andere Zufallszahl ergibt ein anderes Muster.',
+          fields: [
+            { key: 'amount', label: 'Stärke', unit: '%', value: '15', hint: 'Anteil der Fläche, der ausbricht' },
+            { key: 'grain', label: 'Körnung', unit: 'mm', value: '1,2' },
+            { key: 'seed', label: 'Zufallszahl', value: String(1 + Math.floor(Math.random() * 999)) },
+            { key: 'scratches', label: 'Kratzer', value: '1', kind: 'check' },
+          ],
+          ok: 'Anwenden',
+          run: (v) =>
+            void this.runOp(
+              grungeOp(ed, {
+                amount: Math.min(90, Math.max(1, num(v.amount, 'Stärke'))) / 100,
+                grain: Math.max(0.2, num(v.grain.replace(',', '.'), 'Körnung')),
+                seed: Math.round(num(v.seed, 'Zufallszahl')),
+                scratches: v.scratches === '1',
+              }),
+            ),
+        });
+        return;
+      case 'rapport': {
+        if (needSel()) return;
+        const size = selectionSize(doc, sel);
+        const c = selectionCenter(doc, sel) ?? { x: 0, y: 0 };
+        open({
+          title: 'Rapport (Allover)',
+          text: 'Die Auswahl wird auf eine Kachel beschnitten; was über den Rand ragt, erscheint auf der Gegenseite. Die Kachel lässt sich dann lückenlos aneinandersetzen (Export in Kachelgröße).',
+          fields: [
+            { key: 'w', label: 'Kachelbreite', unit: 'mm', value: numberToExpr(Math.round(size?.w ?? 100)) },
+            { key: 'h', label: 'Kachelhöhe', unit: 'mm', value: numberToExpr(Math.round(size?.h ?? 100)) },
+            {
+              key: 'mode',
+              label: 'Versatz',
+              value: 'straight',
+              kind: 'choice',
+              options: [
+                { value: 'straight', label: 'Gerade' },
+                { value: 'halfdrop', label: 'Halber Versatz (Spalten)' },
+                { value: 'brick', label: 'Ziegel (Reihen)' },
+              ],
+            },
+          ],
+          ok: 'Rapport erzeugen',
+          run: (v) => {
+            const w = num(v.w, 'Kachelbreite');
+            const h = num(v.h, 'Kachelhöhe');
+            void this.runOp(rapportOp(ed, { x: c.x - w / 2, y: c.y - h / 2, w, h }, v.mode as 'straight' | 'halfdrop' | 'brick'));
+          },
+        });
+        return;
+      }
       case 'fillet':
       case 'chamfer':
         if (needSel()) return;
@@ -854,7 +944,12 @@ export class AppController {
       const r = await buildScreenPrint(doc, p, m, v, opts);
       this.ui.setState({ busy: null });
       const saved = await saveFile(r.zip, r.fileName, ZIP_TYPE, path);
-      if (saved) this.editor.toast(`Siebdruck-Paket gespeichert: ${r.separation.plates.length} Filme${r.warnings.length ? ` – ${r.warnings.length} Hinweis${r.warnings.length === 1 ? '' : 'e'} in LIESMICH.txt` : ''}`, 'success', 6000);
+      if (saved)
+        this.editor.toast(
+          `Siebdruck-Paket gespeichert: ${r.separation.plates.length} Filme${r.warnings.length ? ` – ${r.warnings.length} Hinweis${r.warnings.length === 1 ? '' : 'e'} in LIESMICH.txt` : ''}`,
+          'success',
+          6000,
+        );
       return !!saved;
     } catch (e) {
       this.ui.setState({ busy: null });
@@ -903,12 +998,14 @@ export class AppController {
       this.ui.setState({ busy: null });
       const type = format === 'pdf' ? PDF_TYPE : format === 'png' ? PNG_TYPE : SVG_TYPE;
       const saved =
-        files.length === 1
-          ? await saveFile(files[0].data, files[0].name, type, path)
-          : await saveFile(zipSync(Object.fromEntries(files.map((f) => [f.name, f.data]))), `${base}.zip`, ZIP_TYPE, path);
+        files.length === 1 ? await saveFile(files[0].data, files[0].name, type, path) : await saveFile(zipSync(Object.fromEntries(files.map((f) => [f.name, f.data]))), `${base}.zip`, ZIP_TYPE, path);
       if (saved) {
         const len = sheets.reduce((s, x) => s + x.length, 0) / 1000;
-        this.editor.toast(`Sammelbogen exportiert: ${sheets.length} Bogen, ${len.toFixed(2).replace('.', ',')} m${layout.tooWide.length ? ` – ${layout.tooWide.length} Stück zu breit, nicht enthalten` : ''}`, layout.tooWide.length ? 'error' : 'success', 6000);
+        this.editor.toast(
+          `Sammelbogen exportiert: ${sheets.length} Bogen, ${len.toFixed(2).replace('.', ',')} m${layout.tooWide.length ? ` – ${layout.tooWide.length} Stück zu breit, nicht enthalten` : ''}`,
+          layout.tooWide.length ? 'error' : 'success',
+          6000,
+        );
       }
       return !!saved;
     } catch (e) {
@@ -978,7 +1075,11 @@ export class AppController {
       const intro = reply.split('```')[0].trim();
       if (intro) this.chatAdd({ role: 'assistant', text: intro.slice(0, 600) });
       for (const l of rep.lines) this.chatAdd({ role: 'action', text: l.text, error: l.error });
-      this.editor.toast(`${rep.done} Schritt${rep.done === 1 ? '' : 'e'} ausgeführt${rep.failed ? `, ${rep.failed} fehlgeschlagen` : ''} – Strg+Z macht alles rückgängig.`, rep.failed ? 'info' : 'success', 4500);
+      this.editor.toast(
+        `${rep.done} Schritt${rep.done === 1 ? '' : 'e'} ausgeführt${rep.failed ? `, ${rep.failed} fehlgeschlagen` : ''} – Strg+Z macht alles rückgängig.`,
+        rep.failed ? 'info' : 'success',
+        4500,
+      );
       return rep.failed === 0;
     } catch (e) {
       this.chatAdd({ role: 'error', text: e instanceof Error ? e.message : String(e) });
@@ -1006,7 +1107,12 @@ export class AppController {
     const weak = contrastWarnings(doc);
     if (weak.length) {
       result.issues = result.issues.filter((i) => i.severity !== 'info' || !/Keine Probleme/.test(i.message));
-      for (const w of weak) result.issues.push({ severity: 'warn', message: `Kontrast: ${w.color.toUpperCase()} auf Stoff „${w.fabric}“ (${w.variant}) ist kaum sichtbar (${w.ratio.toFixed(1).replace('.', ',')} : 1).`, ids: [] });
+      for (const w of weak)
+        result.issues.push({
+          severity: 'warn',
+          message: `Kontrast: ${w.color.toUpperCase()} auf Stoff „${w.fabric}“ (${w.variant}) ist kaum sichtbar (${w.ratio.toFixed(1).replace('.', ',')} : 1).`,
+          ids: [],
+        });
     }
     if (run === this.preflightRun && this.ui.getState().preflight) this.ui.setState({ preflight: { target: t, minLine: ml, result, busy: false } });
     return result;

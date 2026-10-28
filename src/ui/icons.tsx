@@ -167,20 +167,7 @@ export function ConstraintIcon({ kind, size = 20 }: { kind: ConstraintKind; size
   }
 }
 
-export const CONSTRAINT_ORDER: ConstraintKind[] = [
-  'coincident',
-  'horizontal',
-  'vertical',
-  'parallel',
-  'perpendicular',
-  'collinear',
-  'tangent',
-  'concentric',
-  'equal',
-  'symmetric',
-  'midpoint',
-  'fix',
-];
+export const CONSTRAINT_ORDER: ConstraintKind[] = ['coincident', 'horizontal', 'vertical', 'parallel', 'perpendicular', 'collinear', 'tangent', 'concentric', 'equal', 'symmetric', 'midpoint', 'fix'];
 
 // ---------------------------------------------------------------------------
 // Bearbeiten (Meilenstein 2)
@@ -368,5 +355,22 @@ export const IconPen = (p: { size?: number }) => (
 export const IconProfile = (p: { size?: number }) => (
   <Icon {...p}>
     <path d="M5 8 L13 8 A5 5 0 0 1 13 18 L5 18 Z" fill="currentColor" fillOpacity="0.18" />
+  </Icon>
+);
+export const IconHalftone = (p: { size?: number }) => (
+  <Icon {...p}>{[0, 1, 2, 3].flatMap((i) => [0, 1, 2, 3].map((j) => <circle key={`${i}-${j}`} cx={5 + i * 4.6} cy={5 + j * 4.6} r={0.5 + (i + j) * 0.32} fill="currentColor" stroke="none" />))}</Icon>
+);
+export const IconGrunge = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 5 H20 V19 H4 Z" fill="currentColor" fillOpacity="0.2" />
+    <path d="M7 9 l2 1 M14 7 l1.5 1 M11 14 l3 1.5 M6 16 l1 -1 M16 13 l2 2" strokeWidth="2" />
+  </Icon>
+);
+export const IconRapport = (p: { size?: number }) => (
+  <Icon {...p}>
+    <rect x="3.5" y="3.5" width="17" height="17" strokeDasharray="2.5 2" strokeOpacity="0.6" />
+    <circle cx="3.5" cy="12" r="3" fill="currentColor" fillOpacity="0.25" />
+    <circle cx="20.5" cy="12" r="3" fill="currentColor" fillOpacity="0.25" />
+    <path d="M10 8 l4 4 l-4 4" />
   </Icon>
 );
