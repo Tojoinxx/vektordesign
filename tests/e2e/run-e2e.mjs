@@ -856,6 +856,44 @@ await step('Mockup-Vorschau: Logo auf dem Hoodie in Stofffarbe, Kontrast je Druc
   await page.click('[data-testid="mockup-close"]');
 });
 
+await step('DTF-Sammelbogen: Logos und Trikotnamen auf 560-mm-Rolle, PDF mit Schnittlinien, PNG 300 dpi', async () => {
+  await page.click('[data-testid="gangsheet-open"]');
+  await page.waitForSelector('[data-testid="gangsheet"]');
+  const counts = await page.$$('[data-testid^="gang-count-"]');
+  assert(counts.length >= 2, `Motivzeilen: ${counts.length}`);
+  await counts[0].click({ clickCount: 3 });
+  await page.keyboard.type('6');
+  await page.keyboard.press('Enter');
+  await counts[1].click({ clickCount: 3 });
+  await page.keyboard.type('4');
+  await page.keyboard.press('Enter');
+  await page.click('[data-testid="gang-names"]');
+  await page.keyboard.type('Name;Nummer;Größe\nMüller;10;L\nSchmidt;7;M\nYilmaz;23;XL');
+  await page.waitForSelector('[data-testid="gang-canvas"]');
+  await waitFor(async () => (await page.$eval('[data-testid="gang-summary"]', (e) => e.textContent)).startsWith('13 Stück'), 'Stückzahl stimmt nicht');
+  const summary = await page.$eval('[data-testid="gang-summary"]', (e) => e.textContent);
+  await sleep(300);
+  await shot('33-sammelbogen');
+  for (const f of readdirSync(DL)) rmSync(join(DL, f), { force: true });
+  await page.click('[data-testid="gang-pdf"]');
+  const pdf = await waitDownload('pdf', []);
+  await sleep(150);
+  const txt = readFileSync(pdf, 'latin1');
+  assert(txt.startsWith('%PDF-') && (txt.match(/\/Type \/OCG/g) || []).length === 2, 'PDF-Ebenen fehlen');
+  const mb = txt.match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/);
+  assert(mb && Math.abs(Number(mb[1]) - (560 / 25.4) * 72) < 0.1, `PDF-Breite: ${mb && mb[1]}`);
+  copyFileSync(pdf, join(OUT, 'm5-sammelbogen.pdf'));
+  await page.click('[data-testid="gang-png"]');
+  const png = await waitDownload('png', []);
+  await sleep(300);
+  const pb = readFileSync(png);
+  assert(pb.readUInt32BE(16) === Math.ceil((560 / 25.4) * 300 - 1e-6), `PNG-Breite: ${pb.readUInt32BE(16)}`);
+  results.push(`   Sammelbogen: ${summary}`);
+  await page.click('[data-testid="gang-close"]');
+  const saved = await app(() => window.vektordesign.store.getState().doc.production?.gangSheet?.names.rows ?? '');
+  assert(saved.includes('Yilmaz'), 'Einstellungen nicht im Projekt gespeichert');
+});
+
 // ---------------------------------------------------------------------------
 // Meilenstein 4: iPad (Touch, Apple Pencil, Web-App, Sync)
 // ---------------------------------------------------------------------------

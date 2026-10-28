@@ -77,10 +77,12 @@ export interface SceneOptions {
   bounds?: 'geometry' | 'stroke';
   /** Text als Umrisse (aus textOutlines); fehlt ein Eintrag, bleibt der Text lebendig */
   outlines?: Map<Id, Contour[]>;
+  /** Fester Rahmen statt der Geometriegrenzen (z. B. ganzer Sammelbogen) */
+  frame?: BBox;
 }
 
 export function buildScene(doc: SketchDoc, opts: SceneOptions = {}): ExportScene {
-  const box = docBBox(doc, { includeStroke: opts.bounds === 'stroke' });
+  const box = opts.frame ?? docBBox(doc, { includeStroke: opts.bounds === 'stroke' });
   if (!box) throw new ExportError('Nichts zu exportieren: Die Zeichnung enthält keine sichtbaren Objekte (Konstruktionsgeometrie und ausgeblendete Ebenen werden nicht exportiert).');
   const layers = layersOf(doc).map((l) => ({ id: l.id, name: l.name, items: [] as SceneItem[] }));
   const byId = new Map(layers.map((l) => [l.id, l]));

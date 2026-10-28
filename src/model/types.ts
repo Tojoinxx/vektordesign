@@ -361,4 +361,6 @@ export interface Production {
   /** gewähltes Export-Profil */
   profileId: string;
   note?: string;
+  /** DTF-/Transfer-Sammelbogen (siehe model/gangsheet) */
+  gangSheet?: import('./gangsheet').GangSheetSpec;
 }

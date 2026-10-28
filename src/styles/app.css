@@ -2422,3 +2422,62 @@ body {
 .contrast-list .bad .tag {
   background: var(--bad-soft);
 }
+
+/* DTF-Sammelbogen */
+.gang-stage {
+  overflow: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+.gang-stage canvas {
+  display: block;
+}
+.gang-empty {
+  max-width: 34ch;
+  margin: 15% auto;
+  color: var(--muted, #7a7f87);
+  text-align: center;
+}
+.gang-side {
+  width: 320px;
+}
+.gang-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  margin: 8px 0;
+}
+.gang-field {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+.gang-field input,
+.gang-field select {
+  width: 100%;
+  min-width: 0;
+}
+.gang-items {
+  display: grid;
+  gap: 4px;
+}
+.gang-item {
+  display: grid;
+  grid-template-columns: 1fr 72px;
+  align-items: end;
+  gap: 8px;
+  font-size: 13px;
+}
+.gang-item .gang-field span {
+  display: none;
+}
+.gang-names {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.gang-side .warn {
+  color: var(--danger, #c8102e);
+}

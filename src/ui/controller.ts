@@ -37,6 +37,9 @@ import { parseDoc, serializeDoc, PROJECT_EXT } from '../model/serialize';
 import { isTauri, setShareFallback, IMAGE_JPG_TYPE, IMAGE_PNG_TYPE, IMAGE_WEBP_TYPE, AI_TYPE, DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, TEMPLATE_TYPE, ZIP_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
 import { attachImagePixels, buildScene, sceneHasImages, textOutlines } from '../export/scene';
 import { exportPdf } from '../export/pdf';
+import { gangPieces, layoutGang, type GangSheetSpec } from '../model/gangsheet';
+import { buildSheetDocs, withoutCutLayer } from '../export/gangSheetExport';
+import { zipSync } from 'fflate';
 import { exportEps } from '../export/eps';
 import { exportDxf } from '../export/dxf';
 import type { ExportFormat } from '../store/state';
@@ -93,6 +96,8 @@ export interface UiState {
   preflight: { target: PreflightTarget; minLine: number | null; result: PreflightResult | null; busy: boolean } | null;
   /** Mockup-Vorschau offen */
   mockup: boolean;
+  /** DTF-/Transfer-Sammelbogen offen */
+  gangSheet: boolean;
   /** iPad: fertige Datei, die per Knopf geteilt wird */
   shareReady: { name: string; share: () => Promise<void> } | null;
 }
@@ -199,6 +204,7 @@ export class AppController {
       shareReady: null,
       preflight: null,
       mockup: false,
+      gangSheet: false,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -793,6 +799,61 @@ export class AppController {
       this.ui.setState({ busy: null });
       const saved = await saveFile(bytes, `${articleBase(p)}_Artwork-Blatt.pdf`, PDF_TYPE, path);
       if (saved) this.editor.toast('Artwork-Blatt exportiert', 'success');
+      return !!saved;
+    } catch (e) {
+      this.ui.setState({ busy: null });
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
+      return false;
+    }
+  }
+
+  /** Sammelbogen-Einstellungen im Projekt speichern (ein Rückgängig-Schritt). */
+  saveGangSheet(spec: GangSheetSpec): void {
+    const cur = JSON.stringify((productionOf(this.editor.s.doc) as { gangSheet?: GangSheetSpec }).gangSheet ?? null);
+    if (cur === JSON.stringify(spec)) return;
+    this.editor.updateProduction('Sammelbogen', (p) => {
+      p.gangSheet = JSON.parse(JSON.stringify(spec)) as GangSheetSpec;
+    });
+  }
+
+  /**
+   * Sammelbogen exportieren: PDF (Vektor, Schnittlinien als eigene Ebene), PNG 300 dpi
+   * (transparent, ohne Schnittlinien) oder SVG. Mehrere Bögen kommen als ZIP.
+   */
+  async exportGangSheet(spec: GangSheetSpec, format: 'pdf' | 'png' | 'svg', path?: string | null): Promise<boolean> {
+    const doc = this.editor.s.doc;
+    const p = productionOf(doc);
+    try {
+      const pieces = gangPieces(doc, spec, p);
+      if (!pieces.length) throw new Error('Der Sammelbogen ist leer: Stückzahlen bei den Motiven eintragen oder Namen/Nummern hinzufügen.');
+      this.ui.setState({ busy: 'Sammelbogen wird erstellt …' });
+      const layout = layoutGang(pieces, spec);
+      const sheets = await buildSheetDocs(layout, spec, { cutLines: spec.cutLines && format !== 'png', name: p.article });
+      const base = `${articleBase(p)}_Sammelbogen_${Math.round(spec.width)}mm${spec.mirror ? '_gespiegelt' : ''}`;
+      const files: { name: string; data: Uint8Array }[] = [];
+      for (const sh of sheets) {
+        const name = `${base}${sheets.length > 1 ? `_Bogen${sh.index + 1}` : ''}`;
+        if (format === 'pdf') {
+          const scene = buildScene(sh.doc, { frame: sh.frame });
+          await attachImagePixels(scene, (src) => decodeImage(src, 2400));
+          files.push({ name: `${name}.pdf`, data: exportPdf(scene, { title: name }) });
+        } else if (format === 'png') {
+          const r = await exportPng(withoutCutLayer(sh.doc), { dpi: 300, frame: sh.frame, background: null });
+          files.push({ name: `${name}.png`, data: r.bytes });
+        } else {
+          files.push({ name: `${name}.svg`, data: new TextEncoder().encode(exportSvg(sh.doc, { frame: sh.frame, title: name }).svg) });
+        }
+      }
+      this.ui.setState({ busy: null });
+      const type = format === 'pdf' ? PDF_TYPE : format === 'png' ? PNG_TYPE : SVG_TYPE;
+      const saved =
+        files.length === 1
+          ? await saveFile(files[0].data, files[0].name, type, path)
+          : await saveFile(zipSync(Object.fromEntries(files.map((f) => [f.name, f.data]))), `${base}.zip`, ZIP_TYPE, path);
+      if (saved) {
+        const len = sheets.reduce((s, x) => s + x.length, 0) / 1000;
+        this.editor.toast(`Sammelbogen exportiert: ${sheets.length} Bogen, ${len.toFixed(2).replace('.', ',')} m${layout.tooWide.length ? ` – ${layout.tooWide.length} Stück zu breit, nicht enthalten` : ''}`, layout.tooWide.length ? 'error' : 'success', 6000);
+      }
       return !!saved;
     } catch (e) {
       this.ui.setState({ busy: null });

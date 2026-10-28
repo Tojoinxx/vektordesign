@@ -1,5 +1,5 @@
 import type { Contour, Gradient, Id, SketchDoc, Style, Vec2 } from '../model/types';
-import { clean, dist } from '../model/geometry';
+import { clean, dist, type BBox } from '../model/geometry';
 import { sortedStops } from '../model/paint';
 import { contoursToSvgD } from '../model/shape';
 import { dashPattern } from '../render/drawDesign';
@@ -16,6 +16,8 @@ export interface SvgExportOptions {
   title?: string;
   /** Text als Umrisse (siehe textOutlines) */
   outlines?: Map<Id, Contour[]>;
+  /** Fester Rahmen (mm, Welt) */
+  frame?: BBox;
 }
 
 export interface SvgExportResult {
@@ -40,7 +42,7 @@ export function xmlEscape(s: string): string {
  * Bemaßungen, Glyphen und ausgeblendete Ebenen werden nie exportiert.
  */
 export function exportSvg(doc: SketchDoc, opts: SvgExportOptions = {}): SvgExportResult {
-  const scene = buildScene(doc, { bounds: opts.bounds, outlines: opts.outlines });
+  const scene = buildScene(doc, { bounds: opts.bounds, outlines: opts.outlines, frame: opts.frame });
   const { box } = scene;
   const w = scene.widthMm;
   const h = scene.heightMm;

@@ -1,6 +1,7 @@
 import { preloadImages } from '../model/image';
 import type { SketchDoc } from '../model/types';
 import { docBBox } from '../model/bounds';
+import type { BBox } from '../model/geometry';
 import { drawDesign } from '../render/drawDesign';
 import { ExportError } from './svg';
 import { setPngDpi } from './pngMeta';
@@ -11,6 +12,8 @@ export interface PngExportOptions {
   /** Hintergrundfarbe, null = transparent */
   background?: string | null;
   mirror?: boolean;
+  /** Fester Rahmen (mm, Welt) */
+  frame?: BBox;
 }
 
 export interface PngExportResult {
@@ -26,8 +29,8 @@ const MAX_SIDE = 16384;
 const MAX_PIXELS = 16384 * 16384;
 
 /** Pixelmaße für eine Ausgabe – auch für die Anzeige im Exportdialog. */
-export function pngSize(doc: SketchDoc, dpi: number, bounds: 'geometry' | 'stroke' = 'geometry') {
-  const box = docBBox(doc, { includeStroke: bounds === 'stroke' });
+export function pngSize(doc: SketchDoc, dpi: number, bounds: 'geometry' | 'stroke' = 'geometry', frame?: BBox) {
+  const box = frame ?? docBBox(doc, { includeStroke: bounds === 'stroke' });
   if (!box) return null;
   const wMm = box.maxX - box.minX;
   const hMm = box.maxY - box.minY;
@@ -38,7 +41,7 @@ export function pngSize(doc: SketchDoc, dpi: number, bounds: 'geometry' | 'strok
 /** Rendert das Design als PNG mit transparentem Hintergrund und eingetragener Auflösung. */
 export async function exportPng(doc: SketchDoc, opts: PngExportOptions): Promise<PngExportResult> {
   if (!(opts.dpi >= 72)) throw new ExportError('Auflösung zu klein');
-  const size = pngSize(doc, opts.dpi, opts.bounds);
+  const size = pngSize(doc, opts.dpi, opts.bounds, opts.frame);
   if (!size) throw new ExportError('Nichts zu exportieren: Die Zeichnung enthält keine sichtbaren Objekte.');
   const { box, wPx, hPx, wMm, hMm } = size;
   if (wPx > MAX_SIDE || hPx > MAX_SIDE || wPx * hPx > MAX_PIXELS) {

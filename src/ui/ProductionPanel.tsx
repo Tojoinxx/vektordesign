@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Shirt, Copy, FileArchive, FileText, MapPin, Plus, Settings2, Trash2, TriangleAlert } from 'lucide-react';
+import { Shirt, LayoutGrid, Copy, FileArchive, FileText, MapPin, Plus, Settings2, Trash2, TriangleAlert } from 'lucide-react';
 import type { Motif, Production, Technique, Variant } from '../model/types';
 import { GARMENTS, TECHNIQUES, areaOf, garmentOf } from '../model/garments';
 import { allColors, cmykOf, cmykText, motifColors, motifSize, motifWarnings, nextListId, productionOf, variantColor } from '../model/production';
@@ -180,6 +180,9 @@ export function ProductionPanel() {
           </button>
           <button className="btn wide" onClick={() => app.ui.setState({ mockup: true })} data-testid="mockup-open">
             <Shirt size={16} /> Mockup-Vorschau
+          </button>
+          <button className="btn wide" onClick={() => app.ui.setState({ gangSheet: true })} data-testid="gangsheet-open">
+            <LayoutGrid size={16} /> DTF-Sammelbogen
           </button>
           <button className="btn wide" onClick={() => void app.exportArtworkSheet()} disabled={!!busy} data-testid="sheet-export">
             <FileText size={16} /> Nur Artwork-Blatt (PDF)
