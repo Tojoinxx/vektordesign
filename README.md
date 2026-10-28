@@ -156,7 +156,9 @@ Standard ist das dunkle Design. Über das Mond-Symbol oben rechts lassen sich da
 
 Im Tab **Claude** (`Strg+I`) beschreibst du, was entstehen soll – Claude zeichnet, bemaßt, setzt Abhängigkeiten und Farben direkt in der Zeichnung und prüft das Ergebnis anhand einer Vorschau. Bilder (Logo, Skizze, Foto) lassen sich per Schaltfläche, Drag & Drop oder `Strg+V` anhängen, z. B. zwei Bilder mit dem Auftrag „das erste in den Vordergrund, das zweite als Hintergrund mit Verblassen“. Alle Änderungen eines Auftrags sind ein einziger Schritt – `Strg+Z` macht alles rückgängig.
 
-Einrichtung: Unter [console.anthropic.com](https://console.anthropic.com) einen API-Schlüssel erstellen und im Claude-Tab einfügen. Der Schlüssel wird nur auf diesem Gerät gespeichert und nur an die Anthropic-API gesendet; die Kosten pro Auftrag rechnet Anthropic nach Verbrauch ab. Nur der Assistent braucht Internet.
+**Ohne API-Schlüssel (mit deinem Claude-Abo):** Im Claude-Tab „Mit Claude-Abo“ wählen, Wunsch eintippen und **Auftrag kopieren**. Den Text in [claude.ai](https://claude.ai) einfügen (Bilder dort anhängen) und senden. Claudes Antwort komplett kopieren, im Claude-Tab bei „Antwort von Claude“ einfügen und **Ausführen** – die App zeichnet alles in einem Rückgängig-Schritt, mit Bemaßungen und Abhängigkeiten.
+
+**Mit API-Schlüssel:** Einrichtung: Unter [console.anthropic.com](https://console.anthropic.com) einen API-Schlüssel erstellen und im Claude-Tab einfügen. Der Schlüssel wird nur auf diesem Gerät gespeichert und nur an die Anthropic-API gesendet; die Kosten pro Auftrag rechnet Anthropic nach Verbrauch ab. Nur der Assistent braucht Internet.
 
 ### Export
 

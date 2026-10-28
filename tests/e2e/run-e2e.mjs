@@ -1188,6 +1188,31 @@ await step('Preflight: feine Linie für Stick und Plotter markiert, Logo für DT
   await page.click('[data-testid="ribbon-sketch"]');
 });
 
+await step('Claude ohne API-Schlüssel: Auftrag kopieren, Antwort aus claude.ai einfügen und ausführen', async () => {
+  await newDoc();
+  await page.click('[data-testid="tab-claude"]');
+  await page.waitForSelector('[data-testid="claude-mode-abo"]');
+  await page.click('[data-testid="claude-mode-abo"]');
+  await page.type('#claude-eingabe', 'Rechteck 80 × 40 mit Kreis Ø10 in der Mitte');
+  await page.click('[data-testid="bridge-copy"]');
+  await page.waitForSelector('.bridge-prompt');
+  const prompt = await page.$eval('.bridge-prompt textarea', (e) => e.value);
+  assert(prompt.includes('```vektordesign') && prompt.includes('Rechteck 80 × 40'), 'Auftrag unvollständig');
+  const reply = 'Fertig:\n```vektordesign\n[{"tool":"draw_rectangle","input":{"x":0,"y":0,"width":80,"height":40,"anchor":"center","fill":"#1f3a93"}},{"tool":"draw_circle","input":{"cx":3,"cy":2,"diameter":10,"fill":"#f5c518"}},{"tool":"add_constraint","input":{"type":"concentric","targets":["$2","$1.center"]}}]\n```';
+  await page.$eval('[data-testid="bridge-reply"]', (el, v) => {
+    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    set.call(el, v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, reply);
+  await page.click('[data-testid="bridge-run"]');
+  await sleep(300);
+  const st = await statusText();
+  const n = await app(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'circle' || e.kind === 'path').length);
+  assert(n === 2 && st === 'Vollständig bestimmt', `${n} Objekte, Status ${st}`);
+  await shot('70-claude-abo');
+  await page.click('[data-testid="tab-props"]');
+});
+
 await step('Leistung: 150 Rechtecke mit Bemaßungen, Ziehen bleibt flüssig', async () => {
   await newDoc();
   const t = await app(() => {

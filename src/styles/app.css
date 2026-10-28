@@ -2334,3 +2334,25 @@ body {
   width: 16px;
   height: 16px;
 }
+
+.assistant-mode {
+  display: flex;
+  margin: 8px 10px 0;
+}
+.assistant-mode button {
+  flex: 1;
+  flex-direction: column;
+  height: auto;
+  padding: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.assistant-mode small {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.bridge-prompt textarea {
+  width: 100%;
+  font-size: 11px;
+}

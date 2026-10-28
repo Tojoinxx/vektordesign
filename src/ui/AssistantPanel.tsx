@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ImagePlus, KeyRound, RotateCcw, Send, Settings2, Sparkles, Square, X } from 'lucide-react';
+import { ClipboardCopy, ClipboardPaste, ExternalLink, ImagePlus, KeyRound, Play, RotateCcw, Send, Settings2, Sparkles, Square, X } from 'lucide-react';
 import { loadApiKey, loadModel, MODELS, saveApiKey, saveModel } from '../assistant/api';
 import type { ChatImage } from '../assistant/agent';
 import { useApp, useUi } from './hooks';
@@ -35,7 +35,13 @@ async function prepareImage(file: Blob, name: string): Promise<ChatImage> {
     const png = file.type === 'image/png' || file.type === 'image/gif' || file.type === 'image/webp';
     const mediaType = png ? 'image/png' : 'image/jpeg';
     const dataUrl = c.toDataURL(mediaType, 0.9);
-    return { id: `img${imgId++}`, name, mediaType, base64: dataUrl.split(',')[1], url: dataUrl };
+    return {
+      id: `img${imgId++}`,
+      name,
+      mediaType,
+      base64: dataUrl.split(',')[1],
+      url: dataUrl,
+    };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -48,7 +54,26 @@ export function AssistantPanel() {
   const [text, setText] = useState('');
   const [images, setImages] = useState<ChatImage[]>([]);
   const [hasKey, setHasKey] = useState(() => !!loadApiKey());
-  const [settings, setSettings] = useState(() => !loadApiKey());
+  const [mode, setModeState] = useState<'abo' | 'api'>(() => {
+    try {
+      const m = localStorage.getItem('vd.claudeMode');
+      if (m === 'abo' || m === 'api') return m;
+    } catch {
+      /* kein Speicher */
+    }
+    return loadApiKey() ? 'api' : 'abo';
+  });
+  const setMode = (m: 'abo' | 'api') => {
+    setModeState(m);
+    try {
+      localStorage.setItem('vd.claudeMode', m);
+    } catch {
+      /* kein Speicher */
+    }
+  };
+  const [reply, setReply] = useState('');
+  const [copied, setCopied] = useState<string | null>(null);
+  const [settings, setSettings] = useState(false);
   const [keyInput, setKeyInput] = useState('');
   const [model, setModel] = useState(loadModel);
   const [drag, setDrag] = useState(false);
@@ -56,7 +81,10 @@ export function AssistantPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+    listRef.current?.scrollTo({
+      top: listRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
   }, [chat.length, busy]);
 
   const addFiles = async (files: Iterable<File>) => {
@@ -71,6 +99,11 @@ export function AssistantPanel() {
   };
 
   const send = (t = text) => {
+    if (mode === 'abo') {
+      void app.copyBridgePrompt(t).then((p) => setCopied(p));
+      setText('');
+      return;
+    }
     if (busy || (!t.trim() && !images.length)) return;
     if (!hasKey) {
       setSettings(true);
@@ -128,7 +161,28 @@ export function AssistantPanel() {
         </button>
       </div>
 
-      {settings && (
+      <div className="segmented assistant-mode" role="radiogroup" aria-label="Wie Claude arbeitet">
+        <button className={mode === 'abo' ? 'on' : ''} onClick={() => setMode('abo')} role="radio" aria-checked={mode === 'abo'} data-testid="claude-mode-abo">
+          Mit Claude-Abo <small>kostenlos, Kopieren</small>
+        </button>
+        <button className={mode === 'api' ? 'on' : ''} onClick={() => setMode('api')} role="radio" aria-checked={mode === 'api'} data-testid="claude-mode-api">
+          Mit API-Schlüssel <small>direkt, kostet pro Auftrag</small>
+        </button>
+      </div>
+
+      {mode === 'abo' && (
+        <div className="assistant-settings">
+          <p className="small">
+            So geht’s ohne API-Schlüssel: <strong>1.</strong> Wunsch unten eintippen und „Auftrag kopieren“. <strong>2.</strong> In{' '}
+            <a href="https://claude.ai/new" target="_blank" rel="noreferrer">
+              claude.ai <ExternalLink size={11} />
+            </a>{' '}
+            einfügen (Bilder dort anhängen) und senden. <strong>3.</strong> Claudes Antwort komplett kopieren, unten einfügen und „Ausführen“.
+          </p>
+        </div>
+      )}
+
+      {mode === 'api' && (settings || !hasKey) && (
         <div className="assistant-settings">
           <p>
             <KeyRound size={14} /> Claude braucht einen eigenen <strong>API-Schlüssel</strong> (erstellen unter{' '}
@@ -138,7 +192,14 @@ export function AssistantPanel() {
             ). Er wird nur auf diesem Gerät gespeichert und nur an Anthropic gesendet.
           </p>
           <div className="row">
-            <input type="password" value={keyInput} placeholder={hasKey ? '•••••••• (gespeichert)' : 'sk-ant-…'} onChange={(e) => setKeyInput(e.target.value)} onKeyDown={(e) => e.stopPropagation()} aria-label="API-Schlüssel" />
+            <input
+              type="password"
+              value={keyInput}
+              placeholder={hasKey ? '•••••••• (gespeichert)' : 'sk-ant-…'}
+              onChange={(e) => setKeyInput(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              aria-label="API-Schlüssel"
+            />
             <button className="btn accent" onClick={saveKey}>
               Speichern
             </button>
@@ -234,7 +295,13 @@ export function AssistantPanel() {
           id="claude-eingabe"
           value={text}
           rows={3}
-          placeholder={images.length ? 'Was soll Claude mit den Bildern machen? (z. B. Bild 1 vorne, Bild 2 als Hintergrund mit Verblassen)' : 'Auftrag an Claude … (Enter sendet, Umschalt+Enter neue Zeile)'}
+          placeholder={
+            mode === 'abo'
+              ? 'Was soll Claude zeichnen oder ändern? (Enter kopiert den Auftrag für claude.ai)'
+              : images.length
+                ? 'Was soll Claude mit den Bildern machen? (z. B. Bild 1 vorne, Bild 2 als Hintergrund mit Verblassen)'
+                : 'Auftrag an Claude … (Enter sendet, Umschalt+Enter neue Zeile)'
+          }
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => {
             const files = [...e.clipboardData.files];
@@ -252,22 +319,74 @@ export function AssistantPanel() {
           }}
           aria-label="Nachricht an Claude"
         />
-        <div className="row">
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files)} />
-          <button className="icon-btn" title="Bilder anhängen (oder hineinziehen / Strg+V)" aria-label="Bilder anhängen" onClick={() => fileRef.current?.click()}>
-            <ImagePlus size={17} />
-          </button>
-          <span className="spacer" />
-          {busy ? (
-            <button className="btn" onClick={() => app.agent.stop()}>
-              <Square size={13} /> Stopp
+        {mode === 'abo' ? (
+          <>
+            <div className="row">
+              <span className="muted small spacer">{copied ? 'Auftrag erstellt – in claude.ai einfügen.' : 'Bilder direkt in claude.ai anhängen.'}</span>
+              <button className="btn accent" onClick={() => send()} data-testid="bridge-copy">
+                <ClipboardCopy size={14} /> Auftrag kopieren
+              </button>
+            </div>
+            {copied && (
+              <details className="bridge-prompt">
+                <summary className="muted small">Auftrag anzeigen (falls Kopieren nicht ging)</summary>
+                <textarea readOnly value={copied} rows={4} onFocus={(e) => e.currentTarget.select()} aria-label="Auftrag für claude.ai" />
+              </details>
+            )}
+            <textarea
+              value={reply}
+              rows={3}
+              placeholder="Antwort von Claude hier einfügen …"
+              onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              aria-label="Antwort von Claude"
+              data-testid="bridge-reply"
+            />
+            <div className="row">
+              <button
+                className="icon-btn"
+                title="Aus der Zwischenablage einfügen"
+                aria-label="Aus der Zwischenablage einfügen"
+                onClick={() => {
+                  void navigator.clipboard
+                    .readText()
+                    .then((t) => setReply(t))
+                    .catch(() => app.editor.toast('Zugriff auf die Zwischenablage nicht erlaubt – bitte mit Strg+V einfügen.', 'info'));
+                }}
+              >
+                <ClipboardPaste size={16} />
+              </button>
+              <span className="spacer" />
+              <button
+                className="btn accent"
+                disabled={!reply.trim()}
+                onClick={() => {
+                  void app.runBridgeReply(reply).then((ok) => ok && setReply(''));
+                }}
+                data-testid="bridge-run"
+              >
+                <Play size={14} /> Ausführen
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="row">
+            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files)} />
+            <button className="icon-btn" title="Bilder anhängen (oder hineinziehen / Strg+V)" aria-label="Bilder anhängen" onClick={() => fileRef.current?.click()}>
+              <ImagePlus size={17} />
             </button>
-          ) : (
-            <button className="btn accent" onClick={() => send()} disabled={!text.trim() && !images.length}>
-              <Send size={14} /> Senden
-            </button>
-          )}
-        </div>
+            <span className="spacer" />
+            {busy ? (
+              <button className="btn" onClick={() => app.agent.stop()}>
+                <Square size={13} /> Stopp
+              </button>
+            ) : (
+              <button className="btn accent" onClick={() => send()} disabled={!text.trim() && !images.length}>
+                <Send size={14} /> Senden
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

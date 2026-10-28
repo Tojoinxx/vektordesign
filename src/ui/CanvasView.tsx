@@ -1,35 +1,24 @@
-import { useCallback, useEffect, useRef } from "react";
-import type { Vec2 } from "../model/types";
-import { renderScene, type SceneLayout } from "../render/renderer";
-import { toScreen, toWorld, type Viewport } from "../render/viewport";
-import type { PreflightResult } from "../model/preflight";
-import { computeSnap } from "../tools/snap";
-import type { ToolPointer } from "../tools/types";
-import { clampZoom } from "../store/editor";
-import { useApp, useAppState } from "./hooks";
-import { DimensionEditor, DynamicInput, TextEditor } from "./Overlays";
-import { MarkingMenu, markingDirectionCommand } from "./MarkingMenu";
+import { useCallback, useEffect, useRef } from 'react';
+import type { Vec2 } from '../model/types';
+import { renderScene, type SceneLayout } from '../render/renderer';
+import { toScreen, toWorld, type Viewport } from '../render/viewport';
+import type { PreflightResult } from '../model/preflight';
+import { computeSnap } from '../tools/snap';
+import type { ToolPointer } from '../tools/types';
+import { clampZoom } from '../store/editor';
+import { useApp, useAppState } from './hooks';
+import { DimensionEditor, DynamicInput, TextEditor } from './Overlays';
+import { MarkingMenu, markingDirectionCommand } from './MarkingMenu';
 
-const DRAW_TOOLS = new Set([
-  "line",
-  "rect",
-  "circle",
-  "point",
-  "text",
-  "sketch",
-]);
+const DRAW_TOOLS = new Set(['line', 'rect', 'circle', 'point', 'text', 'sketch']);
 
 /** Problemzonen der Prüfung rot markieren. */
-function drawPreflightMarks(
-  ctx: CanvasRenderingContext2D,
-  v: Viewport,
-  r: PreflightResult | null,
-): void {
+function drawPreflightMarks(ctx: CanvasRenderingContext2D, v: Viewport, r: PreflightResult | null): void {
   if (!r) return;
   ctx.save();
   for (const i of r.issues) {
     if (!i.regions?.length) continue;
-    const col = i.severity === "error" ? "rgba(214,69,69," : "rgba(232,140,12,";
+    const col = i.severity === 'error' ? 'rgba(214,69,69,' : 'rgba(232,140,12,';
     ctx.beginPath();
     for (const poly of i.regions) {
       poly.forEach((p, k) => {
@@ -40,7 +29,7 @@ function drawPreflightMarks(
       ctx.closePath();
     }
     ctx.fillStyle = `${col}0.45)`;
-    ctx.fill("evenodd");
+    ctx.fill('evenodd');
     ctx.strokeStyle = `${col}1)`;
     ctx.lineWidth = 1.5;
     ctx.stroke();
@@ -85,9 +74,7 @@ export function CanvasView() {
   const layoutRef = useRef<SceneLayout | null>(null);
   const size = useRef({ w: 800, h: 600, dpr: 1 });
   const frame = useRef(0);
-  const pan = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(
-    null,
-  );
+  const pan = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
   /**
    * Touch und Apple Pencil (iPad):
    * - Stift zeichnet immer; sobald ein Stift benutzt wurde, zeichnen Finger nicht mehr
@@ -96,9 +83,7 @@ export function CanvasView() {
    * - Zwei Finger: Zoom und Verschieben; Zwei-Finger-Tipp = Rückgängig, Drei-Finger-Tipp = Wiederholen.
    * - Langes Drücken = Kontextmenü (Markierungsmenü).
    */
-  const touches = useRef(
-    new Map<number, { x: number; y: number; sx: number; sy: number }>(),
-  );
+  const touches = useRef(new Map<number, { x: number; y: number; sx: number; sy: number }>());
   const pinch = useRef<{
     d: number;
     mid: Vec2;
@@ -107,9 +92,7 @@ export function CanvasView() {
     cy: number;
     active: boolean;
   } | null>(null);
-  const gesture = useRef<
-    "none" | "pending" | "tool" | "pinch" | "pan1" | "menu" | "done"
-  >("none");
+  const gesture = useRef<'none' | 'pending' | 'tool' | 'pinch' | 'pan1' | 'menu' | 'done'>('none');
   const pending = useRef<{ id: number; ev: PointerLike } | null>(null);
   const timers = useRef<{ start?: number; long?: number }>({});
   const tap = useRef<{
@@ -137,7 +120,7 @@ export function CanvasView() {
     frame.current = 0;
     const c = canvasRef.current;
     if (!c) return;
-    const ctx = c.getContext("2d");
+    const ctx = c.getContext('2d');
     if (!ctx) return;
     const { dpr } = size.current;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -175,13 +158,7 @@ export function CanvasView() {
     (window as unknown as { __vdRenderNow?: () => void }).__vdRenderNow = draw;
     const u1 = app.store.subscribe(requestRender);
     const u2 = app.ui.subscribe((s, p) => {
-      if (
-        s.cursorWorld !== p.cursorWorld ||
-        s.dynValues !== p.dynValues ||
-        s.textEdit !== p.textEdit ||
-        s.preflight !== p.preflight
-      )
-        requestRender();
+      if (s.cursorWorld !== p.cursorWorld || s.dynValues !== p.dynValues || s.textEdit !== p.textEdit || s.preflight !== p.preflight) requestRender();
     });
     // Schriften geladen → neu zeichnen
     void document.fonts?.ready.then(requestRender);
@@ -230,9 +207,7 @@ export function CanvasView() {
       const v = vp();
       const world = toWorld(v, screen);
       const s = app.store.getState();
-      const snap = app.current.snaps
-        ? computeSnap(s.doc, v, s.settings, screen, { off: e.altKey })
-        : { pos: world, kind: null, ref: null };
+      const snap = app.current.snaps ? computeSnap(s.doc, v, s.settings, screen, { off: e.altKey }) : { pos: world, kind: null, ref: null };
       return {
         screen,
         world,
@@ -241,7 +216,7 @@ export function CanvasView() {
         shift: e.shiftKey,
         ctrl: e.ctrlKey || e.metaKey,
         alt: e.altKey,
-        pointerType: e.pointerType ?? "mouse",
+        pointerType: e.pointerType ?? 'mouse',
       };
     },
     [app, vp],
@@ -265,35 +240,29 @@ export function CanvasView() {
       const cy = before.y + (s.y - v.height / 2) / zoom;
       app.editor.setView({ zoom, cx, cy });
     };
-    c.addEventListener("wheel", onWheel, { passive: false });
-    return () => c.removeEventListener("wheel", onWheel);
+    c.addEventListener('wheel', onWheel, { passive: false });
+    return () => c.removeEventListener('wheel', onWheel);
   }, [app, vp]);
 
   // Leertaste = Verschieben
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (
-        e.code === "Space" &&
-        !(
-          e.target instanceof HTMLInputElement ||
-          e.target instanceof HTMLTextAreaElement
-        )
-      ) {
+      if (e.code === 'Space' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
         space.current = true;
-        if (canvasRef.current) canvasRef.current.style.cursor = "grab";
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
       }
     };
     const up = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
+      if (e.code === 'Space') {
         space.current = false;
-        if (canvasRef.current) canvasRef.current.style.cursor = "";
+        if (canvasRef.current) canvasRef.current.style.cursor = '';
       }
     };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
     return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
     };
   }, []);
 
@@ -308,7 +277,7 @@ export function CanvasView() {
     clearTimers();
     pending.current = null;
     pinch.current = null;
-    gesture.current = "done";
+    gesture.current = 'done';
   };
   const startPinch = () => {
     const pts = [...touches.current.values()];
@@ -328,7 +297,7 @@ export function CanvasView() {
     clearTimers();
     if (!p) return;
     pending.current = null;
-    gesture.current = "tool";
+    gesture.current = 'tool';
     try {
       canvasRef.current?.setPointerCapture(p.id);
     } catch {
@@ -372,26 +341,22 @@ export function CanvasView() {
         // Mit Stift: Finger verschiebt nur
         const v = app.store.getState().view;
         pan.current = { sx: e.clientX, sy: e.clientY, cx: v.cx, cy: v.cy };
-        gesture.current = "pan1";
+        gesture.current = 'pan1';
         return;
       }
-      gesture.current = "pending";
+      gesture.current = 'pending';
       pending.current = { id: e.pointerId, ev: snapshot(e) };
       timers.current.start = window.setTimeout(() => {
-        if (gesture.current === "pending" && !tap.current.moved) {
+        if (gesture.current === 'pending' && !tap.current.moved) {
           // Finger liegt still: erst Langdruck abwarten, wenn das Werkzeug nichts zieht
-          if (app.store.getState().tool !== "select") startTool();
+          if (app.store.getState().tool !== 'select') startTool();
         }
       }, 140);
       timers.current.long = window.setTimeout(() => {
-        if (
-          (gesture.current === "pending" || gesture.current === "tool") &&
-          !tap.current.moved &&
-          touches.current.size === 1
-        ) {
-          if (gesture.current === "tool") app.current.cancel?.();
+        if ((gesture.current === 'pending' || gesture.current === 'tool') && !tap.current.moved && touches.current.size === 1) {
+          if (gesture.current === 'tool') app.current.cancel?.();
           pending.current = null;
-          gesture.current = "menu";
+          gesture.current = 'menu';
           openMenuAt(tap.current.x, tap.current.y);
         }
       }, 550);
@@ -399,11 +364,11 @@ export function CanvasView() {
     }
     // Zwei oder drei Finger
     tap.current.max = Math.max(tap.current.max, n);
-    if (gesture.current === "tool") app.current.cancel?.();
+    if (gesture.current === 'tool') app.current.cancel?.();
     pan.current = null;
     clearTimers();
     pending.current = null;
-    gesture.current = "pinch";
+    gesture.current = 'pinch';
     if (n === 2) startPinch();
   };
 
@@ -414,19 +379,19 @@ export function CanvasView() {
     t.y = e.clientY;
     if (Math.hypot(t.x - t.sx, t.y - t.sy) > 10) tap.current.moved = true;
     switch (gesture.current) {
-      case "pending":
+      case 'pending':
         if (tap.current.moved) {
           startTool();
           app.current.pointerMove?.(toPointer(snapshot(e)));
         }
         return;
-      case "tool": {
+      case 'tool': {
         const p = toPointer(snapshot(e));
         app.ui.setState({ cursorWorld: p.snap.pos });
         app.current.pointerMove?.(p);
         return;
       }
-      case "pan1": {
+      case 'pan1': {
         const p = pan.current;
         if (!p) return;
         const z = app.store.getState().view.zoom;
@@ -436,28 +401,20 @@ export function CanvasView() {
         });
         return;
       }
-      case "pinch": {
+      case 'pinch': {
         const pc = pinch.current;
         if (!pc || touches.current.size < 2) return;
         const [a, b] = [...touches.current.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        if (
-          !pc.active &&
-          Math.abs(d - pc.d) < 8 &&
-          Math.hypot(mid.x - pc.mid.x, mid.y - pc.mid.y) < 8
-        )
-          return;
+        if (!pc.active && Math.abs(d - pc.d) < 8 && Math.hypot(mid.x - pc.mid.x, mid.y - pc.mid.y) < 8) return;
         pc.active = true;
         const r = canvasRef.current!.getBoundingClientRect();
         const m0 = { x: pc.mid.x - r.left, y: pc.mid.y - r.top };
         const m1 = { x: mid.x - r.left, y: mid.y - r.top };
         const { w, h } = size.current;
         // Weltpunkt unter der Anfangsmitte bleibt unter den Fingern
-        const W = toWorld(
-          { cx: pc.cx, cy: pc.cy, zoom: pc.zoom, width: w, height: h },
-          m0,
-        );
+        const W = toWorld({ cx: pc.cx, cy: pc.cy, zoom: pc.zoom, width: w, height: h }, m0);
         const zoom = clampZoom((pc.zoom * d) / Math.max(pc.d, 1));
         app.editor.setView({
           zoom,
@@ -473,50 +430,36 @@ export function CanvasView() {
     if (!touches.current.has(e.pointerId)) return;
     touches.current.delete(e.pointerId);
     const g = gesture.current;
-    if (
-      g === "pending" ||
-      (g === "tool" && !tap.current.moved && Date.now() - tap.current.t0 < 400)
-    ) {
+    if (g === 'pending' || (g === 'tool' && !tap.current.moved && Date.now() - tap.current.t0 < 400)) {
       // Kurzer Tipp: wie ein Klick; zwei Tipps kurz nacheinander = Doppelklick
-      if (g === "pending") startTool();
+      if (g === 'pending') startTool();
       const pe = toPointer(snapshot(e));
       app.current.pointerUp?.(pe);
       const lt = lastTap.current;
       const now = Date.now();
-      if (
-        lt &&
-        now - lt.t < 350 &&
-        Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 24
-      ) {
+      if (lt && now - lt.t < 350 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 24) {
         lastTap.current = null;
         app.current.doubleClick?.(pe);
       } else lastTap.current = { t: now, x: e.clientX, y: e.clientY };
-      gesture.current = "done";
-    } else if (g === "tool") {
+      gesture.current = 'done';
+    } else if (g === 'tool') {
       app.current.pointerUp?.(toPointer(snapshot(e)));
-      gesture.current = "done";
-    } else if (
-      g === "pinch" &&
-      touches.current.size === 2 &&
-      !pinch.current?.active
-    ) {
+      gesture.current = 'done';
+    } else if (g === 'pinch' && touches.current.size === 2 && !pinch.current?.active) {
       // von drei auf zwei Finger: Zoom neu ansetzen
       startPinch();
     }
     if (touches.current.size > 0) return;
     // Alle Finger weg: Tipp-Gesten auswerten
-    const quick =
-      !tap.current.moved &&
-      Date.now() - tap.current.t0 < 400 &&
-      !pinch.current?.active;
+    const quick = !tap.current.moved && Date.now() - tap.current.t0 < 400 && !pinch.current?.active;
     if (quick && tap.current.max === 2) void app.editor.undo();
     else if (quick && tap.current.max === 3) void app.editor.redo();
-    else if (quick && g === "pan1") openMenuAt(tap.current.x, tap.current.y);
+    else if (quick && g === 'pan1') openMenuAt(tap.current.x, tap.current.y);
     clearTimers();
     pan.current = null;
     pinch.current = null;
     pending.current = null;
-    gesture.current = "none";
+    gesture.current = 'none';
     lastTouchEnd.current = Date.now();
   };
 
@@ -525,21 +468,16 @@ export function CanvasView() {
     // Kein mousedown-Standardverhalten: sonst holt sich die Fläche den Fokus zurück, nachdem
     // ein Werkzeug gerade ein Eingabefeld (Maß, Text) geöffnet und fokussiert hat.
     e.preventDefault();
-    if (
-      document.activeElement instanceof HTMLElement &&
-      document.activeElement !== wrapRef.current
-    )
-      document.activeElement.blur();
+    if (document.activeElement instanceof HTMLElement && document.activeElement !== wrapRef.current) document.activeElement.blur();
     wrapRef.current?.focus({ preventScroll: true });
     if (app.ui.getState().marking) app.ui.setState({ marking: null });
-    if (e.pointerType === "pen") {
+    if (e.pointerType === 'pen') {
       penSeen.current = Date.now();
       penDown.current = true;
       // Stift hat Vorrang: laufende Finger-Gesten beenden
-      if (gesture.current === "pending" || gesture.current === "pan1")
-        resetTouch();
+      if (gesture.current === 'pending' || gesture.current === 'pan1') resetTouch();
     }
-    if (e.pointerType === "touch") {
+    if (e.pointerType === 'touch') {
       touchDown(e);
       return;
     }
@@ -548,7 +486,7 @@ export function CanvasView() {
       e.preventDefault();
       const v = app.store.getState().view;
       pan.current = { sx: e.clientX, sy: e.clientY, cx: v.cx, cy: v.cy };
-      c.style.cursor = "grabbing";
+      c.style.cursor = 'grabbing';
       return;
     }
     if (e.button === 2) {
@@ -559,7 +497,7 @@ export function CanvasView() {
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (e.pointerType === "touch") {
+    if (e.pointerType === 'touch') {
       touchMove(e);
       return;
     }
@@ -579,14 +517,14 @@ export function CanvasView() {
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (e.pointerType === "pen") penDown.current = false;
-    if (e.pointerType === "touch") {
+    if (e.pointerType === 'pen') penDown.current = false;
+    if (e.pointerType === 'touch') {
       touchUp(e);
       return;
     }
     if (pan.current) {
       pan.current = null;
-      canvasRef.current!.style.cursor = "";
+      canvasRef.current!.style.cursor = '';
       return;
     }
     if (e.button === 2 && right.current) {
@@ -615,14 +553,7 @@ export function CanvasView() {
     }
   };
 
-  const cursor =
-    tool === "select"
-      ? "default"
-      : DRAW_TOOLS.has(tool)
-        ? "crosshair"
-        : tool === "gradient"
-          ? "crosshair"
-          : "pointer";
+  const cursor = tool === 'select' ? 'default' : DRAW_TOOLS.has(tool) ? 'crosshair' : tool === 'gradient' ? 'crosshair' : 'pointer';
 
   return (
     <div
@@ -631,13 +562,10 @@ export function CanvasView() {
       tabIndex={-1}
       data-testid="canvas-wrap"
       onDragOver={(e) => {
-        if ([...e.dataTransfer.items].some((i) => i.kind === "file"))
-          e.preventDefault();
+        if ([...e.dataTransfer.items].some((i) => i.kind === 'file')) e.preventDefault();
       }}
       onDrop={(e) => {
-        const f = [...e.dataTransfer.files].find((x) =>
-          x.type.startsWith("image/"),
-        );
+        const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'));
         if (!f) return;
         e.preventDefault();
         const r = canvasRef.current!.getBoundingClientRect();
@@ -645,14 +573,7 @@ export function CanvasView() {
           x: e.clientX - r.left,
           y: e.clientY - r.top,
         });
-        void f
-          .arrayBuffer()
-          .then((b) =>
-            app.insertImage(
-              { name: f.name, data: new Uint8Array(b), mime: f.type },
-              at,
-            ),
-          );
+        void f.arrayBuffer().then((b) => app.insertImage({ name: f.name, data: new Uint8Array(b), mime: f.type }, at));
       }}
     >
       <canvas

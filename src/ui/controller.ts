@@ -11,6 +11,8 @@ import { ConstraintTool } from '../tools/constraintTool';
 import { GradientTool } from '../tools/gradientTool';
 import { CalibrateImageTool, MeasureTool, TrimExtendTool, type MeasureResult } from '../tools/editTools';
 import { readImageFile } from '../model/image';
+import { buildBridgePrompt, parseScript, runScript } from '../assistant/bridge';
+import type { AgentHost } from '../assistant/tools';
 import { preflightTargetFor, runPreflight, type PreflightResult, type PreflightTarget } from '../model/preflight';
 import { layersOf } from '../model/layers';
 import { SketchTool } from '../tools/sketchTool';
@@ -138,6 +140,7 @@ export class AppController {
   readonly editor: Editor;
   readonly ui: StoreApi<UiState>;
   readonly agent: Agent;
+  readonly agentHost: AgentHost;
   /** Verbindung zur geöffneten Projektdatei (Abgleich mit dem iPad) */
   readonly sync = new ProjectSync();
   private tools = new Map<string, Tool>();
@@ -214,13 +217,14 @@ export class AppController {
       snapExclude: () => {},
     };
     this.current = this.tool('select');
+    this.agentHost = {
+      editor: this.editor,
+      renderPreview: () => renderPreviewPng(this.editor.s.doc, 768),
+      openExport: (format, dpi) => this.openExport(format, dpi),
+      fitView: () => this.editor.zoomToFit(),
+    };
     this.agent = new Agent(
-      {
-        editor: this.editor,
-        renderPreview: () => renderPreviewPng(this.editor.s.doc, 768),
-        openExport: (format, dpi) => this.openExport(format, dpi),
-        fitView: () => this.editor.zoomToFit(),
-      },
+      this.agentHost,
       {
         apiKey: loadApiKey,
         model: loadModel,
@@ -816,6 +820,45 @@ export class AppController {
     } catch (e) {
       this.ui.setState({ busy: null });
       this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 8000);
+      return false;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Claude ohne API-Schlüssel (Abo-Brücke)
+  // -------------------------------------------------------------------------
+
+  private chatAdd(e: { role: ChatEntry['role']; text: string; images?: []; error?: boolean }): void {
+    const entry = { images: [], ...e, id: Date.now() + Math.random() } as unknown as ChatEntry;
+    this.ui.setState({ chat: [...this.ui.getState().chat, entry] });
+  }
+
+  /** Auftrag samt Zeichnung für claude.ai in die Zwischenablage legen. */
+  async copyBridgePrompt(request: string): Promise<string> {
+    const text = buildBridgePrompt(this.agentHost, request);
+    try {
+      await navigator.clipboard.writeText(text);
+      this.editor.toast('Auftrag kopiert – jetzt in claude.ai einfügen und senden.', 'success', 4000);
+    } catch {
+      this.editor.toast('Kopieren nicht erlaubt – bitte den Text im Feld markieren und kopieren.', 'info', 5000);
+    }
+    this.chatAdd({ role: 'user', text: request || '(Auftrag ohne Text)', images: [] });
+    this.chatAdd({ role: 'action', text: 'Auftrag für claude.ai kopiert – Antwort unten einfügen' });
+    return text;
+  }
+
+  /** Antwort aus claude.ai ausführen. */
+  async runBridgeReply(reply: string): Promise<boolean> {
+    try {
+      const steps = parseScript(reply);
+      const rep = await runScript(this.agentHost, steps);
+      const intro = reply.split('```')[0].trim();
+      if (intro) this.chatAdd({ role: 'assistant', text: intro.slice(0, 600) });
+      for (const l of rep.lines) this.chatAdd({ role: 'action', text: l.text, error: l.error });
+      this.editor.toast(`${rep.done} Schritt${rep.done === 1 ? '' : 'e'} ausgeführt${rep.failed ? `, ${rep.failed} fehlgeschlagen` : ''} – Strg+Z macht alles rückgängig.`, rep.failed ? 'info' : 'success', 4500);
+      return rep.failed === 0;
+    } catch (e) {
+      this.chatAdd({ role: 'error', text: e instanceof Error ? e.message : String(e) });
       return false;
     }
   }
