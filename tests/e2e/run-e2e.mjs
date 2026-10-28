@@ -1186,6 +1186,15 @@ await step('Bibliothek, Paletten, Format übertragen', async () => {
   const after = await app(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
   assert(after > before, 'Element nicht eingefügt');
   await shot('44-bibliothek');
+  // Druckbereich als Rahmen
+  await page.select('[data-testid="print-area"]', 'chest-left');
+  await app(() => {
+    document.activeElement?.blur();
+    window.vektordesign.editor.setView({ cx: 0, cy: 0, zoom: 3.2 });
+  });
+  await sleep(200);
+  await shot('45-druckbereich');
+  await page.select('[data-testid="print-area"]', '');
   results.push(`   Bibliothek: 1 Element, ${pals.length} Paletten; Format übertragen`);
 });
 

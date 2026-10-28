@@ -2720,3 +2720,13 @@ body {
   display: inline-block;
   cursor: default;
 }
+.rb-select {
+  display: grid;
+  gap: 4px;
+  font-size: 11.5px;
+  align-self: center;
+  padding: 0 6px;
+}
+.rb-select select {
+  max-width: 170px;
+}

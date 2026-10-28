@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { garmentOf } from '../model/garments';
+import { productionOf } from '../model/production';
 import {
   ShieldCheck,
   ImagePlus,
@@ -204,6 +206,27 @@ function EditRibbon() {
   );
 }
 
+/** Druckbereich des gewählten Kleidungsstücks als Rahmen auf der Arbeitsfläche. */
+function PrintAreaSelect() {
+  const app = useApp();
+  const doc = useAppState((s) => s.doc);
+  const area = useUi((s) => s.printArea);
+  const g = garmentOf(productionOf(doc).garment);
+  return (
+    <label className="rb-select" title="Druckbereich in echten Maßen als Rahmen anzeigen (wird nicht exportiert)">
+      <span>Druckbereich</span>
+      <select value={area ?? ''} onChange={(e) => app.ui.setState({ printArea: e.target.value || null })} data-testid="print-area">
+        <option value="">keiner</option>
+        {g.areas.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name} ({a.w} × {a.h})
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 const SYM_LABELS = { off: 'aus', v: 'senkrechte Achse', h: 'waagrechte Achse', vh: 'beide Achsen (4-fach)' } as const;
 const SYM_NEXT = { off: 'v', v: 'h', h: 'vh', vh: 'off' } as const;
 
@@ -404,6 +427,7 @@ function SketchRibbon() {
           <Small icon={<Ruler size={17} />} label="Bemaßungen anzeigen" active={settings.showDims} onClick={() => toggleSetting('showDims')} />
           <Small icon={<IconLine size={17} />} label="Skizzenlinien anzeigen (aus = reine Designvorschau)" active={settings.showOverlay} onClick={() => toggleSetting('showOverlay')} />
         </div>
+        <PrintAreaSelect />
       </Group>
 
       <Group title="Export">

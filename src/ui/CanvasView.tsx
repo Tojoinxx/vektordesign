@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { garmentOf } from '../model/garments';
+import { productionOf } from '../model/production';
+import { docBBox } from '../model/bounds';
 import type { Vec2 } from '../model/types';
 import { renderScene, type SceneLayout } from '../render/renderer';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
@@ -141,6 +144,7 @@ export function CanvasView() {
         cursor: ui.cursorWorld,
       },
       (cx, v) => {
+        drawPrintArea(cx, v, s.doc, ui.printArea);
         app.current.drawOverlay?.(cx, v);
         const sym = s.symmetry;
         if (sym !== 'off') {
@@ -200,7 +204,7 @@ export function CanvasView() {
     (window as unknown as { __vdRenderNow?: () => void }).__vdRenderNow = draw;
     const u1 = app.store.subscribe(requestRender);
     const u2 = app.ui.subscribe((s, p) => {
-      if (s.cursorWorld !== p.cursorWorld || s.dynValues !== p.dynValues || s.textEdit !== p.textEdit || s.preflight !== p.preflight) requestRender();
+      if (s.cursorWorld !== p.cursorWorld || s.dynValues !== p.dynValues || s.textEdit !== p.textEdit || s.preflight !== p.preflight || s.printArea !== p.printArea) requestRender();
     });
     // Schriften geladen → neu zeichnen
     void document.fonts?.ready.then(requestRender);
@@ -641,4 +645,26 @@ export function CanvasView() {
       <MarkingMenu />
     </div>
   );
+}
+
+/** Druckbereich als gestrichelter Rahmen um den Ursprung; rot, wenn das Motiv größer ist. */
+function drawPrintArea(cx: CanvasRenderingContext2D, v: Viewport, doc: import('../model/types').SketchDoc, areaId: string | null): void {
+  if (!areaId) return;
+  const a = garmentOf(productionOf(doc).garment).areas.find((x) => x.id === areaId);
+  if (!a) return;
+  const p0 = toScreen(v, { x: -a.w / 2, y: a.h / 2 });
+  const p1 = toScreen(v, { x: a.w / 2, y: -a.h / 2 });
+  const b = docBBox(doc);
+  const tooBig = !!b && (b.maxX - b.minX > a.w + 1e-6 || b.maxY - b.minY > a.h + 1e-6);
+  cx.save();
+  cx.strokeStyle = tooBig ? '#e03131' : '#e8590c';
+  cx.fillStyle = tooBig ? '#e03131' : '#e8590c';
+  cx.lineWidth = 1.5;
+  cx.setLineDash([10, 6]);
+  cx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+  cx.setLineDash([]);
+  cx.font = '600 12px system-ui, sans-serif';
+  const label = `${a.name} · ${a.w} × ${a.h} mm${tooBig && b ? ` – Motiv ${Math.round(b.maxX - b.minX)} × ${Math.round(b.maxY - b.minY)} mm ist zu groß` : ''}`;
+  cx.fillText(label, p0.x + 6, p0.y - 8);
+  cx.restore();
 }

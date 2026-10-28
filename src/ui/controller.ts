@@ -126,6 +126,8 @@ export interface UiState {
   costs: boolean;
   /** Vorlagen-Generator offen */
   generator: boolean;
+  /** Druckbereich als Rahmen auf der Arbeitsfläche (Bereichs-Id des Kleidungsstücks) */
+  printArea: string | null;
   /** iPad: fertige Datei, die per Knopf geteilt wird */
   shareReady: { name: string; share: () => Promise<void> } | null;
 }
@@ -242,6 +244,7 @@ export class AppController {
       screenPrint: false,
       costs: false,
       generator: false,
+      printArea: null,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
