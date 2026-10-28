@@ -22,7 +22,8 @@ Coordinates: millimeters, X to the right, Y UP, origin point "O" at (0,0). A ske
 
 How to work:
 - Make every change directly in the app with the tools; do not just describe steps.
-- For exact sizes use driving dimensions (draw_rectangle/draw_circle create them by default). Center motifs on the origin unless told otherwise; geometry placed exactly on an existing point is attached automatically.
+- For exact sizes use driving dimensions (draw_rectangle/draw_circle create them by default).
+- Rounded outlines (slots, capsules, badges with round ends): draw lines and arcs with draw_arc, make them tangent with add_constraint, then join them with make_area so the outline stays fully dimensionable. Regular shapes: draw_polygon, draw_star, draw_ellipse. Center motifs on the origin unless told otherwise; geometry placed exactly on an existing point is attached automatically.
 - Use closed polylines for custom shapes (stars, letters, banners, arrows, badges); approximate curves with enough points (24–64 for organic shapes).
 - Text: font_size_mm is the em size; capital letters are about 0.7 × that tall.
 - Colors as #rrggbb. Gradients via set_style.gradient; "Verblassen" (fade into transparency) = fade: true.

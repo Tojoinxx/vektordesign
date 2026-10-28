@@ -1,6 +1,7 @@
 import * as ClipperNS from 'clipper-lib';
 import type { Contour, Entity, SketchDoc, Vec2 } from './types';
-import { pathVertices, pt } from './doc';
+import { pt } from './doc';
+import { pathContour } from './arc';
 import { circleContour, flattenContour, polyArea, polygonContour, shapeWorldContours } from './shape';
 
 /**
@@ -44,7 +45,7 @@ export function entityContours(doc: SketchDoc, e: Entity): Contour[] | null {
       return [circleContour(c.x, c.y, e.r)];
     }
     case 'path':
-      return e.closed ? [polygonContour(pathVertices(doc, e))] : null;
+      return e.closed ? [pathContour(doc, e)] : null;
     case 'shape':
       return shapeWorldContours(doc, e).filter((c) => c.closed);
     default:

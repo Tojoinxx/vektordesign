@@ -3,6 +3,7 @@ import { addLine, dissolvePath, lineOf, pathOfLine, pt } from '../model/doc';
 import { shapeWorldPolys } from '../model/shape';
 import { pathVertices } from '../model/doc';
 import { isHidden } from '../model/layers';
+import { angleOnArc, arcGeom } from '../model/arc';
 
 /**
  * Stutzen und Dehnen von Linien (wie in Inventor): Schnittpunkte mit allen anderen sichtbaren
@@ -26,17 +27,23 @@ export function intersectionParams(doc: SketchDoc, lineId: Id, a: Vec2, b: Vec2,
   for (const e of Object.values(doc.entities)) {
     if (e.id === lineId || isHidden(doc, e.id)) continue;
     if (e.kind === 'line') seg(pt(doc, e.p1), pt(doc, e.p2));
-    else if (e.kind === 'circle') {
+    else if (e.kind === 'circle' || e.kind === 'arc') {
+      const ag = e.kind === 'arc' ? arcGeom(doc, e) : null;
       const c = pt(doc, e.center);
+      const er = ag ? ag.r : (e as { r: number }).r;
       const fx = a.x - c.x;
       const fy = a.y - c.y;
       const A = d.x * d.x + d.y * d.y;
       const B = 2 * (fx * d.x + fy * d.y);
-      const C = fx * fx + fy * fy - e.r * e.r;
+      const C = fx * fx + fy * fy - er * er;
       const disc = B * B - 4 * A * C;
       if (disc < 0 || A < 1e-18) continue;
       for (const s of [-1, 1]) {
         const t = (-B + s * Math.sqrt(disc)) / (2 * A);
+        if (ag) {
+          const q = lerp(a, b, t);
+          if (!angleOnArc(ag, Math.atan2(q.y - ag.c.y, q.x - ag.c.x))) continue;
+        }
         if (!segmentOnly || (t >= -1e-9 && t <= 1 + 1e-9)) out.push(t);
       }
     } else if (e.kind === 'shape') {

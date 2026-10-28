@@ -8,6 +8,11 @@ export type ToolId =
   | 'line'
   | 'rect'
   | 'circle'
+  | 'arc'
+  | 'ellipse'
+  | 'polygon'
+  | 'star'
+  | 'pen'
   | 'text'
   | 'point'
   | 'dimension'
@@ -91,6 +96,14 @@ export interface AppState {
   view: ViewState;
   tool: ToolId;
   rectMode: 'corner' | 'center';
+  /** Bogen über 3 Punkte oder vom Mittelpunkt */
+  arcMode: '3p' | 'center';
+  /** Vieleck: Ecken auf dem Kreis (Umkreis) oder Kanten berühren ihn (Inkreis) */
+  polygonMode: 'circumscribed' | 'inscribed';
+  polygonSides: number;
+  starPoints: number;
+  /** Innenradius / Außenradius */
+  starRatio: number;
   /** Neue Geometrie als Konstruktionsgeometrie zeichnen */
   constructionMode: boolean;
   settings: Settings;
@@ -149,6 +162,11 @@ export function initialState(): AppState {
     view: { cx: 0, cy: 0, zoom: 4 },
     tool: 'select',
     rectMode: 'corner',
+    arcMode: '3p',
+    polygonMode: 'circumscribed',
+    polygonSides: 6,
+    starPoints: 5,
+    starRatio: 0.45,
     constructionMode: false,
     settings: { ...DEFAULT_SETTINGS },
     currentStyle: { ...DEFAULT_STYLE },

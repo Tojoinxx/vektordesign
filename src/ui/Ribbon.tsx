@@ -1,5 +1,26 @@
 import type { ReactNode } from 'react';
-import { ShieldCheck, ImagePlus, ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Copy, FileImage, FileCode2, FileText, FileDown, Grid3x3, Maximize, Palette, Ruler, Sparkles, Trash2, Eye, EyeOff, Magnet } from 'lucide-react';
+import {
+  ShieldCheck,
+  ImagePlus,
+  ArrowDownToLine,
+  ArrowUpToLine,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  FileImage,
+  FileCode2,
+  FileText,
+  FileDown,
+  Grid3x3,
+  Maximize,
+  Palette,
+  Ruler,
+  Sparkles,
+  Trash2,
+  Eye,
+  EyeOff,
+  Magnet,
+} from 'lucide-react';
 import type { ConstraintKind } from '../model/types';
 import { CONSTRAINT_LABELS } from '../solver/analysis';
 import type { ToolId } from '../store/state';
@@ -36,6 +57,13 @@ import {
   IconSubtract,
   IconIntersect,
   IconExclude,
+  IconArc3,
+  IconArcCenter,
+  IconEllipse,
+  IconPolygon,
+  IconStar,
+  IconPen,
+  IconProfile,
 } from './icons';
 import type { EditCommand } from './controller';
 import { useUi } from './hooks';
@@ -92,7 +120,13 @@ export function Ribbon() {
           Bearbeiten
         </button>
         <span className="spacer" />
-        <button className="ribbon-collapse" onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Werkzeugband einblenden' : 'Werkzeugband einklappen (mehr Platz zum Zeichnen)'} aria-label={collapsed ? 'Werkzeugband einblenden' : 'Werkzeugband einklappen'} data-testid="ribbon-collapse">
+        <button
+          className="ribbon-collapse"
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? 'Werkzeugband einblenden' : 'Werkzeugband einklappen (mehr Platz zum Zeichnen)'}
+          aria-label={collapsed ? 'Werkzeugband einblenden' : 'Werkzeugband einklappen'}
+          data-testid="ribbon-collapse"
+        >
           {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
         </button>
       </div>
@@ -161,6 +195,8 @@ function SketchRibbon() {
   const app = useApp();
   const tool = useAppState((s) => s.tool);
   const rectMode = useAppState((s) => s.rectMode);
+  const arcMode = useAppState((s) => s.arcMode);
+  const polygonMode = useAppState((s) => s.polygonMode);
   const construction = useAppState((s) => s.constructionMode);
   const settings = useAppState((s) => s.settings);
   const hasSel = useAppState((s) => s.selection.length > 0);
@@ -198,12 +234,70 @@ function SketchRibbon() {
           </div>
         </div>
         <Big icon={<IconCircle />} label="Kreis" kbd="C" active={tool === 'circle'} onClick={() => set('circle')} testId="tool-circle" />
+        <div className="rb-split">
+          <Big icon={arcMode === 'center' ? <IconArcCenter /> : <IconArc3 />} label="Bogen" kbd="A" active={tool === 'arc'} onClick={() => set('arc')} testId="tool-arc" />
+          <div className="rb-split-modes">
+            <Small
+              icon={<IconArc3 size={16} />}
+              label="Bogen durch 3 Punkte"
+              active={arcMode === '3p'}
+              onClick={() => {
+                app.store.setState({ arcMode: '3p' });
+                set('arc');
+              }}
+              testId="arc-mode-3p"
+            />
+            <Small
+              icon={<IconArcCenter size={16} />}
+              label="Bogen vom Mittelpunkt"
+              active={arcMode === 'center'}
+              onClick={() => {
+                app.store.setState({ arcMode: 'center' });
+                set('arc');
+              }}
+              testId="arc-mode-center"
+            />
+          </div>
+        </div>
+        <div className="rb-col">
+          <Small icon={<IconEllipse size={18} />} label="Ellipse" active={tool === 'ellipse'} onClick={() => set('ellipse')} testId="tool-ellipse" />
+          <Small
+            icon={<IconPolygon size={18} />}
+            label={`Vieleck (${polygonMode === 'inscribed' ? 'Inkreis' : 'Umkreis'}) – erneut klicken wechselt`}
+            kbd="N"
+            active={tool === 'polygon'}
+            onClick={() => {
+              if (tool === 'polygon') app.store.setState({ polygonMode: polygonMode === 'inscribed' ? 'circumscribed' : 'inscribed' });
+              set('polygon');
+            }}
+            testId="tool-polygon"
+          />
+        </div>
+        <div className="rb-col">
+          <Small icon={<IconStar size={18} />} label="Stern" active={tool === 'star'} onClick={() => set('star')} testId="tool-star" />
+          <Small icon={<IconPen size={18} />} label="Zeichenstift (Bézierpfad)" kbd="B" active={tool === 'pen'} onClick={() => set('pen')} testId="tool-pen" />
+        </div>
         <Big icon={<IconText />} label="Text" kbd="T" active={tool === 'text'} onClick={() => set('text')} testId="tool-text" />
         <Big icon={<IconSketch />} label="Freihand" kbd="S" active={tool === 'sketch'} onClick={() => set('sketch')} testId="tool-sketch" />
         <Big icon={<ImagePlus size={24} strokeWidth={1.75} />} label="Bild" onClick={() => void app.insertImage()} testId="insert-image" />
         <div className="rb-col">
           <Small icon={<IconPoint size={18} />} label="Punkt" kbd="P" active={tool === 'point'} onClick={() => set('point')} />
-          <Small icon={<IconConstruction size={18} />} label="Neue Geometrie als Konstruktion (gestrichelt, nicht exportiert)" active={construction} onClick={() => app.store.setState({ constructionMode: !construction })} />
+          <Small
+            icon={<IconProfile size={18} />}
+            label="Geschlossene Fläche aus gewählten Linien und Bögen"
+            onClick={() => {
+              const out = app.editor.createProfile(app.editor.s.selection);
+              if (!out.ok) app.editor.toast(out.message, 'error', 6000);
+              else if (out.pathId) app.editor.select([out.pathId]);
+            }}
+            testId="draw-profile"
+          />
+          <Small
+            icon={<IconConstruction size={18} />}
+            label="Neue Geometrie als Konstruktion (gestrichelt, nicht exportiert)"
+            active={construction}
+            onClick={() => app.store.setState({ constructionMode: !construction })}
+          />
         </div>
       </Group>
 
@@ -225,8 +319,20 @@ function SketchRibbon() {
           ))}
         </div>
         <div className="rb-col">
-          <Small icon={<Eye size={17} />} label="Alle Abhängigkeiten anzeigen" kbd="F8" active={settings.showGlyphs} onClick={() => app.store.setState({ settings: { ...settings, showGlyphs: true } })} />
-          <Small icon={<EyeOff size={17} />} label="Abhängigkeiten ausblenden" kbd="F9" active={!settings.showGlyphs} onClick={() => app.store.setState({ settings: { ...settings, showGlyphs: false } })} />
+          <Small
+            icon={<Eye size={17} />}
+            label="Alle Abhängigkeiten anzeigen"
+            kbd="F8"
+            active={settings.showGlyphs}
+            onClick={() => app.store.setState({ settings: { ...settings, showGlyphs: true } })}
+          />
+          <Small
+            icon={<EyeOff size={17} />}
+            label="Abhängigkeiten ausblenden"
+            kbd="F9"
+            active={!settings.showGlyphs}
+            onClick={() => app.store.setState({ settings: { ...settings, showGlyphs: false } })}
+          />
         </div>
       </Group>
 

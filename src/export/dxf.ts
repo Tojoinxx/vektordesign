@@ -75,6 +75,20 @@ export function exportDxf(scene: ExportScene, opts: { mirror?: boolean; toleranc
         g(40, n(it.circle.r));
         continue;
       }
+      if (it.arc) {
+        // Gespiegelt kehrt sich die Laufrichtung um: Winkel an der Senkrechten spiegeln
+        const start = opts.mirror ? 180 - it.arc.end : it.arc.start;
+        const end = opts.mirror ? 180 - it.arc.start : it.arc.end;
+        g(0, 'ARC');
+        g(8, ln);
+        g(10, n(X(it.arc.c.x)));
+        g(20, n(Y(it.arc.c.y)));
+        g(30, 0);
+        g(40, n(it.arc.r));
+        g(50, n(((start % 360) + 360) % 360));
+        g(51, n(((end % 360) + 360) % 360));
+        continue;
+      }
       for (const c of it.contours) {
         const pts = flattenContour(c, tol);
         if (pts.length < 2) continue;

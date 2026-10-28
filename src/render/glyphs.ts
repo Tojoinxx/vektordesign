@@ -1,4 +1,5 @@
 import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
+import { arcGeom, arcMidpoint, arcOf, roundOf } from '../model/arc';
 import { circleOf, lineOf, pt } from '../model/doc';
 import { THEME } from './theme';
 import { toScreen, type Viewport } from './viewport';
@@ -21,8 +22,20 @@ export const GLYPH = 16;
  * Ordnet Glyphen an. `only` beschränkt auf Abhängigkeiten, die diese Ids betreffen
  * (z. B. Auswahl, wenn Glyphen ausgeblendet sind).
  */
-export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>): GlyphItem[] {
+export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>, focus?: Set<Id>): GlyphItem[] {
   const out: GlyphItem[] = [];
+  // Ausgewählte Objekte samt ihren Kanten und Punkten (für leise Abhängigkeiten)
+  const near = new Set<Id>();
+  for (const id of focus ?? []) {
+    near.add(id);
+    const e = doc.entities[id];
+    if (e?.kind === 'path') for (const ed of e.edges) near.add(ed.id);
+  }
+  for (const id of [...near]) {
+    const e = doc.entities[id];
+    if (!e) continue;
+    for (const p of Object.values(doc.points)) if (p.owner === id) near.add(p.id);
+  }
   const stack = new Map<string, number>();
   const nextIndex = (key: string) => {
     const n = stack.get(key) ?? 0;
@@ -61,6 +74,19 @@ export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>): Glyp
     const base = { x: ctr.x + r * 0.7071 + 12, y: ctr.y + r * 0.7071 + 12 };
     return (i) => ({ x: base.x + i * (GLYPH + 3), y: base.y });
   };
+  const arcAnchor = (aid: Id): ((i: number) => Vec2) | null => {
+    const a = arcOf(doc, aid);
+    if (!a) return null;
+    const g = arcGeom(doc, a);
+    if (g.r * vp.zoom < 10 && !only) return null;
+    const m = toScreen(vp, arcMidpoint(g));
+    const c = toScreen(vp, g.c);
+    const len = Math.hypot(m.x - c.x, m.y - c.y) || 1;
+    const nx = (m.x - c.x) / len;
+    const ny = (m.y - c.y) / len;
+    const base = { x: m.x + nx * 16, y: m.y + ny * 16 };
+    return (i) => ({ x: base.x + i * (GLYPH + 3), y: base.y });
+  };
   const pointAnchor = (pid: Id): ((i: number) => Vec2) | null => {
     const p = doc.points[pid];
     if (!p) return null;
@@ -71,11 +97,13 @@ export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>): Glyp
     if (doc.points[id]) return pointAnchor(id);
     if (lineOf(doc, id)) return lineAnchor(id);
     if (circleOf(doc, id)) return circleAnchor(id);
+    if (arcOf(doc, id)) return arcAnchor(id);
     return null;
   };
 
   for (const c of Object.values(doc.constraints)) {
     if (only && !c.refs.some((r) => only.has(r)) && !only.has(c.id)) continue;
+    if (c.quiet && !c.refs.some((r) => near.has(r)) && !near.has(c.id)) continue;
     if (c.refs.some((r) => isHidden(doc, r))) continue;
     const r = c.refs;
     const push = (targetId: Id) => {
@@ -93,7 +121,7 @@ export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>): Glyp
         break;
       }
       case 'concentric': {
-        const ctr = circleOf(doc, r[0])?.center ?? r[0];
+        const ctr = roundOf(doc, r[0])?.center ?? r[0];
         push(ctr);
         break;
       }

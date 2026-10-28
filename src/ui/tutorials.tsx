@@ -11,6 +11,11 @@ export type TutorialId =
   | 'line'
   | 'rect'
   | 'circle'
+  | 'arc'
+  | 'polygon'
+  | 'star'
+  | 'ellipse'
+  | 'pen'
   | 'text'
   | 'point'
   | 'dimension'
@@ -132,7 +137,13 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
     anim: () => (
       <Frame>
         <path fill={K.freeFill} stroke={K.free} strokeWidth="2">
-          <animate attributeName="d" values="M62 96 L168 101 L162 44 L70 38 Z;M62 96 L168 101 L162 44 L70 38 Z;M60 100 L180 100 L180 40 L60 40 Z;M60 100 L180 100 L180 40 L60 40 Z" keyTimes="0;0.35;0.55;1" dur={DUR} repeatCount="indefinite" />
+          <animate
+            attributeName="d"
+            values="M62 96 L168 101 L162 44 L70 38 Z;M62 96 L168 101 L162 44 L70 38 Z;M60 100 L180 100 L180 40 L60 40 Z;M60 100 L180 100 L180 40 L60 40 Z"
+            keyTimes="0;0.35;0.55;1"
+            dur={DUR}
+            repeatCount="indefinite"
+          />
           <animate attributeName="stroke" values={`${K.free};${K.free};${K.ink};${K.ink}`} keyTimes="0;0.55;0.6;1" dur={DUR} repeatCount="indefinite" />
         </path>
         <Tag x={120} y={118} text="80" show="0;0;1;1" />
@@ -180,7 +191,14 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
     anim: () => (
       <Frame>
         <path fill="none" stroke={K.free} strokeWidth="2" strokeLinejoin="round">
-          <animate attributeName="d" values="M50 100 L50 100;M50 100 L130 100;M50 100 L130 100 L130 40;M50 100 L130 100 L130 40 L50 100;M50 100 L130 100 L130 40 L50 100" keyTimes="0;0.25;0.5;0.75;1" dur={DUR} repeatCount="indefinite" calcMode="discrete" />
+          <animate
+            attributeName="d"
+            values="M50 100 L50 100;M50 100 L130 100;M50 100 L130 100 L130 40;M50 100 L130 100 L130 40 L50 100;M50 100 L130 100 L130 40 L50 100"
+            keyTimes="0;0.25;0.5;0.75;1"
+            dur={DUR}
+            repeatCount="indefinite"
+            calcMode="discrete"
+          />
         </path>
         <path d="M50 100 L130 100 L130 40 Z" fill={K.freeFill} opacity="0">
           <animate attributeName="opacity" values="0;0;0;1" keyTimes="0;0.5;0.75;1" dur={DUR} repeatCount="indefinite" calcMode="discrete" />
@@ -219,6 +237,80 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
         <path d="M116 70 h8 M120 66 v8" stroke={K.ink} strokeWidth="1.5" />
         <Tag x={120} y={128} text="Ø80" show="0;0;1;1" />
         <Cursor path="120 70;120 70;160 70;160 70" times="0;0.2;0.6;1" click="0;12;0;0" />
+      </Frame>
+    ),
+  },
+  arc: {
+    title: 'Bogen',
+    steps: [
+      '3 Punkte: Start klicken, Ende klicken, dann mit der Maus die Wölbung zeigen und klicken – oder den Radius eintippen.',
+      'Vom Mittelpunkt (Werkzeugmenü): Mittelpunkt, Startpunkt, dann in Drehrichtung zum Ende fahren.',
+      'Bögen lassen sich wie Kreise bemaßen und tangential an Linien legen. Linien und Bögen ergeben über „Geschlossene Fläche“ eine füllbare Kontur.',
+    ],
+    anim: () => (
+      <Frame>
+        <path d="M70 100 A55 55 0 0 1 170 100" fill="none" stroke={K.free} strokeWidth="2" strokeDasharray="180" strokeDashoffset="180">
+          <animate attributeName="stroke-dashoffset" values="180;180;180;0;0" keyTimes="0;0.2;0.45;0.75;1" dur={DUR} repeatCount="indefinite" />
+        </path>
+        <Tag x={120} y={30} text="R55" show="0;0;0;1;1" />
+        <Cursor path="70 100;170 100;120 50;120 50" times="0;0.3;0.7;1" click="12;12;12;0" />
+      </Frame>
+    ),
+  },
+  polygon: {
+    title: 'Vieleck',
+    steps: [
+      'Mittelpunkt klicken, dann eine Ecke. Eckenzahl eintippen, Tab → Durchmesser, Enter.',
+      'Erneuter Klick auf das Werkzeug wechselt zwischen Umkreis (Ecken auf dem Kreis) und Inkreis (Schlüsselweite).',
+    ],
+    anim: () => (
+      <Frame>
+        <circle cx="120" cy="70" r="45" fill="none" stroke={K.ink} strokeOpacity="0.4" strokeDasharray="4 3" />
+        <path d="M120 25 L159 47.5 L159 92.5 L120 115 L81 92.5 L81 47.5 Z" fill={K.freeFill} stroke={K.free} strokeWidth="2" opacity="0">
+          <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.4;0.6;1" dur={DUR} repeatCount="indefinite" />
+        </path>
+        <Tag x={190} y={30} text="6 · Ø90" show="0;0;1;1" />
+        <Cursor path="120 70;120 70;120 25;120 25" times="0;0.2;0.6;1" click="0;12;0;0" />
+      </Frame>
+    ),
+  },
+  star: {
+    title: 'Stern',
+    steps: ['Mittelpunkt klicken, dann die Spitze. Zacken, Ø außen und Ø innen eintippen (Tab wechselt).', 'Beide Durchmesser bleiben als Bemaßung erhalten und lassen sich später ändern.'],
+    anim: () => (
+      <Frame>
+        <path d="M120 22 L131 55 L166 55 L138 76 L149 110 L120 89 L91 110 L102 76 L74 55 L109 55 Z" fill={K.freeFill} stroke={K.free} strokeWidth="2" opacity="0">
+          <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.4;0.6;1" dur={DUR} repeatCount="indefinite" />
+        </path>
+        <Cursor path="120 70;120 70;120 22;120 22" times="0;0.2;0.6;1" click="0;12;0;0" />
+      </Frame>
+    ),
+  },
+  ellipse: {
+    title: 'Ellipse',
+    steps: ['Mittelpunkt klicken, dann eine Ecke des umschließenden Rechtecks.', 'Breite eintippen, Tab → Höhe, Enter. Die Ellipse ist eine Form und lässt sich gleichmäßig über ihre Breite bemaßen.'],
+    anim: () => (
+      <Frame>
+        <ellipse cx="120" cy="70" rx="0" ry="0" fill={K.freeFill} stroke={K.free} strokeWidth="2">
+          <animate attributeName="rx" values="0;0;60;60" keyTimes="0;0.2;0.6;1" dur={DUR} repeatCount="indefinite" />
+          <animate attributeName="ry" values="0;0;32;32" keyTimes="0;0.2;0.6;1" dur={DUR} repeatCount="indefinite" />
+        </ellipse>
+        <Cursor path="120 70;120 70;180 102;180 102" times="0;0.2;0.6;1" click="0;12;0;0" />
+      </Frame>
+    ),
+  },
+  pen: {
+    title: 'Zeichenstift',
+    steps: [
+      'Klicken setzt eine Ecke, Klicken und Ziehen eine Kurve mit Griffen.',
+      'Klick auf den ersten Punkt schließt die Form, Enter beendet einen offenen Pfad, Rücktaste nimmt den letzten Punkt zurück.',
+    ],
+    anim: () => (
+      <Frame>
+        <path d="M60 100 C80 30 160 30 180 100" fill="none" stroke={K.free} strokeWidth="2" strokeDasharray="200" strokeDashoffset="200">
+          <animate attributeName="stroke-dashoffset" values="200;200;0;0" keyTimes="0;0.3;0.7;1" dur={DUR} repeatCount="indefinite" />
+        </path>
+        <Cursor path="60 100;120 47;180 100;180 100" times="0;0.35;0.7;1" click="12;12;12;0" />
       </Frame>
     ),
   },

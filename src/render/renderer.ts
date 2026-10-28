@@ -1,11 +1,12 @@
 import { imageCorners } from '../model/image';
+import { arcGeom, pathContour } from '../model/arc';
 import type { Dimension, Entity, Id, SketchDoc, Vec2 } from '../model/types';
 import { ORIGIN_ID } from '../model/types';
 import { lineOf, pt } from '../model/doc';
 import { measureText } from '../model/textMetrics';
 import type { Analysis } from '../solver/analysis';
 import type { Settings } from '../store/state';
-import { drawDesign } from './drawDesign';
+import { drawDesign, traceContour } from './drawDesign';
 import { shapeWorldPolys } from '../model/shape';
 import { isHidden } from '../model/layers';
 import { dimGeometry, type DimGeom } from './dimGeometry';
@@ -66,7 +67,7 @@ export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp
   if (settings.showDims) layout.dims = drawDimensions(ctx, s, problems.items);
   const only = settings.showGlyphs ? undefined : s.selection;
   if (settings.showGlyphs || s.selection.size) {
-    layout.glyphs = layoutGlyphs(doc, vp, only);
+    layout.glyphs = layoutGlyphs(doc, vp, only, s.selection);
     drawGlyphs(ctx, layout.glyphs, { hover: s.hover, selection: s.selection, problems: problems.items });
   }
   drawOrigin(ctx, vp, s.hover === ORIGIN_ID || s.selection.has(ORIGIN_ID));
@@ -217,6 +218,8 @@ function isFree(s: SceneState, e: Entity): boolean {
     }
     case 'circle':
       return fp.has(e.center) || a.free.circles.has(e.id);
+    case 'arc':
+      return fp.has(e.center) || fp.has(e.p1) || fp.has(e.p2);
     case 'text':
     case 'shape':
     case 'image':
@@ -236,14 +239,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     if (e.kind !== 'path' || isHidden(doc, e.id)) continue;
     if (!(s.selection.has(e.id) || s.hover === e.id)) continue;
     ctx.beginPath();
-    e.edges.forEach((ed, i) => {
-      const l = lineOf(doc, ed.id);
-      if (!l) return;
-      const a = T(pt(doc, ed.reversed ? l.p2 : l.p1));
-      if (i === 0) ctx.moveTo(a.x, a.y);
-      else ctx.lineTo(a.x, a.y);
-    });
-    ctx.closePath();
+    traceContour(ctx, T, { ...pathContour(doc, e), closed: true });
     ctx.fillStyle = s.selection.has(e.id) ? THEME.selectedFill : THEME.hoverFill;
     ctx.fill();
   }
@@ -307,6 +303,13 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
       const b = T(pt(doc, e.p2));
       path.moveTo(a.x, a.y);
       path.lineTo(b.x, b.y);
+    } else if (e.kind === 'arc') {
+      const g = arcGeom(doc, e);
+      const c = T(g.c);
+      const a = T(g.p1);
+      // Bildschirm: y nach unten → Winkel spiegeln, Richtung umkehren
+      path.moveTo(a.x, a.y);
+      path.arc(c.x, c.y, Math.max(g.r * vp.zoom, 0.5), -g.a0, -(g.a0 + g.sweep), true);
     } else {
       const c = T(pt(doc, e.center));
       const r = Math.max(e.r * vp.zoom, 0.5);
@@ -353,7 +356,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     if (problems.has(p.id)) color = THEME.conflict;
     if (hov) color = THEME.hover;
     if (sel) color = THEME.selected;
-    const isCenter = owner?.kind === 'circle' || (p.construction && !owner) || owner?.kind === 'path' || owner?.kind === 'shape' || owner?.kind === 'image';
+    const isCenter = owner?.kind === 'circle' || (owner?.kind === 'arc' && owner.center === p.id) || (p.construction && !owner) || owner?.kind === 'path' || owner?.kind === 'shape' || owner?.kind === 'image';
     const r = sel || hov ? 4 : 2.6;
     if (isCenter || p.construction) {
       const c = get(crosses, color);

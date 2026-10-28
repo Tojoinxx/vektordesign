@@ -1,5 +1,6 @@
 import type { Entity, Id, SketchDoc } from './types';
 import { lineOf, pathVertices, pt } from './doc';
+import { arcBBox, arcGeom } from './arc';
 import { bboxAddPoint, bboxValid, emptyBBox, type BBox } from './geometry';
 import { measureText } from './textMetrics';
 import { contoursBBox, shapeWorldContours } from './shape';
@@ -29,8 +30,21 @@ export function entityBBox(doc: SketchDoc, e: Entity, includeStroke = false): BB
       bboxAddPoint(b, { x: a.x + m.right, y: a.y + m.ascent }, pad);
       break;
     }
+    case 'arc': {
+      const ab = arcBBox(arcGeom(doc, e));
+      bboxAddPoint(b, { x: ab.minX, y: ab.minY }, pad);
+      bboxAddPoint(b, { x: ab.maxX, y: ab.maxY }, pad);
+      break;
+    }
     case 'path': {
       for (const v of pathVertices(doc, e)) bboxAddPoint(b, v, pad);
+      for (const edge of e.edges) {
+        const a = doc.entities[edge.id];
+        if (a?.kind !== 'arc') continue;
+        const ab = arcBBox(arcGeom(doc, a));
+        bboxAddPoint(b, { x: ab.minX, y: ab.minY }, pad);
+        bboxAddPoint(b, { x: ab.maxX, y: ab.maxY }, pad);
+      }
       break;
     }
     case 'image': {

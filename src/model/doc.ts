@@ -1,4 +1,5 @@
 import type {
+  ArcEntity,
   CircleEntity,
   Constraint,
   ConstraintKind,
@@ -68,6 +69,8 @@ export function entityPointIds(doc: SketchDoc, e: Entity): Id[] {
       return [e.p1, e.p2];
     case 'circle':
       return [e.center];
+    case 'arc':
+      return [e.center, e.p1, e.p2];
     case 'text':
     case 'shape':
     case 'image':
@@ -75,8 +78,9 @@ export function entityPointIds(doc: SketchDoc, e: Entity): Id[] {
     case 'path': {
       const ids: Id[] = [];
       for (const edge of e.edges) {
-        const l = lineOf(doc, edge.id);
-        if (l) ids.push(l.p1, l.p2);
+        const l = doc.entities[edge.id];
+        if (l?.kind === 'line') ids.push(l.p1, l.p2);
+        else if (l?.kind === 'arc') ids.push(l.center, l.p1, l.p2);
       }
       for (const p of Object.values(doc.points)) if (p.owner === e.id) ids.push(p.id);
       return ids;
@@ -95,14 +99,18 @@ export function pathOfLine(doc: SketchDoc, lineId: Id): PathEntity | undefined {
 /** Eckpunkte eines Pfads in Durchlaufrichtung (Startpunkte der Kanten). */
 export function pathVertices(doc: SketchDoc, path: PathEntity): Vec2[] {
   const out: Vec2[] = [];
+  const edgeOf = (id: Id) => {
+    const e = doc.entities[id];
+    return e && (e.kind === 'line' || e.kind === 'arc') ? e : undefined;
+  };
   for (const edge of path.edges) {
-    const l = lineOf(doc, edge.id);
+    const l = edgeOf(edge.id);
     if (!l) continue;
     out.push(pt(doc, edge.reversed ? l.p2 : l.p1));
   }
   if (!path.closed && path.edges.length) {
     const last = path.edges[path.edges.length - 1];
-    const l = lineOf(doc, last.id);
+    const l = edgeOf(last.id);
     if (l) out.push(pt(doc, last.reversed ? l.p1 : l.p2));
   }
   return out;
@@ -159,6 +167,20 @@ export function addCircle(d: SketchDoc, c: Vec2, r: number, style: Style = DEFAU
   d.entities[id] = circle;
   d.order.push(id);
   return circle;
+}
+
+/** Bogen gegen den Uhrzeigersinn von a nach b um c (b wird auf den Radius |c−a| gelegt). */
+export function addArc(d: SketchDoc, c: Vec2, a: Vec2, b: Vec2, style: Style = DEFAULT_STYLE, construction = false): ArcEntity {
+  const id = newId(d, 'a');
+  const r = Math.hypot(a.x - c.x, a.y - c.y);
+  const ang = Math.atan2(b.y - c.y, b.x - c.x);
+  const center = addPoint(d, c, { owner: id });
+  const p1 = addPoint(d, a, { owner: id });
+  const p2 = addPoint(d, { x: c.x + r * Math.cos(ang), y: c.y + r * Math.sin(ang) }, { owner: id });
+  const arc: ArcEntity = { id, kind: 'arc', center, p1, p2, construction, style: { ...style, fill: null } };
+  d.entities[id] = arc;
+  d.order.push(id);
+  return arc;
 }
 
 export interface TextInit {
@@ -294,7 +316,7 @@ export function dissolvePath(d: SketchDoc, pathId: Id, deleting: Set<Id> = new S
   const lines: Id[] = [];
   for (const edge of path.edges) {
     const l = d.entities[edge.id];
-    if (l && l.kind === 'line' && !deleting.has(edge.id)) {
+    if (l && (l.kind === 'line' || l.kind === 'arc') && !deleting.has(edge.id)) {
       l.style = { ...path.style, fill: null };
       lines.push(edge.id);
     }
@@ -314,6 +336,10 @@ export function fixValuesFor(d: SketchDoc, refId: Id): number[] | null {
   if (e?.kind === 'circle') {
     const c = pt(d, e.center);
     return [c.x, c.y, e.r];
+  }
+  if (e?.kind === 'arc') {
+    const [c, a, b] = [pt(d, e.center), pt(d, e.p1), pt(d, e.p2)];
+    return [c.x, c.y, a.x, a.y, b.x, b.y];
   }
   return null;
 }

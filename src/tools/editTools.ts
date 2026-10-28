@@ -1,4 +1,5 @@
 import type { Id, Vec2 } from '../model/types';
+import { arcGeom, arcOf, pathContour, pathHasArcs } from '../model/arc';
 import { lineOf, pt } from '../model/doc';
 import { entityArea, areaOf } from '../model/boolean';
 import { entityBBox } from '../model/bounds';
@@ -131,6 +132,17 @@ export class MeasureTool implements Tool {
       this.last = null;
       return;
     }
+    if (hit?.kind === 'arc') {
+      const ar = arcOf(doc, hit.id);
+      if (ar) {
+        const g = arcGeom(doc, ar);
+        const deg = (g.sweep * 180) / Math.PI;
+        this.last = null;
+        this.first = null;
+        this.show({ title: 'Bogen', rows: [['Radius', mm(g.r)], ['Durchmesser', mm(2 * g.r)], ['Öffnungswinkel', `${formatNumber(deg, 2)}°`], ['Bogenlänge', mm(g.r * g.sweep)], ['Sehne', mm(Math.hypot(g.p2.x - g.p1.x, g.p2.y - g.p1.y))]] });
+        return;
+      }
+    }
     if (hit?.kind === 'line') {
       this.first = { kind: 'line', id: hit.id };
       const l = lineOf(doc, hit.id)!;
@@ -207,7 +219,7 @@ export class MeasureTool implements Tool {
     if (area) rows.push(['Fläche', `${formatNumber(areaOf(area), 2)} mm²`]);
     let perim = 0;
     if (e.kind === 'circle') perim = 2 * Math.PI * e.r;
-    else if (e.kind === 'path') perim = polyLength(pathVertices(doc, e), e.closed);
+    else if (e.kind === 'path') perim = pathHasArcs(doc, e) ? polyLength(flattenContour(pathContour(doc, e), 0.002), e.closed) : polyLength(pathVertices(doc, e), e.closed);
     else if (e.kind === 'shape') for (const c of shapeWorldContours(doc, e)) perim += polyLength(flattenContour(c, 0.005), c.closed);
     if (perim) rows.push(['Umfang', mm(perim)]);
     rows.push(['Breite', mm(b.maxX - b.minX)], ['Höhe', mm(b.maxY - b.minY)]);

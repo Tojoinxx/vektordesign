@@ -1,5 +1,5 @@
 import { imageElement } from '../model/image';
-import type { Entity, Gradient, Id, SketchDoc, Style, Vec2 } from '../model/types';
+import type { Contour, Entity, Gradient, Id, SketchDoc, Style, Vec2 } from '../model/types';
 import { lineOf, pathVertices, pt } from '../model/doc';
 import { entityBBox } from '../model/bounds';
 import { gradientToWorld, isGradient, sortedStops } from '../model/paint';
@@ -8,6 +8,7 @@ import { cssFont } from '../model/textMetrics';
 import { bboxValid, dist } from '../model/geometry';
 import { segments, shapeWorldContours } from '../model/shape';
 import { visibleOrder } from '../model/layers';
+import { arcContour, arcGeom, pathContour } from '../model/arc';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -77,19 +78,33 @@ function applyStroke(t: DesignTarget, s: Style): boolean {
   return true;
 }
 
+/** Zeichnet eine Kontur (mit Bézier-Segmenten) in den aktuellen Pfad. */
+export function traceContour(ctx: Ctx, toScreen: (p: Vec2) => Vec2, c: Contour): void {
+  if (!c.nodes.length) return;
+  const s0 = toScreen(c.nodes[0]);
+  ctx.moveTo(s0.x, s0.y);
+  for (const seg of segments(c)) {
+    const p3 = toScreen(seg.p3);
+    if (seg.curved) {
+      const p1 = toScreen(seg.p1);
+      const p2 = toScreen(seg.p2);
+      ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+    } else ctx.lineTo(p3.x, p3.y);
+  }
+  if (c.closed) ctx.closePath();
+}
+
 function buildPath(t: DesignTarget, doc: SketchDoc, e: Entity): boolean {
   const ctx = t.ctx;
   ctx.beginPath();
   switch (e.kind) {
     case 'path': {
-      const vs = pathVertices(doc, e);
-      if (vs.length < 2) return false;
-      vs.forEach((v, i) => {
-        const s = t.toScreen(v);
-        if (i === 0) ctx.moveTo(s.x, s.y);
-        else ctx.lineTo(s.x, s.y);
-      });
-      if (e.closed) ctx.closePath();
+      if (pathVertices(doc, e).length < 2) return false;
+      traceContour(ctx, t.toScreen, pathContour(doc, e));
+      return true;
+    }
+    case 'arc': {
+      traceContour(ctx, t.toScreen, arcContour(arcGeom(doc, e)));
       return true;
     }
     case 'line': {
@@ -106,20 +121,7 @@ function buildPath(t: DesignTarget, doc: SketchDoc, e: Entity): boolean {
       return true;
     }
     case 'shape': {
-      for (const c of shapeWorldContours(doc, e)) {
-        if (!c.nodes.length) continue;
-        const s0 = t.toScreen(c.nodes[0]);
-        ctx.moveTo(s0.x, s0.y);
-        for (const seg of segments(c)) {
-          const p3 = t.toScreen(seg.p3);
-          if (seg.curved) {
-            const p1 = t.toScreen(seg.p1);
-            const p2 = t.toScreen(seg.p2);
-            ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
-          } else ctx.lineTo(p3.x, p3.y);
-        }
-        if (c.closed) ctx.closePath();
-      }
+      for (const c of shapeWorldContours(doc, e)) traceContour(ctx, t.toScreen, c);
       return true;
     }
     case 'text':

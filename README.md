@@ -6,7 +6,7 @@ Maßgenaues 2D-Vektorgrafikprogramm für Textil-Designs. Die Bedienung folgt dem
 
 ![Rechteck mit Farbverlauf und Verblassen, Bemaßungen und Abhängigkeiten](docs/screenshot-verlauf.png)
 
-**Stand: Meilenstein 1 (MVP Desktop)** – Linie, Rechteck, Kreis, Punkt, Text, Bemaßung mit Ausdrücken, zwölf Abhängigkeiten, Statusanzeige (unter-/voll-/überbestimmt), Füllung, Kontur und Farbverläufe, Zoom/Pan, Rückgängig, SVG- und PNG-Export, Windows-Installer über GitHub Actions. Dazu: Claude als Design-Agent in der App (auch mit Bildern), Stilvorschläge, kurze Tutorials beim ersten Benutzen eines Werkzeugs und ein dunkles Design (hell umschaltbar).
+**Stand: Meilenstein 5 in Arbeit** – Skizzieren wie in Inventor (Linie, Rechteck, Kreis, Bogen, Ellipse, Vieleck, Stern, Zeichenstift, Text, Freihand mit Formerkennung), Bemaßung mit Ausdrücken, zwölf Abhängigkeiten, Ebenen, Verläufe, boolesche Operationen, Bearbeiten-Werkzeuge, Messen, Export als SVG, PDF, EPS, DXF und PNG, LabwearOS-Paket mit Artwork-Blatt, iPad-Web-App mit Pencil und Sync, Bilder als Vorlage und Vektorisieren, Preflight je Veredelung, Mockup mit Kontrastprüfung, DTF-Sammelbogen mit Namen und Nummern sowie Claude als Design-Assistent (mit API-Schlüssel oder über das claude.ai-Abo).
 
 ## Installation
 
@@ -45,7 +45,7 @@ npm run desktop:build  # Installer unter src-tauri/target/release/bundle/
 
 ### Grundprinzip
 
-1. **Grob zeichnen** – Linie (`L`), Rechteck (`R`), Kreis (`C`), Text (`T`). Beim Zeichnen entstehen automatisch Abhängigkeiten (z. B. horizontal, vertikal, koinzident), erkennbar an kleinen Symbolen (Glyphen).
+1. **Grob zeichnen** – Linie (`L`), Rechteck (`R`), Kreis (`C`), Bogen (`A`), Vieleck (`N`), Zeichenstift (`B`), Ellipse, Stern, Text (`T`). Beim Zeichnen entstehen automatisch Abhängigkeiten (z. B. horizontal, vertikal, koinzident), erkennbar an kleinen Symbolen (Glyphen).
 2. **Bemaßen** – `D`, dann eine Linie, zwei Punkte, einen Kreis oder zwei Linien (Winkel) anklicken, das Maß platzieren und den Wert eintippen. Erlaubt sind Ausdrücke wie `20+5`, `d0/2`, `12,5`, `(d0-10)/2`, `max(d1; 20)` und Einheiten (`cm`, `in`, `°`). Doppelklick auf eine Bemaßung ändert sie.
 3. **Abhängigkeiten setzen** – Koinzident, horizontal, vertikal, parallel, rechtwinklig, kollinear, tangential, konzentrisch, gleich, symmetrisch, Mittelpunkt, fixiert. Objekte vorher auswählen oder das Werkzeug wählen und nacheinander anklicken.
 4. **Status prüfen** – unten rechts: blau *Unterbestimmt – noch X Bemaßungen nötig*, grün *Vollständig bestimmt*, rot *Überbestimmt* mit verständlicher Meldung. Ein Klick auf den Status zeigt, was noch frei ist. Würde ein Maß die Skizze überbestimmen, bietet die App an, es als getriebene Bemaßung (Referenz, in Klammern) anzulegen.
@@ -133,6 +133,9 @@ Die Tech-Packs entstehen in LabwearOS. Vektordesign liefert die passenden Artwor
 | langes Drücken | Kontextmenü |
 | Doppeltipp | wie Doppelklick (z. B. Bemaßung ändern) |
 
+- **Bogen** (`A`): Start, Ende, Wölbung – oder vom Mittelpunkt. Bögen bemaßt man wie Kreise (Radius), legt sie tangential an Linien und macht aus Linien und Bögen mit **Geschlossene Fläche** (Rechtsklick oder Leiste) eine füllbare Kontur – z. B. ein vollständig bemaßtes Langloch.
+- **Vieleck** (`N`) und **Stern**: Mittelpunkt, Ecke bzw. Spitze; Eckenzahl und Durchmesser direkt eintippen. Die Geometrie bleibt parametrisch (Konstruktionskreise mit Durchmesserbemaßung).
+- **Ellipse** und **Zeichenstift** (`B`): erzeugen Formen; beim Zeichenstift setzt Klicken eine Ecke, Ziehen eine Kurve, Klick auf den Start schließt.
 - **Freihand** (`S`, auch im Markierungsmenü): grob zeichnen, beim Absetzen entsteht saubere Geometrie – Linie (fast waagrecht/senkrecht wird exakt), Kreis, Rechteck, Dreieck/Vieleck oder Linienzug. Danach wie gewohnt bemaßen.
 - **Ziffernblock:** Auf Touch-Geräten erscheint beim Bemaßen ein großer Ziffernblock statt der Bildschirmtastatur (Ausdrücke wie `30+5` gehen auch).
 - **Teilen-Menü:** Exporte und „Speichern“ öffnen auf dem iPad das Teilen-Menü – „In Dateien sichern“ (iCloud Drive, OneDrive), AirDrop, Mail oder direkt die Cricut-App.
@@ -195,6 +198,9 @@ Optional beim Export: Rand inklusive Konturstärke und horizontal spiegeln (Flex
 | `O` | Versatz | | `Strg+Umschalt+G` | Gruppierung aufheben |
 | `M` | Messen | | | |
 | `S` | Freihandskizze mit Formerkennung | | | |
+| `A` | Bogen (3 Punkte; Mittelpunktbogen im Werkzeugmenü) | | | |
+| `N` | Vieleck (erneuter Klick: Umkreis/Inkreis) | | | |
+| `B` | Zeichenstift für Bézierpfade | | | |
 | `Esc` | Abbrechen, zurück zur Auswahl | | | |
 
 Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Ziehen verschiebt die Ansicht, Rechtsklick öffnet das Markierungsmenü (wie in Inventor; Rechtsklick gedrückt halten und in eine Richtung ziehen startet den Befehl direkt). Fang an Endpunkt, Mitte, Schnittpunkt, Kreismittelpunkt, Kurve und Raster lässt sich unten in der Statusleiste umschalten.

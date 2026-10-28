@@ -10,7 +10,7 @@ import { useApp, useAppState } from './hooks';
 import { DimensionEditor, DynamicInput, TextEditor } from './Overlays';
 import { MarkingMenu, markingDirectionCommand } from './MarkingMenu';
 
-const DRAW_TOOLS = new Set(['line', 'rect', 'circle', 'point', 'text', 'sketch']);
+const DRAW_TOOLS = new Set(['line', 'rect', 'circle', 'arc', 'ellipse', 'polygon', 'star', 'pen', 'point', 'text', 'sketch']);
 
 /** Problemzonen der Prüfung rot markieren. */
 function drawPreflightMarks(ctx: CanvasRenderingContext2D, v: Viewport, r: PreflightResult | null): void {

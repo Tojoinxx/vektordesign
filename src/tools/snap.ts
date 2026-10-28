@@ -1,4 +1,5 @@
 import type { Id, SketchDoc, Vec2 } from '../model/types';
+import { angleOnArc, arcGeom, arcMidpoint, arcOf, closestOnArc, roundOf } from '../model/arc';
 import { ORIGIN_ID } from '../model/types';
 import { pt } from '../model/doc';
 import {
@@ -74,7 +75,7 @@ export function computeSnap(doc: SketchDoc, vp: Viewport, settings: Settings, s:
       continue;
     }
     const owner = p.owner ? doc.entities[p.owner] : undefined;
-    const isCenter = owner?.kind === 'circle' || owner?.kind === 'path' || (!owner && p.construction);
+    const isCenter = owner?.kind === 'circle' || (owner?.kind === 'arc' && owner.center === p.id) || owner?.kind === 'path' || (!owner && p.construction);
     if (isCenter && !settings.snapCenter) continue;
     if (!isCenter && owner && !settings.snapEndpoint) continue;
     consider(isCenter ? 'center' : owner ? 'endpoint' : 'point', p, { kind: 'point', id: p.id });
@@ -104,6 +105,15 @@ export function computeSnap(doc: SketchDoc, vp: Viewport, settings: Settings, s:
           consider('onCurve', { x: c.x + (w.x - c.x) * k, y: c.y + (w.y - c.y) * k }, { kind: 'onCurve', id: e.id });
         }
       }
+    } else if (e.kind === 'arc') {
+      const g = arcGeom(doc, e);
+      // Bogenmitte wie die Mitte einer Linie (Hilfspunkt, keine Abhängigkeit)
+      if (settings.snapMidpoint) consider('midpoint', arcMidpoint(g), null);
+      const c = closestOnArc(w, g);
+      if (dist(c, w) <= tolW) {
+        near.push(e);
+        if (settings.snapOnCurve) consider('onCurve', c, { kind: 'onCurve', id: e.id });
+      }
     }
   }
 
@@ -113,16 +123,26 @@ export function computeSnap(doc: SketchDoc, vp: Viewport, settings: Settings, s:
         const a = near[i];
         const b = near[j];
         let pts: Vec2[] = [];
+        const ra = roundOf(doc, a.id);
+        const rb = roundOf(doc, b.id);
         if (a.kind === 'line' && b.kind === 'line') {
           const x = segmentIntersection(pt(doc, a.p1), pt(doc, a.p2), pt(doc, b.p1), pt(doc, b.p2));
           if (x) pts = [x];
-        } else if (a.kind === 'line' && b.kind === 'circle') {
-          pts = segmentCircleIntersections(pt(doc, a.p1), pt(doc, a.p2), pt(doc, b.center), b.r);
-        } else if (a.kind === 'circle' && b.kind === 'line') {
-          pts = segmentCircleIntersections(pt(doc, b.p1), pt(doc, b.p2), pt(doc, a.center), a.r);
-        } else if (a.kind === 'circle' && b.kind === 'circle') {
-          pts = circleCircleIntersections(pt(doc, a.center), a.r, pt(doc, b.center), b.r);
+        } else if (a.kind === 'line' && rb) {
+          pts = segmentCircleIntersections(pt(doc, a.p1), pt(doc, a.p2), pt(doc, rb.center), rb.r);
+        } else if (ra && b.kind === 'line') {
+          pts = segmentCircleIntersections(pt(doc, b.p1), pt(doc, b.p2), pt(doc, ra.center), ra.r);
+        } else if (ra && rb) {
+          pts = circleCircleIntersections(pt(doc, ra.center), ra.r, pt(doc, rb.center), rb.r);
         }
+        // Schnittpunkte mit Bögen nur, wenn sie auf dem Bogen liegen
+        const onArc = (id: Id, p: Vec2) => {
+          const ar = arcOf(doc, id);
+          if (!ar) return true;
+          const g = arcGeom(doc, ar);
+          return angleOnArc(g, Math.atan2(p.y - g.c.y, p.x - g.c.x));
+        };
+        pts = pts.filter((p) => onArc(a.id, p) && onArc(b.id, p));
         for (const p of pts) consider('intersection', p, { kind: 'intersection', ids: [a.id, b.id] });
       }
     }

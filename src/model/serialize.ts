@@ -47,7 +47,7 @@ export function parseDoc(text: string): SketchDoc {
   if (!doc.points[ORIGIN_ID]) doc.points[ORIGIN_ID] = { id: ORIGIN_ID, x: 0, y: 0, locked: true, construction: true };
   // Verweise prüfen
   for (const e of Object.values(doc.entities)) {
-    const refs = e.kind === 'line' ? [e.p1, e.p2] : e.kind === 'circle' ? [e.center] : e.kind === 'text' ? [e.anchor] : [];
+    const refs = e.kind === 'line' ? [e.p1, e.p2] : e.kind === 'circle' ? [e.center] : e.kind === 'arc' ? [e.center, e.p1, e.p2] : e.kind === 'text' ? [e.anchor] : [];
     for (const r of refs) if (!doc.points[r]) throw new ProjectFileError(`Projektdatei beschädigt: Punkt ${r} fehlt.`);
   }
   // Zähler hinter die höchste vorhandene Id setzen

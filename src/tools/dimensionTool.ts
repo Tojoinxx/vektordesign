@@ -1,4 +1,5 @@
 import type { Dimension, Id, SketchDoc, Vec2 } from '../model/types';
+import { roundOf } from '../model/arc';
 import { circleOf, entityOf, lineOf, pt } from '../model/doc';
 import { contoursBBox, shapeWorldContours } from '../model/shape';
 import { measureDim } from '../model/measure';
@@ -10,7 +11,7 @@ import type { DimensionSpec } from '../store/editor';
 import { hitTest, type Hit } from './hit';
 import type { Tool, ToolContext, ToolPointer } from './types';
 
-type Pick = { kind: 'point' | 'line' | 'circle' | 'shape'; id: Id };
+type Pick = { kind: 'point' | 'line' | 'circle' | 'arc' | 'shape'; id: Id };
 
 /**
  * Bemaßungswerkzeug wie in Inventor: Geometrie wählen, Maß mit der Maus platzieren,
@@ -44,6 +45,7 @@ export class DimensionTool implements Tool {
     if (hit.kind === 'point') return { kind: 'point', id: hit.id };
     if (hit.kind === 'line') return { kind: 'line', id: hit.id };
     if (hit.kind === 'circle' && hit.dist > 0) return { kind: 'circle', id: hit.id };
+    if (hit.kind === 'arc') return { kind: 'arc', id: hit.id };
     if (hit.kind === 'shape') return { kind: 'shape', id: hit.id };
     return null;
   }
@@ -79,7 +81,7 @@ export class DimensionTool implements Tool {
 
   private combinable(picks: Pick[]): boolean {
     if (picks.length === 1) return true;
-    const [a, b] = picks;
+    const [a, b] = picks.map((p) => ({ ...p, kind: p.kind === 'arc' ? ('circle' as const) : p.kind }));
     if (a.kind === 'shape' || b.kind === 'shape') return false;
     if (a.kind === 'point' || b.kind === 'point') return true;
     if (a.kind === 'line' && b.kind === 'line') return true;
@@ -198,6 +200,13 @@ export function specFromPicks(doc: SketchDoc, picks: Pick[], cursor: Vec2, px: n
         offset: Math.max(0, dist(cursor, C) - c.r - 14 * px),
       };
     }
+    if (a.kind === 'arc') {
+      // Bögen bekommen wie in Inventor einen Radius
+      const r = roundOf(doc, a.id);
+      if (!r) return null;
+      const C = pt(doc, r.center);
+      return { kind: 'radius', refs: [a.id], angle: Math.atan2(cursor.y - C.y, cursor.x - C.x), offset: Math.max(0, dist(cursor, C) - r.r - 14 * px) };
+    }
     if (a.kind === 'line') {
       const l = lineOf(doc, a.id);
       if (!l) return null;
@@ -216,7 +225,7 @@ export function specFromPicks(doc: SketchDoc, picks: Pick[], cursor: Vec2, px: n
     return null;
   }
   const [a, b] = picks;
-  const centerOf = (p: Pick) => (p.kind === 'circle' ? circleOf(doc, p.id)!.center : p.id);
+  const centerOf = (p: Pick) => (p.kind === 'circle' || p.kind === 'arc' ? roundOf(doc, p.id)!.center : p.id);
   if (a.kind !== 'line' && b.kind !== 'line') {
     return linearSpec(doc, centerOf(a), centerOf(b), cursor, forceAligned);
   }

@@ -1,19 +1,8 @@
 import { produce } from 'immer';
-import type {
-  Constraint,
-  ConstraintKind,
-  Dimension,
-  DimensionKind,
-  Id,
-  LineEntity,
-  Layer,
-  ShapeEntity,
-  SketchDoc,
-  Style,
-  TextEntity,
-  Vec2,
-} from '../model/types';
-import { shapeSize } from '../model/shape';
+import { orderLoop } from '../model/profile';
+import { circleThrough3 } from '../model/arc';
+import type { Contour, ShapeNode, Constraint, ConstraintKind, Dimension, DimensionKind, Id, LineEntity, Layer, ShapeEntity, SketchDoc, Style, TextEntity, Vec2 } from '../model/types';
+import { addShapeFromWorld, shapeSize } from '../model/shape';
 import { productionOf } from '../model/production';
 import type { ImageEntity, Production } from '../model/types';
 import { DEFAULT_LAYER, groupMembers, isInert, layerIdOf, layersOf } from '../model/layers';
@@ -21,6 +10,7 @@ import { applyXf, cloneInto, type Xf, type XfReport } from './xform';
 import { extendLine, trimLine, type TrimResult } from './trimExtend';
 import { ORIGIN_ID } from '../model/types';
 import {
+  addArc,
   addCircle,
   addConstraint,
   addDimension,
@@ -55,12 +45,7 @@ import { initialState } from './state';
 // ---------------------------------------------------------------------------
 
 /** Wohin ein gezeichneter Punkt gefangen wurde (für automatische Abhängigkeiten). */
-export type SnapRef =
-  | { kind: 'point'; id: Id }
-  | { kind: 'onCurve'; id: Id }
-  | { kind: 'midpoint'; id: Id }
-  | { kind: 'intersection'; ids: Id[] }
-  | { kind: 'grid' };
+export type SnapRef = { kind: 'point'; id: Id } | { kind: 'onCurve'; id: Id } | { kind: 'midpoint'; id: Id } | { kind: 'intersection'; ids: Id[] } | { kind: 'grid' };
 
 export interface PlacedPoint {
   pos: Vec2;
@@ -441,7 +426,7 @@ export class Editor {
     } else if (snap.kind === 'onCurve') {
       if (snap.id === ownEntity || !d.entities[snap.id]) return out;
       const e = d.entities[snap.id];
-      if (e.kind === 'line' || e.kind === 'circle') out.push(addConstraint(d, 'coincident', [pointId, snap.id]).id);
+      if (e.kind === 'line' || e.kind === 'circle' || e.kind === 'arc') out.push(addConstraint(d, 'coincident', [pointId, snap.id]).id);
     } else if (snap.kind === 'midpoint') {
       if (snap.id === ownEntity || !lineOf(d, snap.id)) return out;
       out.push(addConstraint(d, 'midpoint', [pointId, snap.id]).id);
@@ -496,7 +481,7 @@ export class Editor {
       },
       { autoIds },
     );
-    return { ...out, line: out.ok && line ? out.doc.entities[line.id] as LineEntity : undefined };
+    return { ...out, line: out.ok && line ? (out.doc.entities[line.id] as LineEntity) : undefined };
   }
 
   /**
@@ -537,6 +522,26 @@ export class Editor {
     return { ...last, lineIds, pathId };
   }
 
+  /**
+   * Geschlossene Fläche aus gewählten Linien und Bögen: ordnet die Kanten zu einer Schleife
+   * (Enden müssen zusammenfallen) und legt einen gefüllten Pfad an.
+   */
+  createProfile(ids: Id[], style?: Style): CommitOutcome & { pathId?: Id } {
+    const doc = this.s.doc;
+    const edges = orderLoop(doc, ids);
+    if ('error' in edges) return { ok: false, reason: 'invalid', message: edges.error };
+    let pathId: Id | undefined;
+    const st = style ?? { ...this.s.currentStyle, fill: this.s.currentStyle.fill ?? '#1e2328' };
+    const out = this.commit(
+      'Geschlossene Fläche',
+      (d) => {
+        pathId = addPath(d, edges.edges, true, st).id;
+      },
+      { skipSolve: true },
+    );
+    return { ...out, pathId };
+  }
+
   /** Fasst eine Linienkette zu einem (geschlossenen) Pfad zusammen. */
   createPathFromLines(lineIds: Id[], closed: boolean, style?: Style): CommitOutcome & { pathId?: Id } {
     let pathId: Id | undefined;
@@ -545,7 +550,12 @@ export class Editor {
       (d) => {
         const valid = lineIds.filter((id) => lineOf(d, id) && !pathOfLine(d, id));
         if (valid.length < 2) throw new Error('Zu wenige Linien für eine Kontur');
-        const p = addPath(d, valid.map((id) => ({ id, reversed: false })), closed, style ?? this.s.currentStyle);
+        const p = addPath(
+          d,
+          valid.map((id) => ({ id, reversed: false })),
+          closed,
+          style ?? this.s.currentStyle,
+        );
         pathId = p.id;
       },
       { skipSolve: true },
@@ -603,7 +613,12 @@ export class Editor {
 
         let pathId: Id | null = null;
         if (!construction) {
-          const path = addPath(d, lines.map((l) => ({ id: l.id, reversed: false })), true, style);
+          const path = addPath(
+            d,
+            lines.map((l) => ({ id: l.id, reversed: false })),
+            true,
+            style,
+          );
           pathId = path.id;
           ids.pathId = path.id;
         }
@@ -663,7 +678,7 @@ export class Editor {
         if (!opts.noAuto && center.snap) {
           // Mittelpunkt eines anderen Kreises → konzentrisch, sonst koinzident
           const snap = center.snap;
-          const otherCircle = snap.kind === 'point' ? Object.values(d.entities).find((e) => e.kind === 'circle' && e.center === snap.id) : undefined;
+          const otherCircle = snap.kind === 'point' ? Object.values(d.entities).find((e) => (e.kind === 'circle' || e.kind === 'arc') && e.center === snap.id) : undefined;
           if (otherCircle) autoIds.push(addConstraint(d, 'concentric', [c.id, otherCircle.id]).id);
           else autoIds.push(...this.snapConstraints(d, c.center, snap, c.id));
         }
@@ -679,7 +694,216 @@ export class Editor {
     return { ...out, circleId, dimId };
   }
 
-  createText(at: PlacedPoint, text: string, opts: Partial<Pick<TextEntity, 'fontFamily' | 'fontSize' | 'fontWeight' | 'italic' | 'align'>> & { style?: Style; noAuto?: boolean } = {}): CommitOutcome & { textId?: Id } {
+  /**
+   * Bogen um `center` von `start` nach `end`; `ccw` = gegen den Uhrzeigersinn. Das Ende wird auf
+   * den Radius gelegt. Fang erzeugt Abhängigkeiten (Start/Ende/Mittelpunkt), `radius` eine Bemaßung.
+   */
+  createArc(
+    center: PlacedPoint,
+    start: PlacedPoint,
+    end: PlacedPoint,
+    ccw: boolean,
+    opts: { radius?: string | null; construction?: boolean; noAuto?: boolean; style?: Style; centerSnap?: boolean } = {},
+  ): CommitOutcome & { arcId?: Id; dimId?: Id } {
+    const r = dist(center.pos, start.pos);
+    if (!(r > 1e-6) || dist(start.pos, end.pos) < 1e-6) return { ok: false, reason: 'invalid', message: 'Bogen ist zu klein' };
+    const [a, b] = ccw ? [start, end] : [end, start];
+    const autoIds: Id[] = [];
+    let arcId: Id | undefined;
+    let dimId: Id | undefined;
+    const style = opts.style ?? this.s.currentStyle;
+    const out = this.commit(
+      opts.construction ? 'Konstruktionsbogen' : 'Bogen',
+      (d) => {
+        const arc = addArc(d, center.pos, a.pos, b.pos, style, !!opts.construction);
+        arcId = arc.id;
+        if (!opts.noAuto) {
+          if (opts.centerSnap !== false) autoIds.push(...this.snapConstraints(d, arc.center, center.snap, arc.id));
+          autoIds.push(...this.snapConstraints(d, arc.p1, a.snap, arc.id));
+          autoIds.push(...this.snapConstraints(d, arc.p2, b.snap, arc.id));
+        }
+        if (opts.radius) dimId = addDimension(d, { kind: 'radius', refs: [arc.id], expr: opts.radius, value: 0, driven: false, offset: 0 }).id;
+      },
+      { autoIds },
+    );
+    return { ...out, arcId, dimId };
+  }
+
+  /** Bogen durch drei Punkte: Start, Ende und ein Punkt auf dem Bogen. */
+  createArc3(
+    start: PlacedPoint,
+    end: PlacedPoint,
+    onArc: Vec2,
+    opts: { radius?: string | null; construction?: boolean; noAuto?: boolean; style?: Style } = {},
+  ): CommitOutcome & { arcId?: Id; dimId?: Id } {
+    const c = circleThrough3(start.pos, onArc, end.pos);
+    if (!c) return { ok: false, reason: 'invalid', message: 'Die drei Punkte liegen auf einer Geraden' };
+    return this.createArc({ pos: c.c }, start, end, c.ccw, { ...opts, centerSnap: false });
+  }
+
+  /**
+   * Regelmäßiges Vieleck wie in Inventor: Linien mit Konstruktionskreis. „Umkreis“: Ecken auf dem
+   * Kreis, „Inkreis“: Kanten berühren den Kreis. Alle Kanten gleich lang, Mittelpunkt als Kreismitte.
+   */
+  createPolygon(
+    center: PlacedPoint,
+    corner: Vec2,
+    sides: number,
+    mode: 'circumscribed' | 'inscribed' = 'circumscribed',
+    opts: { diameter?: string | null; noAuto?: boolean; style?: Style } = {},
+  ): CommitOutcome & { pathId?: Id; circleId?: Id; lineIds?: Id[] } {
+    const n = Math.max(3, Math.min(64, Math.round(sides)));
+    const rr = dist(center.pos, corner);
+    if (!(rr > 1e-6)) return { ok: false, reason: 'invalid', message: 'Vieleck ist zu klein' };
+    const a0 = Math.atan2(corner.y - center.pos.y, corner.x - center.pos.x);
+    // Inkreis: `corner` liegt auf der Kantenmitte → Eckradius größer
+    const R = mode === 'inscribed' ? rr / Math.cos(Math.PI / n) : rr;
+    const start = mode === 'inscribed' ? a0 - Math.PI / n : a0;
+    const pts = Array.from({ length: n }, (_, i) => ({ x: center.pos.x + R * Math.cos(start + (2 * Math.PI * i) / n), y: center.pos.y + R * Math.sin(start + (2 * Math.PI * i) / n) }));
+    const autoIds: Id[] = [];
+    const ids: { pathId?: Id; circleId?: Id; lineIds: Id[] } = { lineIds: [] };
+    const style = opts.style ?? this.s.currentStyle;
+    const out = this.commit(
+      'Vieleck',
+      (d) => {
+        // Ecken auf dem Umkreis + gleiche Kanten = regelmäßig (starr für jede Eckenzahl).
+        // Inkreis: zusätzlicher konzentrischer Kreis, der eine Kante berührt (und damit alle).
+        const outer = addCircle(d, center.pos, R, { ...style, fill: null }, true);
+        let circle = outer;
+        if (mode === 'inscribed') {
+          circle = addCircle(d, center.pos, rr, { ...style, fill: null }, true);
+          addConstraint(d, 'concentric', [circle.id, outer.id]);
+        }
+        ids.circleId = circle.id;
+        const lines = pts.map((p, i) => addLine(d, p, pts[(i + 1) % n], { ...style, fill: null }));
+        ids.lineIds = lines.map((l) => l.id);
+        for (let i = 0; i < n; i++) addConstraint(d, 'coincident', [lines[i].p2, lines[(i + 1) % n].p1]).quiet = true;
+        for (let i = 1; i < n; i++) addConstraint(d, 'equal', [lines[0].id, lines[i].id]).quiet = true;
+        for (const l of lines) addConstraint(d, 'coincident', [l.p1, outer.id]).quiet = true;
+        if (mode === 'inscribed') addConstraint(d, 'tangent', [lines[0].id, circle.id]);
+        ids.pathId = addPath(
+          d,
+          lines.map((l) => ({ id: l.id, reversed: false })),
+          true,
+          style,
+        ).id;
+        if (!opts.noAuto && center.snap) autoIds.push(...this.snapConstraints(d, outer.center, center.snap, outer.id));
+        if (opts.diameter) addDimension(d, { kind: 'diameter', refs: [circle.id], expr: opts.diameter, value: 0, driven: false, offset: 0, angle: Math.PI / 4 });
+      },
+      { autoIds },
+    );
+    return { ...out, ...ids };
+  }
+
+  /**
+   * Stern: Spitzen auf einem äußeren, Innenecken auf einem inneren Konstruktionskreis (konzentrisch),
+   * alle Kanten gleich lang. Bemaßbar über beide Kreisdurchmesser.
+   */
+  createStar(
+    center: PlacedPoint,
+    tip: Vec2,
+    points: number,
+    innerRatio = 0.5,
+    opts: { diameter?: string | null; innerDiameter?: string | null; noAuto?: boolean; style?: Style } = {},
+  ): CommitOutcome & { pathId?: Id; outerId?: Id; innerId?: Id } {
+    const n = Math.max(3, Math.min(48, Math.round(points)));
+    const R = dist(center.pos, tip);
+    if (!(R > 1e-6)) return { ok: false, reason: 'invalid', message: 'Stern ist zu klein' };
+    const ri = R * Math.min(0.95, Math.max(0.05, innerRatio));
+    const a0 = Math.atan2(tip.y - center.pos.y, tip.x - center.pos.x);
+    const pts: Vec2[] = [];
+    for (let i = 0; i < 2 * n; i++) {
+      const r = i % 2 === 0 ? R : ri;
+      const a = a0 + (Math.PI * i) / n;
+      pts.push({ x: center.pos.x + r * Math.cos(a), y: center.pos.y + r * Math.sin(a) });
+    }
+    const autoIds: Id[] = [];
+    const ids: { pathId?: Id; outerId?: Id; innerId?: Id } = {};
+    const style = opts.style ?? this.s.currentStyle;
+    const out = this.commit(
+      'Stern',
+      (d) => {
+        const outer = addCircle(d, center.pos, R, { ...style, fill: null }, true);
+        const inner = addCircle(d, center.pos, ri, { ...style, fill: null }, true);
+        ids.outerId = outer.id;
+        ids.innerId = inner.id;
+        addConstraint(d, 'concentric', [inner.id, outer.id]);
+        const m = pts.length;
+        const lines = pts.map((p, i) => addLine(d, p, pts[(i + 1) % m], { ...style, fill: null }));
+        for (let i = 0; i < m; i++) addConstraint(d, 'coincident', [lines[i].p2, lines[(i + 1) % m].p1]).quiet = true;
+        for (let i = 1; i < m; i++) addConstraint(d, 'equal', [lines[0].id, lines[i].id]).quiet = true;
+        lines.forEach((l, i) => (addConstraint(d, 'coincident', [l.p1, i % 2 === 0 ? outer.id : inner.id]).quiet = true));
+        ids.pathId = addPath(
+          d,
+          lines.map((l) => ({ id: l.id, reversed: false })),
+          true,
+          style,
+        ).id;
+        if (!opts.noAuto && center.snap) autoIds.push(...this.snapConstraints(d, outer.center, center.snap, outer.id));
+        if (opts.diameter) addDimension(d, { kind: 'diameter', refs: [outer.id], expr: opts.diameter, value: 0, driven: false, offset: 0, angle: Math.PI / 4 });
+        if (opts.innerDiameter) addDimension(d, { kind: 'diameter', refs: [inner.id], expr: opts.innerDiameter, value: 0, driven: false, offset: 0, angle: -Math.PI / 4 });
+      },
+      { autoIds },
+    );
+    return { ...out, ...ids };
+  }
+
+  /**
+   * Ellipse als Form (Bézier, Abweichung < 0,03 %) mit Mittelpunkt als Skizzenpunkt.
+   * Breite und Höhe lassen sich wie bei jeder Form bemaßen.
+   */
+  createEllipse(center: PlacedPoint, rx: number, ry: number, opts: { width?: string | null; height?: string | null; noAuto?: boolean; style?: Style } = {}): CommitOutcome & { shapeId?: Id } {
+    if (!(rx > 1e-6 && ry > 1e-6)) return { ok: false, reason: 'invalid', message: 'Ellipse ist zu klein' };
+    const k = 0.5522847498307936;
+    const c = center.pos;
+    const contour: Contour = {
+      closed: true,
+      nodes: [
+        { x: c.x + rx, y: c.y, ix: c.x + rx, iy: c.y - ry * k, ox: c.x + rx, oy: c.y + ry * k },
+        { x: c.x, y: c.y + ry, ix: c.x + rx * k, iy: c.y + ry, ox: c.x - rx * k, oy: c.y + ry },
+        { x: c.x - rx, y: c.y, ix: c.x - rx, iy: c.y + ry * k, ox: c.x - rx, oy: c.y - ry * k },
+        { x: c.x, y: c.y - ry, ix: c.x - rx * k, iy: c.y - ry, ox: c.x + rx * k, oy: c.y - ry },
+      ],
+    };
+    let shapeId: Id | undefined;
+    const autoIds: Id[] = [];
+    const style = opts.style ?? this.s.currentStyle;
+    const out = this.commit(
+      'Ellipse',
+      (d) => {
+        const s = addShapeFromWorld(d, [contour], style, { name: 'Ellipse' });
+        shapeId = s.id;
+        if (!opts.noAuto && center.snap) autoIds.push(...this.snapConstraints(d, s.anchor, center.snap, s.id));
+        // Formen skalieren gleichmäßig: nur eine Größe treibt, die andere ergibt sich
+        if (opts.width) addDimension(d, { kind: 'width', refs: [s.id], expr: opts.width, value: 0, driven: false, offset: ry + 8 });
+        else if (opts.height) addDimension(d, { kind: 'height', refs: [s.id], expr: opts.height, value: 0, driven: false, offset: 8 });
+      },
+      { autoIds },
+    );
+    return { ...out, shapeId };
+  }
+
+  /** Freie Bézierform aus Knoten (Zeichenstift). Offene Pfade bekommen keine Füllung. */
+  createBezier(nodes: ShapeNode[], closed: boolean, opts: { style?: Style } = {}): CommitOutcome & { shapeId?: Id } {
+    if (nodes.length < 2) return { ok: false, reason: 'invalid', message: 'Mindestens zwei Punkte setzen' };
+    let shapeId: Id | undefined;
+    const base = opts.style ?? this.s.currentStyle;
+    const style = closed ? base : { ...base, fill: null, stroke: base.stroke ?? '#1e2328' };
+    const out = this.commit(
+      'Pfad',
+      (d) => {
+        shapeId = addShapeFromWorld(d, [{ closed, nodes: nodes.map((n) => ({ ...n })) }], style, { name: 'Pfad' }).id;
+      },
+      { skipSolve: true },
+    );
+    return { ...out, shapeId };
+  }
+
+  createText(
+    at: PlacedPoint,
+    text: string,
+    opts: Partial<Pick<TextEntity, 'fontFamily' | 'fontSize' | 'fontWeight' | 'italic' | 'align'>> & { style?: Style; noAuto?: boolean } = {},
+  ): CommitOutcome & { textId?: Id } {
     const t = this.s.textDefaults;
     let textId: Id | undefined;
     const autoIds: Id[] = [];
@@ -730,6 +954,8 @@ export class Editor {
       const e = doc.entities[id];
       if (!e) return 'other';
       if (e.kind === 'line' || e.kind === 'circle' || e.kind === 'text') return e.kind;
+      // Bögen verhalten sich bei Abhängigkeiten wie Kreise
+      if (e.kind === 'arc') return 'circle';
       return 'other';
     };
     const t = refs.map(type);
@@ -829,7 +1055,7 @@ export class Editor {
     const ids: Id[] = [];
     const out = this.commit(`Abhängigkeit „${CONSTRAINT_LABELS[kind]}“`, (d) => {
       for (const r of fresh) {
-        const fixedAt = kind === 'fix' ? fixValuesFor(d, r[0]) ?? undefined : undefined;
+        const fixedAt = kind === 'fix' ? (fixValuesFor(d, r[0]) ?? undefined) : undefined;
         ids.push(addConstraint(d, kind, r, fixedAt).id);
       }
     });
@@ -1066,7 +1292,7 @@ export class Editor {
     const doc = this.s.doc;
     const ents = [...new Set(ids.map((id) => resolveRef(doc, id)))].filter((id) => {
       const e = doc.entities[id];
-      return e && (e.kind === 'line' || e.kind === 'circle' || e.kind === 'path');
+      return e && (e.kind === 'line' || e.kind === 'circle' || e.kind === 'arc' || e.kind === 'path');
     });
     if (!ents.length) return { ok: false, reason: 'invalid', message: 'Linien oder Kreise wählen' };
     return this.commit(
@@ -1079,7 +1305,7 @@ export class Editor {
           if (e.kind === 'path') {
             e.edges.forEach((ed) => lines.add(ed.id));
             dissolvePath(d, e.id);
-          } else if (e.kind === 'line') {
+          } else if (e.kind === 'line' || e.kind === 'arc') {
             const p = pathOfLine(d, e.id);
             if (p) dissolvePath(d, p.id);
             lines.add(e.id);
@@ -1399,7 +1625,8 @@ export class Editor {
   }
 
   updateLayer(id: Id, patch: Partial<Pick<Layer, 'name' | 'visible' | 'locked'>>): CommitOutcome {
-    const label = patch.name !== undefined ? 'Ebene umbenennen' : patch.visible !== undefined ? (patch.visible ? 'Ebene einblenden' : 'Ebene ausblenden') : patch.locked ? 'Ebene sperren' : 'Ebene entsperren';
+    const label =
+      patch.name !== undefined ? 'Ebene umbenennen' : patch.visible !== undefined ? (patch.visible ? 'Ebene einblenden' : 'Ebene ausblenden') : patch.locked ? 'Ebene sperren' : 'Ebene entsperren';
     const out = this.commit(
       label,
       (d) => {
@@ -1439,7 +1666,9 @@ export class Editor {
     return this.commit(
       'Ebene löschen',
       (d) => {
-        d.layers = layersOf(d).filter((l) => l.id !== id).map((l) => ({ ...l }));
+        d.layers = layersOf(d)
+          .filter((l) => l.id !== id)
+          .map((l) => ({ ...l }));
         for (const e of Object.values(d.entities)) if (layerIdOf(this.s.doc, e) === id) e.layer = target;
       },
       { skipSolve: true },
@@ -1710,7 +1939,7 @@ export function drawableTargets(doc: SketchDoc, ids: Id[]): Id[] {
     if (!target) continue;
     const e = doc.entities[target];
     if (!e) continue;
-    if (e.kind === 'line') {
+    if (e.kind === 'line' || e.kind === 'arc') {
       const path = pathOfLine(doc, e.id);
       out.add(path ? path.id : e.id);
     } else out.add(e.id);

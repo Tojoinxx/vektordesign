@@ -1,4 +1,5 @@
 import type { Contour, Entity, Id, SketchDoc, Style, TextEntity, Vec2 } from '../model/types';
+import { pathContour, pathHasArcs } from '../model/arc';
 import { deleteIds, pt } from '../model/doc';
 import { addShapeFromWorld, polygonContour } from '../model/shape';
 import { BOOL_LABELS, booleanAreas, entityArea, offsetArea, polysToContours, roundCorners, type BoolOp } from '../model/boolean';
@@ -75,7 +76,8 @@ export function toShape(ed: Editor, ids: Id[] = ed.s.selection): Outcome {
     for (const e of items) {
       const area = entityArea(doc, e);
       if (!area) continue;
-      created.push(replaceWithShape(d, [e.id], e.kind === 'circle' ? circleAsContours(doc, e.id) : polysToContours(area), e.style, { like: e }));
+      const exact = e.kind === 'circle' ? circleAsContours(doc, e.id) : e.kind === 'path' && pathHasArcs(doc, e) ? [pathContour(doc, e)] : polysToContours(area);
+      created.push(replaceWithShape(d, [e.id], exact, e.style, { like: e }));
     }
   });
   if (out.ok) ed.select(created);

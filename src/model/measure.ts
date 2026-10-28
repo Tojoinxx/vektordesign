@@ -1,6 +1,7 @@
 import type { Constraint, Dimension, SketchDoc, Vec2 } from './types';
 import { circleOf, entityOf, lineOf, pt } from './doc';
 import { shapeSize } from './shape';
+import { arcGeom, arcOf, roundOf } from './arc';
 import { cross, dist, distToLine, dot, mid, normAngle, normAngle2pi, sub, toDeg } from './geometry';
 
 /** Aktueller Messwert einer Bemaßung in mm bzw. Grad (vorzeichenrichtig, wo sinnvoll). */
@@ -25,11 +26,11 @@ export function measureDim(doc: SketchDoc, dim: Pick<Dimension, 'kind' | 'refs'>
       return distToLine(pt(doc, b.p1), pt(doc, a.p1), pt(doc, a.p2));
     }
     case 'radius': {
-      const c = circleOf(doc, r[0]);
+      const c = roundOf(doc, r[0]);
       return c ? c.r : NaN;
     }
     case 'diameter': {
-      const c = circleOf(doc, r[0]);
+      const c = roundOf(doc, r[0]);
       return c ? 2 * c.r : NaN;
     }
     case 'angle': {
@@ -76,6 +77,11 @@ export function constraintError(doc: SketchDoc, c: Constraint): number {
       if (l) return distToLine(a, l[0], l[1]);
       const ci = circleOf(doc, r[1]);
       if (ci) return Math.abs(dist(a, pt(doc, ci.center)) - ci.r);
+      const ar = arcOf(doc, r[1]);
+      if (ar) {
+        const g = arcGeom(doc, ar);
+        return Math.abs(dist(a, g.c) - g.r);
+      }
       return NaN;
     }
     case 'horizontal':
@@ -101,9 +107,9 @@ export function constraintError(doc: SketchDoc, c: Constraint): number {
     }
     case 'tangent': {
       const l = lineEndsOf(doc, r[0]);
-      const c2 = circleOf(doc, r[1]);
+      const c2 = roundOf(doc, r[1]);
       if (l && c2) return Math.abs(distToLine(pt(doc, c2.center), l[0], l[1]) - c2.r);
-      const c1 = circleOf(doc, r[0]);
+      const c1 = roundOf(doc, r[0]);
       if (c1 && c2) {
         const d = dist(pt(doc, c1.center), pt(doc, c2.center));
         return Math.min(Math.abs(d - (c1.r + c2.r)), Math.abs(d - Math.abs(c1.r - c2.r)));
@@ -112,7 +118,7 @@ export function constraintError(doc: SketchDoc, c: Constraint): number {
     }
     case 'concentric': {
       const centerOf = (id: string) => {
-        const ci = circleOf(doc, id);
+        const ci = roundOf(doc, id);
         return ci ? pt(doc, ci.center) : P(id);
       };
       const a = centerOf(r[0]);
@@ -123,8 +129,8 @@ export function constraintError(doc: SketchDoc, c: Constraint): number {
       const a = lineEndsOf(doc, r[0]);
       const b = lineEndsOf(doc, r[1]);
       if (a && b) return Math.abs(dist(a[0], a[1]) - dist(b[0], b[1]));
-      const c1 = circleOf(doc, r[0]);
-      const c2 = circleOf(doc, r[1]);
+      const c1 = roundOf(doc, r[0]);
+      const c2 = roundOf(doc, r[1]);
       if (c1 && c2) return Math.abs(c1.r - c2.r);
       return NaN;
     }
@@ -155,6 +161,8 @@ export function constraintError(doc: SketchDoc, c: Constraint): number {
         const ctr = pt(doc, ci.center);
         return Math.max(Math.hypot(ctr.x - f[0], ctr.y - f[1]), Math.abs(ci.r - f[2]));
       }
+      const ar = arcOf(doc, r[0]);
+      if (ar) return Math.max(...[ar.center, ar.p1, ar.p2].map((pid, i) => Math.hypot(pt(doc, pid).x - f[2 * i], pt(doc, pid).y - f[2 * i + 1])));
       return NaN;
     }
   }

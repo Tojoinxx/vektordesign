@@ -12,7 +12,7 @@ import type { Tool, ToolContext, ToolPointer } from './types';
 const HV_TOL = toRad(3);
 
 /** Gemeinsame Basis: Fangmarke, Vorschaufarben, Meldungen. */
-abstract class DrawToolBase {
+export abstract class DrawToolBase {
   protected snap: SnapResult | null = null;
   protected cursor: Vec2 | null = null;
   protected noAuto = false;

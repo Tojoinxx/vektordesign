@@ -1,5 +1,6 @@
 import type { Dimension, SketchDoc, Vec2 } from '../model/types';
-import { circleOf, entityOf, lineOf, pt } from '../model/doc';
+import { arcGeom, arcOf, roundOf } from '../model/arc';
+import { entityOf, lineOf, pt } from '../model/doc';
 import { contoursBBox, shapeWorldContours } from '../model/shape';
 import { add, dist, dot, lineIntersection, mul, norm, normAngle2pi, projectOnLine, sub } from '../model/geometry';
 import { formatNumber } from '../params/expr';
@@ -129,10 +130,14 @@ export function dimGeometry(doc: SketchDoc, d: Dimension, px: number, display: S
       }
       case 'radius':
       case 'diameter': {
-        const c = circleOf(doc, d.refs[0]);
+        const c = roundOf(doc, d.refs[0]);
         if (!c) return null;
         const C = pt(doc, c.center);
-        const ang = d.angle ?? Math.PI / 4;
+        const ar = arcOf(doc, d.refs[0]);
+        const ang = d.angle ?? (ar ? (() => {
+          const g = arcGeom(doc, ar);
+          return g.a0 + g.sweep / 2;
+        })() : Math.PI / 4);
         const dir = { x: Math.cos(ang), y: Math.sin(ang) };
         const rim = add(C, mul(dir, c.r));
         const textDist = Math.max(d.offset, 0) + 14 * px;

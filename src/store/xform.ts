@@ -80,13 +80,21 @@ export function applyXf(d: SketchDoc, ids: Id[], xf: Xf, report: XfReport = { no
         e.rotation = norm360(xf.axis === 'y' ? -e.rotation : 180 - e.rotation);
       }
       if (e.kind === 'text') report.notes.add('Texte werden beim Spiegeln nur versetzt, nicht gespiegelt. Für gespiegelten Text erst „Text in Pfade“.');
+      // Spiegeln kehrt die Laufrichtung um: Start und Ende tauschen, damit der Bogen derselbe bleibt
+      if (e.kind === 'arc') [e.p1, e.p2] = [e.p2, e.p1];
     }
   }
   if (xf.kind === 'move') {
-    for (const c of Object.values(d.constraints)) if (c.kind === 'fix' && c.fixedAt && pts.has(c.refs[0])) {
-      c.fixedAt[0] += xf.dx;
-      c.fixedAt[1] += xf.dy;
-    }
+    for (const c of Object.values(d.constraints))
+      if (c.kind === 'fix' && c.fixedAt && (pts.has(c.refs[0]) || targets.has(c.refs[0]))) {
+        c.fixedAt[0] += xf.dx;
+        c.fixedAt[1] += xf.dy;
+        if (c.fixedAt.length === 6)
+          for (let k = 2; k < 6; k += 2) {
+            c.fixedAt[k] += xf.dx;
+            c.fixedAt[k + 1] += xf.dy;
+          }
+      }
     return;
   }
   const inTargets = (rid: Id) => targets.has(rid) || pts.has(rid);
@@ -97,7 +105,15 @@ export function applyXf(d: SketchDoc, ids: Id[], xf: Xf, report: XfReport = { no
       const q = xfPoint(xf, { x: c.fixedAt[0], y: c.fixedAt[1] });
       c.fixedAt[0] = q.x;
       c.fixedAt[1] = q.y;
-      if (xf.kind === 'scale' && c.fixedAt.length > 2) c.fixedAt[2] *= Math.abs(xf.k);
+      if (c.fixedAt.length === 6) {
+        // Bogen: Mittelpunkt, Start, Ende (beim Spiegeln Start/Ende getauscht)
+        for (let k = 2; k < 6; k += 2) {
+          const r = xfPoint(xf, { x: c.fixedAt[k], y: c.fixedAt[k + 1] });
+          c.fixedAt[k] = r.x;
+          c.fixedAt[k + 1] = r.y;
+        }
+        if (xf.kind === 'mirror') c.fixedAt = [c.fixedAt[0], c.fixedAt[1], c.fixedAt[4], c.fixedAt[5], c.fixedAt[2], c.fixedAt[3]];
+      } else if (xf.kind === 'scale' && c.fixedAt.length > 2) c.fixedAt[2] *= Math.abs(xf.k);
     }
     if (xf.kind === 'rotate' && (c.kind === 'horizontal' || c.kind === 'vertical')) {
       if (quarter === 90 || quarter === 270) c.kind = c.kind === 'horizontal' ? 'vertical' : 'horizontal';
@@ -130,7 +146,7 @@ export function applyXf(d: SketchDoc, ids: Id[], xf: Xf, report: XfReport = { no
 
 function prefixOf(e: Entity | undefined): string {
   if (!e) return 'x';
-  return e.kind === 'line' ? 'l' : e.kind === 'circle' ? 'c' : e.kind === 'text' ? 't' : e.kind === 'path' ? 'pa' : 's';
+  return e.kind === 'line' ? 'l' : e.kind === 'circle' ? 'c' : e.kind === 'arc' ? 'a' : e.kind === 'text' ? 't' : e.kind === 'path' ? 'pa' : 's';
 }
 
 /**
@@ -169,8 +185,13 @@ export function cloneInto(d: SketchDoc, src: SketchDoc, ids: Id[]): Id[] {
       copy.p1 = idMap.get(copy.p1)!;
       copy.p2 = idMap.get(copy.p2)!;
     } else if (copy.kind === 'circle') copy.center = idMap.get(copy.center)!;
+    else if (copy.kind === 'arc') {
+      copy.center = idMap.get(copy.center)!;
+      copy.p1 = idMap.get(copy.p1)!;
+      copy.p2 = idMap.get(copy.p2)!;
+    }
     else if (copy.kind === 'text' || copy.kind === 'shape' || copy.kind === 'image') copy.anchor = idMap.get(copy.anchor)!;
-    else if (copy.kind === 'path') copy.edges = copy.edges.map((ed) => ({ ...ed, id: mapId(ed.id, 'l') }));
+    else if (copy.kind === 'path') copy.edges = copy.edges.map((ed) => ({ ...ed, id: mapId(ed.id, prefixOf(src.entities[ed.id])) }));
     if (copy.group) {
       let g = groupMap.get(copy.group);
       if (!g) {

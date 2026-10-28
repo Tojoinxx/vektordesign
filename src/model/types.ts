@@ -90,6 +90,17 @@ export interface CircleEntity extends EntityBase {
   r: number;
 }
 
+/**
+ * Kreisbogen gegen den Uhrzeigersinn von `p1` (Start) nach `p2` (Ende) um `center`.
+ * Der Radius ergibt sich aus dem Abstand Mittelpunkt–Start (der Solver hält beide Enden auf dem Kreis).
+ */
+export interface ArcEntity extends EntityBase {
+  kind: 'arc';
+  center: Id;
+  p1: Id;
+  p2: Id;
+}
+
 export type TextAlign = 'left' | 'center' | 'right';
 
 export interface TextEntity extends EntityBase {
@@ -106,7 +117,7 @@ export interface TextEntity extends EntityBase {
 }
 
 export interface PathEdge {
-  /** Id einer Linie */
+  /** Id einer Linie oder eines Bogens */
   id: Id;
   /** true = Kante wird von p2 nach p1 durchlaufen */
   reversed: boolean;
@@ -176,7 +187,7 @@ export interface ImageEntity extends EntityBase {
   reference: boolean;
 }
 
-export type Entity = LineEntity | CircleEntity | TextEntity | PathEntity | ShapeEntity | ImageEntity;
+export type Entity = LineEntity | CircleEntity | ArcEntity | TextEntity | PathEntity | ShapeEntity | ImageEntity;
 
 export interface Layer {
   id: Id;
@@ -217,6 +228,8 @@ export interface Constraint {
   kind: ConstraintKind;
   refs: Id[];
   fixedAt?: number[];
+  /** Innere Abhängigkeit einer Form (Vieleck, Stern): Symbol nur bei Auswahl der Form */
+  quiet?: boolean;
 }
 
 /**

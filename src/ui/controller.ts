@@ -1,4 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
 import type { ConstraintKind, Id, Vec2 } from '../model/types';
 import { createAppStore, type AppStore, type ToolId } from '../store/state';
 import { Editor, type PlacedPoint } from '../store/editor';
@@ -265,6 +266,21 @@ export class AppController {
         break;
       case 'circle':
         t = new CircleTool(this.ctx);
+        break;
+      case 'arc':
+        t = new ArcTool(this.ctx);
+        break;
+      case 'ellipse':
+        t = new EllipseTool(this.ctx);
+        break;
+      case 'polygon':
+        t = new PolygonTool(this.ctx);
+        break;
+      case 'star':
+        t = new StarTool(this.ctx);
+        break;
+      case 'pen':
+        t = new PenTool(this.ctx);
         break;
       case 'text':
         t = new TextTool(this.ctx);

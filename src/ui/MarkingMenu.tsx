@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Copy, Lock, Maximize, Palette, RotateCcw, Trash2, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
 import type { AppController } from './controller';
 import { useApp, useAppState, useUi } from './hooks';
-import { IconCircle, IconConstruction, IconDimension, IconLine, IconRect, IconSketch, IconText } from './icons';
+import { IconCircle, IconConstruction, IconDimension, IconLine, IconProfile, IconRect, IconSketch, IconText } from './icons';
 
 interface Item {
   label: string;
@@ -54,6 +54,21 @@ function contextItems(app: AppController): Item[] {
       },
     });
     if (dim.kind === 'radius' || dim.kind === 'diameter') items.push({ label: dim.kind === 'radius' ? 'Als Durchmesser' : 'Als Radius', run: (a) => void a.editor.toggleRadiusDiameter(dim.id) });
+  }
+  const edgeSel = sel.filter((id) => {
+    const e = s.doc.entities[id];
+    return e && (e.kind === 'line' || e.kind === 'arc') && !e.construction;
+  });
+  if (edgeSel.length >= 2) {
+    items.push({
+      label: 'Geschlossene Fläche',
+      icon: <IconProfile size={15} />,
+      run: (a) => {
+        const out = a.editor.createProfile(a.editor.s.selection);
+        if (!out.ok) a.editor.toast(out.message, 'error', 6000);
+        else if (out.pathId) a.editor.select([out.pathId]);
+      },
+    });
   }
   if (sel.length) {
     items.push({ label: 'Duplizieren', icon: <Copy size={15} />, run: (a) => void a.editor.duplicate() });

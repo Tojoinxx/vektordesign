@@ -3,6 +3,7 @@ import { lineOf, pathVertices, pt } from '../model/doc';
 import { docBBox, entityBBox } from '../model/bounds';
 import { layerOf, layersOf, visibleOrder } from '../model/layers';
 import { circleContour, polygonContour, shapeWorldContours } from '../model/shape';
+import { arcContour, arcGeom, pathContour } from '../model/arc';
 import { gradientToWorld, isGradient } from '../model/paint';
 import { bboxValid, type BBox } from '../model/geometry';
 import { loadFont, textContours } from '../platform/fontOutline';
@@ -27,6 +28,8 @@ export interface SceneItem {
   text?: { entity: TextEntity; anchor: Vec2 };
   /** Kreis (für DXF als echter Kreis, für SVG als <circle>) */
   circle?: { c: Vec2; r: number };
+  /** Bogen (für DXF als echter Bogen): Winkel in Grad, gegen den Uhrzeigersinn */
+  arc?: { c: Vec2; r: number; start: number; end: number };
   /** Pixelbild (SVG eingebettet, PDF mit `pixels`; EPS/DXF ohne Bilder) */
   image?: { src: string; c: Vec2; width: number; height: number; rotation: number; flipX: boolean; pixels?: { rgba: Uint8Array | Uint8ClampedArray; width: number; height: number } };
 }
@@ -108,7 +111,13 @@ function sceneItem(doc: SketchDoc, e: Entity, outlines?: Map<Id, Contour[]>): Sc
     case 'path': {
       const vs = pathVertices(doc, e);
       if (vs.length < 2) return null;
-      item = { ...base, contours: [polygonContour(vs, e.closed)], closed: e.closed };
+      item = { ...base, contours: [pathContour(doc, e)], closed: e.closed };
+      break;
+    }
+    case 'arc': {
+      const g = arcGeom(doc, e);
+      const deg = (a: number) => (a * 180) / Math.PI;
+      item = { ...base, style: { ...e.style, fill: null }, contours: [arcContour(g)], closed: false, arc: { c: { ...g.c }, r: g.r, start: deg(g.a0), end: deg(g.a0 + g.sweep) } };
       break;
     }
     case 'circle': {

@@ -2,7 +2,7 @@ import { Algorithm, DebugMode, GcsWrapper, SolveStatus, init_planegcs_module, ty
 import type { Constraint, Dimension, Id, SketchDoc, Vec2 } from '../model/types';
 import { constraintError, dimError } from '../model/measure';
 import { circleOf, lineOf } from '../model/doc';
-import { constraintPrimitives, dimensionPrimitives, modelIdOf, SEP } from './mapping';
+import { arcPrimitives, constraintPrimitives, dimensionPrimitives, modelIdOf, SEP } from './mapping';
 
 /** Temporäre Zug-Vorgabe beim interaktiven Ziehen (wird nur „so gut es geht“ erfüllt). */
 export type DragSpec =
@@ -51,6 +51,7 @@ interface Component {
   points: Id[];
   circles: Id[];
   lines: Id[];
+  arcs: Id[];
   constraints: Constraint[];
   dims: Dimension[];
 }
@@ -224,6 +225,7 @@ export class SketchSolver {
       const c = circleOf(doc, id)!;
       prims.push({ id, type: 'circle', c_id: c.center, radius: solved?.radii[id] ?? c.r });
     }
+    for (const id of comp.arcs) prims.push(...arcPrimitives(doc, id, solved?.points));
     for (const c of comp.constraints) prims.push(...constraintPrimitives(doc, c));
     for (const d of comp.dims) prims.push(...dimensionPrimitives(doc, d));
     return prims;
@@ -258,7 +260,7 @@ function freeComponent(doc: SketchDoc, comp: Component): CompResult {
   const radii: Record<Id, number> = {};
   for (const id of comp.points) points[id] = { x: doc.points[id].x, y: doc.points[id].y };
   for (const id of comp.circles) radii[id] = circleOf(doc, id)!.r;
-  return { ok: true, points, radii, dof: comp.points.length * 2 + comp.circles.length, conflicting: [], redundant: [], maxError: 0 };
+  return { ok: true, points, radii, dof: comp.points.length * 2 + comp.circles.length - comp.arcs.length, conflicting: [], redundant: [], maxError: 0 };
 }
 
 function extraPrimitives(doc: SketchDoc, opts: SolveOptions): SketchPrimitive[] {
@@ -333,6 +335,7 @@ export function components(doc: SketchDoc, exclude?: ReadonlySet<Id>): Component
   for (const p of Object.values(doc.points)) if (!p.locked) parent.set(p.id, p.id);
   const lines: Id[] = [];
   const circles: Id[] = [];
+  const arcs: Id[] = [];
   for (const e of Object.values(doc.entities)) {
     if (e.kind === 'line') {
       lines.push(e.id);
@@ -341,6 +344,10 @@ export function components(doc: SketchDoc, exclude?: ReadonlySet<Id>): Component
       circles.push(e.id);
       parent.set(e.id, e.id);
       if (parent.has(e.center)) union(e.id, e.center);
+    } else if (e.kind === 'arc') {
+      arcs.push(e.id);
+      const own = [e.center, e.p1, e.p2].filter((p) => parent.has(p));
+      for (let i = 1; i < own.length; i++) union(own[0], own[i]);
     }
   }
   /** Freie Knoten (Punkte/Radien), die eine Referenz berührt */
@@ -350,6 +357,7 @@ export function components(doc: SketchDoc, exclude?: ReadonlySet<Id>): Component
     if (!e) return [];
     if (e.kind === 'line') return [e.p1, e.p2].filter((p) => parent.has(p));
     if (e.kind === 'circle') return [e.id];
+    if (e.kind === 'arc') return [e.center, e.p1, e.p2].filter((p) => parent.has(p));
     if (e.kind === 'text') return parent.has(e.anchor) ? [e.anchor] : [];
     return [];
   };
@@ -370,7 +378,7 @@ export function components(doc: SketchDoc, exclude?: ReadonlySet<Id>): Component
   const comp = (root: Id) => {
     let c = byRoot.get(root);
     if (!c) {
-      c = { points: [], circles: [], lines: [], constraints: [], dims: [] };
+      c = { points: [], circles: [], lines: [], arcs: [], constraints: [], dims: [] };
       byRoot.set(root, c);
     }
     return c;
@@ -381,6 +389,12 @@ export function components(doc: SketchDoc, exclude?: ReadonlySet<Id>): Component
     const l = lineOf(doc, id)!;
     const anchor = parent.has(l.p1) ? l.p1 : parent.has(l.p2) ? l.p2 : null;
     if (anchor) comp(find(anchor)).lines.push(id);
+  }
+  for (const id of arcs) {
+    const a = doc.entities[id];
+    if (a?.kind !== 'arc') continue;
+    const anchor = [a.center, a.p1, a.p2].find((p) => parent.has(p));
+    if (anchor) comp(find(anchor)).arcs.push(id);
   }
   for (const c of cons) {
     const n = nodesOfItem(c.refs);

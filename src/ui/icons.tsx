@@ -321,3 +321,52 @@ export const IconSketch = (p: { size?: number }) => (
     <path d="M15.5 4.5 L19.5 8.5 L11 17 L7 17 L7 13 Z" fill="currentColor" fillOpacity="0.12" strokeWidth="1.4" />
   </Icon>
 );
+export const IconArc3 = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 18 A9 9 0 0 1 20 18" />
+    {dot(4, 18)}
+    {dot(12, 9.2)}
+    {dot(20, 18)}
+  </Icon>
+);
+export const IconArcCenter = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M20 14 A8 8 0 0 0 8 7" />
+    <path d="M10 14 h4 M12 12 v4" />
+    <path d="M12 14 L20 14" strokeOpacity="0.45" strokeDasharray="2 2" />
+    {dot(20, 14)}
+    {dot(8, 7)}
+  </Icon>
+);
+export const IconEllipse = (p: { size?: number }) => (
+  <Icon {...p}>
+    <ellipse cx="12" cy="12" rx="9" ry="5.5" />
+    <path d="M10 12 h4 M12 10 v4" />
+  </Icon>
+);
+export const IconPolygon = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M12 3.5 L19.4 7.75 L19.4 16.25 L12 20.5 L4.6 16.25 L4.6 7.75 Z" />
+    <circle cx="12" cy="12" r="8.5" strokeOpacity="0.35" strokeDasharray="2 2" />
+  </Icon>
+);
+export const IconStar = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M12 3 L14.6 9.1 L21 9.6 L16.1 13.8 L17.6 20.3 L12 16.8 L6.4 20.3 L7.9 13.8 L3 9.6 L9.4 9.1 Z" />
+  </Icon>
+);
+export const IconPen = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 19 C6 9 14 17 19 6" />
+    <path d="M14 4 L20 4 M17 1.5 L17 6.5" strokeOpacity="0" />
+    {dot(4, 19)}
+    {dot(19, 6)}
+    <path d="M19 6 L22 3" strokeOpacity="0.55" />
+    <path d="M19 6 L16 9" strokeOpacity="0.55" />
+  </Icon>
+);
+export const IconProfile = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M5 8 L13 8 A5 5 0 0 1 13 18 L5 18 Z" fill="currentColor" fillOpacity="0.18" />
+  </Icon>
+);

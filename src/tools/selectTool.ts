@@ -1,6 +1,8 @@
 import type { Id, SketchDoc, Vec2 } from '../model/types';
+import { arcContour, arcGeom, pathContour, roundOf } from '../model/arc';
+import { flattenContour } from '../model/shape';
 import { ORIGIN_ID } from '../model/types';
-import { circleOf, lineOf, pathOfLine, pt } from '../model/doc';
+import { circleOf, pathOfLine, pt } from '../model/doc';
 import { entityBBox } from '../model/bounds';
 import { bboxContainsBox, bboxIntersects, bboxValid, circleTouchesBox, dist, dot, segmentTouchesBox, sub, type BBox } from '../model/geometry';
 import { dimGeometry } from '../render/dimGeometry';
@@ -132,7 +134,7 @@ export class SelectTool implements Tool {
     const g = dimGeometry(doc, d, 1 / vp.zoom);
     if (!g) return;
     if (d.kind === 'radius' || d.kind === 'diameter') {
-      const c = circleOf(doc, d.refs[0]);
+      const c = roundOf(doc, d.refs[0]);
       if (!c) return;
       const C = pt(doc, c.center);
       const ang = Math.atan2(w.y - C.y, w.x - C.x);
@@ -236,16 +238,18 @@ export class SelectTool implements Tool {
       const eb = entityBBox(doc, e);
       if (!bboxValid(eb)) continue;
       const inside = bboxContainsBox(box, eb);
-      if (e.kind === 'line') {
+      if (e.kind === 'line' || e.kind === 'arc') {
         if (pathOfLine(doc, e.id)) continue;
+        if (e.kind === 'arc') {
+          take(e.id, inside, flattenContour(arcContour(arcGeom(doc, e)), 0.1).some((q, i, arr) => i > 0 && segmentTouchesBox(arr[i - 1], q, box)));
+          continue;
+        }
         take(e.id, inside, segmentTouchesBox(pt(doc, e.p1), pt(doc, e.p2), box));
       } else if (e.kind === 'circle') {
         take(e.id, inside, circleTouchesBox(pt(doc, e.center), e.r, box));
       } else if (e.kind === 'path') {
-        const touching = e.edges.some((ed) => {
-          const l = lineOf(doc, ed.id);
-          return !!l && segmentTouchesBox(pt(doc, l.p1), pt(doc, l.p2), box);
-        });
+        const poly = flattenContour(pathContour(doc, e), 0.1);
+        const touching = poly.some((q, i) => segmentTouchesBox(poly[i === 0 ? poly.length - 1 : i - 1], q, box));
         take(e.id, inside, touching);
       } else {
         take(e.id, inside, bboxIntersects(box, eb));

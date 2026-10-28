@@ -1,15 +1,16 @@
 import type { Id, SketchDoc, Vec2 } from '../model/types';
-import { lineOf, pathVertices, pt } from '../model/doc';
+import { pathVertices, pt } from '../model/doc';
 import { measureText } from '../model/textMetrics';
 import { closestOnSegment, dist, pointInPolygon } from '../model/geometry';
-import { pointInPolys, shapeWorldPolys } from '../model/shape';
+import { flattenContour, pointInPolys, shapeWorldPolys } from '../model/shape';
+import { arcGeom, distToArc, pathContour, pathHasArcs } from '../model/arc';
 import { imageCorners } from '../model/image';
 import { isInert } from '../model/layers';
 import type { SceneLayout } from '../render/renderer';
 import { hitGlyph } from '../render/glyphs';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
 
-export type HitKind = 'point' | 'line' | 'circle' | 'text' | 'path' | 'shape' | 'image' | 'dim' | 'glyph';
+export type HitKind = 'point' | 'line' | 'circle' | 'arc' | 'text' | 'path' | 'shape' | 'image' | 'dim' | 'glyph';
 
 export interface Hit {
   kind: HitKind;
@@ -82,6 +83,8 @@ export function hitTest(doc: SketchDoc, vp: Viewport, layout: SceneLayout | null
       } else if (e.kind === 'circle') {
         const c = toScreen(vp, pt(doc, e.center));
         d = Math.abs(dist(c, s) - e.r * vp.zoom);
+      } else if (e.kind === 'arc') {
+        d = distToArc(toWorld(vp, s), arcGeom(doc, e)) * vp.zoom;
       }
       if (d <= curveTol && (!best || d < best.dist)) best = { kind: e.kind as HitKind, id: e.id, dist: d };
     }
@@ -117,7 +120,7 @@ export function hitTest(doc: SketchDoc, vp: Viewport, layout: SceneLayout | null
     if (opts.fills && e.kind === 'image' && pointInPolys(w, [imageCorners(doc, e)], 'nonzero')) return { kind: 'image', id: e.id, dist: 0 };
     if (opts.fills) {
       if (e.kind === 'path' && e.closed && (e.style.fill || e.construction === false)) {
-        const vs = pathVertices(doc, e);
+        const vs = pathHasArcs(doc, e) ? flattenContour(pathContour(doc, e), 0.05) : pathVertices(doc, e);
         if (vs.length >= 3 && pointInPolygon(w, vs) && e.style.fill) return { kind: 'path', id: e.id, dist: 0 };
       } else if (e.kind === 'circle' && e.style.fill && !e.construction) {
         if (dist(pt(doc, e.center), w) <= e.r) return { kind: 'circle', id: e.id, dist: 0 };
@@ -137,6 +140,8 @@ export function pointsOf(doc: SketchDoc, id: Id): Id[] {
       return [e.p1, e.p2];
     case 'circle':
       return [e.center];
+    case 'arc':
+      return [e.center, e.p1, e.p2];
     case 'text':
     case 'shape':
     case 'image':
@@ -144,8 +149,9 @@ export function pointsOf(doc: SketchDoc, id: Id): Id[] {
     case 'path': {
       const out: Id[] = [];
       for (const ed of e.edges) {
-        const l = lineOf(doc, ed.id);
-        if (l) out.push(l.p1, l.p2);
+        const l = doc.entities[ed.id];
+        if (l?.kind === 'line') out.push(l.p1, l.p2);
+        else if (l?.kind === 'arc') out.push(l.center, l.p1, l.p2);
       }
       for (const p of Object.values(doc.points)) if (p.owner === e.id) out.push(p.id);
       return out;

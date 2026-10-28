@@ -1,4 +1,5 @@
 import type { ConstraintKind, DimensionKind, Gradient, Id, SketchDoc, Style, Vec2 } from '../model/types';
+import { arcGeom } from '../model/arc';
 import { ORIGIN_ID } from '../model/types';
 import { circleOf, lineOf, pathOfLine, pathVertices, pt } from '../model/doc';
 import { entityBBox } from '../model/bounds';
@@ -93,6 +94,97 @@ export const TOOL_DEFS: ToolDef[] = [
         construction: { type: 'boolean' },
       },
       required: ['cx', 'cy', 'diameter'],
+    },
+  },
+  {
+    name: 'draw_arc',
+    description:
+      'Draw a circular arc counter-clockwise from start_angle to end_angle (degrees, 0 = +x, 90 = +y) around (cx, cy). Endpoints that land on existing points get attached. With dimension=true (default) the radius becomes a driving dimension. Arcs can be dimensioned (radius/diameter) and constrained (tangent to lines/circles/arcs, equal, concentric) like circles, and combined with lines into a filled area via make_area.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        cx: { type: 'number' },
+        cy: { type: 'number' },
+        radius: { type: 'number', description: 'mm, > 0' },
+        start_angle: { type: 'number' },
+        end_angle: { type: 'number' },
+        dimension: { type: 'boolean' },
+        stroke: COLOR,
+        stroke_width: { type: 'number' },
+        construction: { type: 'boolean' },
+      },
+      required: ['cx', 'cy', 'radius', 'start_angle', 'end_angle'],
+    },
+  },
+  {
+    name: 'draw_polygon',
+    description:
+      'Draw a regular polygon (lines with a construction circle, all sides equal). mode "circumscribed": corners on the circle; "inscribed": sides touch the circle (diameter = width across flats). rotation = angle (degrees) of the first corner (circumscribed) or first side midpoint (inscribed).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        cx: { type: 'number' },
+        cy: { type: 'number' },
+        sides: { type: 'number', description: '3–64' },
+        diameter: { type: 'number' },
+        mode: { type: 'string', enum: ['circumscribed', 'inscribed'] },
+        rotation: { type: 'number' },
+        fill: COLOR,
+        stroke: COLOR,
+        stroke_width: { type: 'number' },
+      },
+      required: ['cx', 'cy', 'sides', 'diameter'],
+    },
+  },
+  {
+    name: 'draw_star',
+    description:
+      'Draw a star (tips on an outer, inner corners on an inner construction circle; both diameters become dimensions). rotation = angle (degrees) of the first tip, default 90 (pointing up).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        cx: { type: 'number' },
+        cy: { type: 'number' },
+        points: { type: 'number', description: 'number of tips, 3–48' },
+        outer_diameter: { type: 'number' },
+        inner_diameter: { type: 'number' },
+        rotation: { type: 'number' },
+        fill: COLOR,
+        stroke: COLOR,
+        stroke_width: { type: 'number' },
+      },
+      required: ['cx', 'cy', 'points', 'outer_diameter', 'inner_diameter'],
+    },
+  },
+  {
+    name: 'draw_ellipse',
+    description: 'Draw an axis-aligned ellipse (as a shape) centered at (cx, cy).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        cx: { type: 'number' },
+        cy: { type: 'number' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+        fill: COLOR,
+        stroke: COLOR,
+        stroke_width: { type: 'number' },
+      },
+      required: ['cx', 'cy', 'width', 'height'],
+    },
+  },
+  {
+    name: 'make_area',
+    description: 'Turn lines and arcs whose ends meet (coincident) into one closed, fillable area, e.g. a slot made of two lines and two tangent arcs.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'string' } },
+        fill: COLOR,
+        stroke: COLOR,
+        stroke_width: { type: 'number' },
+      },
+      required: ['ids'],
     },
   },
   {
@@ -245,13 +337,14 @@ export const TOOL_DEFS: ToolDef[] = [
   },
   {
     name: 'get_production',
-    description: 'Production data for LabwearOS: article, version, garment, motifs (placement on the garment, finishing technique), color variants, Pantone notes, available print areas and techniques.',
+    description:
+      'Production data for LabwearOS: article, version, garment, motifs (placement on the garment, finishing technique), color variants, Pantone notes, available print areas and techniques.',
     input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'set_production',
     description:
-      'Change production data. Placement: area id (e.g. chest-left = wearer\'s left chest), or x (mm from center line, + = right in the image) and y (mm from collar seam to top edge of motif). Variants: list replaces all variants; colors maps original design colors to print colors. pantone: map print color #rrggbb → Pantone code text (free text only).',
+      "Change production data. Placement: area id (e.g. chest-left = wearer's left chest), or x (mm from center line, + = right in the image) and y (mm from collar seam to top edge of motif). Variants: list replaces all variants; colors maps original design colors to print colors. pantone: map print color #rrggbb → Pantone code text (free text only).",
     input_schema: {
       type: 'object',
       properties: {
@@ -266,7 +359,11 @@ export const TOOL_DEFS: ToolDef[] = [
         y: { type: 'number' },
         variants: {
           type: 'array',
-          items: { type: 'object', properties: { name: { type: 'string' }, fabric: COLOR, fabric_name: { type: 'string' }, colors: { type: 'object', additionalProperties: { type: 'string' } } }, required: ['name', 'fabric'] },
+          items: {
+            type: 'object',
+            properties: { name: { type: 'string' }, fabric: COLOR, fabric_name: { type: 'string' }, colors: { type: 'object', additionalProperties: { type: 'string' } } },
+            required: ['name', 'fabric'],
+          },
         },
         pantone: { type: 'object', additionalProperties: { type: 'string' } },
       },
@@ -311,8 +408,34 @@ export function sketchSummary(doc: SketchDoc, analysis: Analysis, selection: Id[
     }
     const box = entityBBox(doc, e);
     const bbox = bboxValid(box) ? [r3(box.minX), r3(box.minY), r3(box.maxX), r3(box.maxY)] : null;
-    if (e.kind === 'circle') {
-      objects.push({ id: e.id, type: 'circle', center_point: e.center, center: pair(pt(doc, e.center)), diameter: r3(e.r * 2), ...styleJson(e.style), ...(e.construction ? { construction: true } : {}) });
+    if (e.kind === 'arc') {
+      const g = arcGeom(doc, e);
+      const path = pathOfLine(doc, e.id);
+      objects.push({
+        id: e.id,
+        type: 'arc',
+        center_point: e.center,
+        start_point: e.p1,
+        end_point: e.p2,
+        center: pair(g.c),
+        radius: r3(g.r),
+        start_angle: r3((g.a0 * 180) / Math.PI),
+        sweep_angle: r3((g.sweep * 180) / Math.PI),
+        ...(path ? { in_path: path.id } : styleJson(e.style)),
+        ...(e.construction ? { construction: true } : {}),
+      });
+    } else if (e.kind === 'shape') {
+      objects.push({ id: e.id, type: 'shape', name: e.name ?? null, anchor_point: e.anchor, bbox, ...styleJson(e.style) });
+    } else if (e.kind === 'circle') {
+      objects.push({
+        id: e.id,
+        type: 'circle',
+        center_point: e.center,
+        center: pair(pt(doc, e.center)),
+        diameter: r3(e.r * 2),
+        ...styleJson(e.style),
+        ...(e.construction ? { construction: true } : {}),
+      });
     } else if (e.kind === 'text') {
       objects.push({
         id: e.id,
@@ -329,7 +452,9 @@ export function sketchSummary(doc: SketchDoc, analysis: Analysis, selection: Id[
         ...styleJson(e.style),
       });
     } else if (e.kind === 'path') {
-      const helpers = Object.values(doc.points).filter((p) => p.owner === e.id).map((p) => p.id);
+      const helpers = Object.values(doc.points)
+        .filter((p) => p.owner === e.id)
+        .map((p) => p.id);
       objects.push({
         id: e.id,
         type: e.closed ? 'closed_path' : 'open_path',
@@ -574,6 +699,79 @@ export async function runTool(host: AgentHost, name: string, input: Record<strin
           summary: `Kreis Ø${numberToExpr(dia)} mm`,
         };
       }
+      case 'draw_arc': {
+        const cx = num(input.cx, 'cx');
+        const cy = num(input.cy, 'cy');
+        const r = num(input.radius, 'radius');
+        if (r <= 0) return fail('radius muss > 0 sein');
+        const a0 = (num(input.start_angle, 'start_angle') * Math.PI) / 180;
+        const a1 = (num(input.end_angle, 'end_angle') * Math.PI) / 180;
+        const at = (a: number) => ({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+        const style = styleFrom(input, ed.s.currentStyle);
+        const out = ed.createArc(placed(doc, { x: cx, y: cy }), placed(doc, at(a0)), placed(doc, at(a1)), true, {
+          radius: input.dimension === false ? null : numberToExpr(r),
+          construction: input.construction === true,
+          style,
+        });
+        const err = outcomeText(out);
+        if (err || !out.ok) return fail(err ?? 'Bogen fehlgeschlagen');
+        const a = ed.s.doc.entities[out.arcId!] as { center: string; p1: string; p2: string };
+        return { content: `Created arc ${out.arcId} (center point ${a.center}, start point ${a.p1}, end point ${a.p2}). ${statusLine(ed)}`, summary: `Bogen R${numberToExpr(r)} mm` };
+      }
+      case 'draw_polygon': {
+        const cx = num(input.cx, 'cx');
+        const cy = num(input.cy, 'cy');
+        const n = Math.round(num(input.sides, 'sides'));
+        const dia = num(input.diameter, 'diameter');
+        if (dia <= 0 || n < 3) return fail('sides ≥ 3 und diameter > 0 nötig');
+        const rot = ((typeof input.rotation === 'number' ? input.rotation : 90) * Math.PI) / 180;
+        const mode = input.mode === 'inscribed' ? 'inscribed' : 'circumscribed';
+        const out = ed.createPolygon(placed(doc, { x: cx, y: cy }), { x: cx + (dia / 2) * Math.cos(rot), y: cy + (dia / 2) * Math.sin(rot) }, n, mode, {
+          diameter: numberToExpr(dia),
+          style: styleFrom(input, ed.s.currentStyle),
+        });
+        const err = outcomeText(out);
+        if (err || !out.ok) return fail(err ?? 'Vieleck fehlgeschlagen');
+        return {
+          content: `Created ${n}-sided polygon ${out.pathId} (construction circle ${out.circleId}, lines ${out.lineIds?.join(', ')}). ${statusLine(ed)}`,
+          summary: `${n}-Eck Ø${numberToExpr(dia)} mm`,
+        };
+      }
+      case 'draw_star': {
+        const cx = num(input.cx, 'cx');
+        const cy = num(input.cy, 'cy');
+        const n = Math.round(num(input.points, 'points'));
+        const D = num(input.outer_diameter, 'outer_diameter');
+        const d = num(input.inner_diameter, 'inner_diameter');
+        if (n < 3 || D <= 0 || d <= 0 || d >= D) return fail('points ≥ 3 und 0 < inner_diameter < outer_diameter nötig');
+        const rot = ((typeof input.rotation === 'number' ? input.rotation : 90) * Math.PI) / 180;
+        const out = ed.createStar(placed(doc, { x: cx, y: cy }), { x: cx + (D / 2) * Math.cos(rot), y: cy + (D / 2) * Math.sin(rot) }, n, d / D, {
+          diameter: numberToExpr(D),
+          innerDiameter: numberToExpr(d),
+          style: styleFrom(input, ed.s.currentStyle),
+        });
+        const err = outcomeText(out);
+        if (err || !out.ok) return fail(err ?? 'Stern fehlgeschlagen');
+        return { content: `Created star ${out.pathId} (outer circle ${out.outerId}, inner circle ${out.innerId}). ${statusLine(ed)}`, summary: `Stern ${n} Zacken Ø${numberToExpr(D)} mm` };
+      }
+      case 'draw_ellipse': {
+        const cx = num(input.cx, 'cx');
+        const cy = num(input.cy, 'cy');
+        const w = num(input.width, 'width');
+        const h = num(input.height, 'height');
+        if (w <= 0 || h <= 0) return fail('width und height müssen > 0 sein');
+        const out = ed.createEllipse(placed(doc, { x: cx, y: cy }), w / 2, h / 2, { style: styleFrom(input, ed.s.currentStyle) });
+        const err = outcomeText(out);
+        if (err || !out.ok) return fail(err ?? 'Ellipse fehlgeschlagen');
+        return { content: `Created ellipse ${out.shapeId}. ${statusLine(ed)}`, summary: `Ellipse ${numberToExpr(w)} × ${numberToExpr(h)} mm` };
+      }
+      case 'make_area': {
+        const ids = Array.isArray(input.ids) ? input.ids.map(String) : [];
+        const st = styleFrom(input, { ...ed.s.currentStyle, fill: ed.s.currentStyle.fill ?? '#1e2328' });
+        const out = ed.createProfile(ids, st);
+        if (!out.ok) return fail(out.message);
+        return { content: `Created closed area ${out.pathId}. ${statusLine(ed)}`, summary: 'Geschlossene Fläche' };
+      }
       case 'draw_polyline': {
         const raw = input.points;
         if (!Array.isArray(raw) || raw.length < 2) return fail('points braucht mindestens 2 Punkte');
@@ -718,7 +916,10 @@ export async function runTool(host: AgentHost, name: string, input: Record<strin
         const moved = [...ids].reduce((m, id) => Math.max(m, dist(after.points[id], doc.points[id])), 0);
         const full = Math.hypot(dx, dy);
         return {
-          content: moved >= full - 1e-6 ? `Moved by (${dx}, ${dy}).` : `Only partly moved (${r3(moved)} of ${r3(full)} mm) because constraints/dimensions hold the geometry. Change dimensions or delete constraints instead.`,
+          content:
+            moved >= full - 1e-6
+              ? `Moved by (${dx}, ${dy}).`
+              : `Only partly moved (${r3(moved)} of ${r3(full)} mm) because constraints/dimensions hold the geometry. Change dimensions or delete constraints instead.`,
           summary: `Verschoben (${numberToExpr(dx)}, ${numberToExpr(dy)})`,
         };
       }

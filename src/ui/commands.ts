@@ -115,6 +115,43 @@ export function buildCommands(): Command[] {
       },
     },
     { id: 'tool.circle', label: 'Kreis', group: 'Zeichnen', shortcut: 'C', keys: [{ key: 'c' }], run: (a) => a.setTool('circle') },
+    {
+      id: 'tool.arc',
+      label: 'Bogen (3 Punkte)',
+      group: 'Zeichnen',
+      shortcut: 'A',
+      keys: [{ key: 'a' }],
+      keywords: 'arc kreisbogen rundung',
+      run: (a) => {
+        a.store.setState({ arcMode: '3p' });
+        a.setTool('arc');
+      },
+    },
+    {
+      id: 'tool.arc.center',
+      label: 'Bogen vom Mittelpunkt',
+      group: 'Zeichnen',
+      keywords: 'arc kreisbogen mittelpunktbogen',
+      run: (a) => {
+        a.store.setState({ arcMode: 'center' });
+        a.setTool('arc');
+      },
+    },
+    { id: 'tool.ellipse', label: 'Ellipse', group: 'Zeichnen', keywords: 'oval', run: (a) => a.setTool('ellipse') },
+    { id: 'tool.polygon', label: 'Vieleck (Polygon)', group: 'Zeichnen', shortcut: 'N', keys: [{ key: 'n' }], keywords: 'polygon sechseck achteck dreieck n-eck', run: (a) => a.setTool('polygon') },
+    { id: 'tool.star', label: 'Stern', group: 'Zeichnen', keywords: 'stern zacken star', run: (a) => a.setTool('star') },
+    { id: 'tool.pen', label: 'Zeichenstift (Bézierpfad)', group: 'Zeichnen', shortcut: 'B', keys: [{ key: 'b' }], keywords: 'bezier kurve pfad pen stift', run: (a) => a.setTool('pen') },
+    {
+      id: 'draw.profile',
+      label: 'Geschlossene Fläche aus Auswahl',
+      group: 'Zeichnen',
+      keywords: 'kontur füllen fläche profil schließen linien bögen',
+      run: (a) => {
+        const out = a.editor.createProfile(a.editor.s.selection);
+        if (!out.ok) a.editor.toast(out.message, 'error', 6000);
+        else if (out.pathId) a.editor.select([out.pathId]);
+      },
+    },
     { id: 'tool.text', label: 'Text', group: 'Zeichnen', shortcut: 'T', keys: [{ key: 't' }], run: (a) => a.setTool('text') },
     { id: 'tool.point', label: 'Punkt', group: 'Zeichnen', shortcut: 'P', keys: [{ key: 'p' }], run: (a) => a.setTool('point') },
     { id: 'check.preflight', label: 'Prüfen für Veredelung (Preflight)', group: 'Prüfen', keywords: 'preflight check fehler linien zu fein plotter stick siebdruck dtf', run: (a) => void a.preflight() },

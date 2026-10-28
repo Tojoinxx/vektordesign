@@ -894,6 +894,111 @@ await step('DTF-Sammelbogen: Logos und Trikotnamen auf 560-mm-Rolle, PDF mit Sch
   assert(saved.includes('Yilmaz'), 'Einstellungen nicht im Projekt gespeichert');
 });
 
+await step('Neue Zeichenwerkzeuge: Bogen (3 Punkte und Mittelpunkt), Vieleck, Stern, Ellipse, Zeichenstift', async () => {
+  await newDoc();
+  await app(() => window.vektordesign.editor.setView({ cx: 15, cy: 20, zoom: 4 }));
+  await page.click('[data-testid="ribbon-sketch"]');
+  await sleep(100);
+  const kinds = () => app(() => Object.values(window.vektordesign.store.getState().doc.entities).map((e) => e.kind));
+  // Bogen durch 3 Punkte mit Radius 25
+  await page.keyboard.press('a');
+  await clickWorld(-60, -20);
+  await clickWorld(-20, -20);
+  await moveWorld(-40, -8);
+  await page.keyboard.type('25');
+  await page.keyboard.press('Enter');
+  await sleep(150);
+  const arcR = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    const a = Object.values(d.entities).find((e) => e.kind === 'arc');
+    if (!a) return null;
+    const c = d.points[a.center];
+    const p = d.points[a.p1];
+    return Math.hypot(p.x - c.x, p.y - c.y);
+  });
+  assert(arcR !== null && Math.abs(arcR - 25) < 1e-6, `Bogenradius: ${arcR}`);
+  await page.keyboard.press('Escape');
+  // Vieleck: 6 Ecken, Ø40
+  await page.keyboard.press('n');
+  await clickWorld(30, 0);
+  await moveWorld(48, 3);
+  await page.keyboard.type('6');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('40');
+  await page.keyboard.press('Enter');
+  await sleep(150);
+  await page.keyboard.press('Escape');
+  // Stern: 5 Zacken, Ø50 / Ø20
+  await page.click('[data-testid="tool-star"]');
+  await clickWorld(0, 50);
+  await moveWorld(2, 70);
+  await page.keyboard.type('5');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('50');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+  await sleep(150);
+  await page.keyboard.press('Escape');
+  // Ellipse 40 × 20
+  await page.click('[data-testid="tool-ellipse"]');
+  await clickWorld(-55, 50);
+  await moveWorld(-35, 58);
+  await page.keyboard.type('40');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+  await sleep(150);
+  await page.keyboard.press('Escape');
+  // Zeichenstift: Ecke, Kurve (ziehen), Ecke, Klick auf den Start schließt
+  await page.keyboard.press('b');
+  await clickWorld(40, 40);
+  const a = await screenOf(55, 65);
+  await page.mouse.move(a.x, a.y, { steps: 3 });
+  await page.mouse.down();
+  await page.mouse.move(a.x + 40, a.y, { steps: 6 });
+  await page.mouse.up();
+  await clickWorld(70, 40);
+  await clickWorld(40, 40);
+  await sleep(150);
+  // Mittelpunktbogen: halber Kreis gegen den Uhrzeigersinn
+  await page.click('[data-testid="arc-mode-center"]');
+  await clickWorld(80, -20);
+  await clickWorld(95, -20);
+  await moveWorld(90, -10);
+  await moveWorld(80, -5);
+  await moveWorld(70, -10);
+  await clickWorld(65, -20);
+  await sleep(150);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('f');
+  await sleep(200);
+  await shot('34-neue-werkzeuge');
+  const k = await kinds();
+  const count = (x) => k.filter((y) => y === x).length;
+  assert(count('arc') === 2, `Bögen: ${count('arc')}`);
+  assert(count('path') === 2, `Flächen (Vieleck + Stern): ${count('path')}`);
+  assert(count('shape') === 2, `Formen (Ellipse + Pfad): ${count('shape')}`);
+  const info = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    const shapes = Object.values(d.entities).filter((e) => e.kind === 'shape');
+    const pen = shapes.find((e) => e.name === 'Pfad');
+    const arcs = Object.values(d.entities).filter((e) => e.kind === 'arc');
+    const sweeps = arcs.map((a) => {
+      const c = d.points[a.center];
+      const p1 = d.points[a.p1];
+      const p2 = d.points[a.p2];
+      let s = Math.atan2(p2.y - c.y, p2.x - c.x) - Math.atan2(p1.y - c.y, p1.x - c.x);
+      while (s <= 0) s += Math.PI * 2;
+      return (s * 180) / Math.PI;
+    });
+    return { penClosed: pen?.contours[0].closed, penCurved: pen?.contours[0].nodes.some((n) => n.ox !== undefined), sweeps };
+  });
+  assert(info.penClosed && info.penCurved, `Pfad: ${JSON.stringify(info)}`);
+  assert(info.sweeps.some((s) => Math.abs(s - 180) < 1), `Mittelpunktbogen: ${info.sweeps}`);
+  results.push(`   Bögen ${info.sweeps.map((s) => s.toFixed(0) + '°').join(', ')}, Vieleck, Stern, Ellipse, geschlossener Bézierpfad`);
+});
+
 // ---------------------------------------------------------------------------
 // Meilenstein 4: iPad (Touch, Apple Pencil, Web-App, Sync)
 // ---------------------------------------------------------------------------
