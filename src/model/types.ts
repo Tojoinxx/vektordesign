@@ -293,7 +293,7 @@ export type SketchStatus = 'empty' | 'under' | 'full' | 'over';
 // ---------------------------------------------------------------------------
 
 export type Technique = 'screen' | 'dtg' | 'puff' | 'embroidery' | 'patch' | 'silicone' | 'sublimation' | 'transfer' | 'emboss' | 'allover';
-export type GarmentId = 'hoodie' | 'tshirt' | 'sweatshirt' | 'cap';
+export type GarmentId = 'hoodie' | 'tshirt' | 'sweatshirt' | 'cap' | 'bag';
 export type GarmentView = 'front' | 'back';
 
 /**

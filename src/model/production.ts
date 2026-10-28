@@ -1,6 +1,6 @@
 import { produce } from 'immer';
 import type { ColorSpec, Entity, Id, Motif, Production, SketchDoc, Style, Variant } from './types';
-import { hexToRgb, normalizeHex, rgbToCmyk } from './color';
+import { contrastRatio, hexToRgb, normalizeHex, rgbToCmyk } from './color';
 import { isGradient } from './paint';
 import { layersOf, visibleOrder } from './layers';
 import { areaOf, garmentOf } from './garments';
@@ -158,6 +158,26 @@ export function motifWarnings(doc: SketchDoc, p: Production, m: Motif): string[]
 }
 
 const fmt = (n: number) => (Math.round(n * 10) / 10).toLocaleString('de-DE');
+
+export interface ContrastWarning {
+  variant: string;
+  fabric: string;
+  color: string;
+  ratio: number;
+}
+
+/** Druckfarben, die sich kaum vom Stoff abheben (je Variante). Grenze: Kontrast unter 1,6 : 1. */
+export function contrastWarnings(doc: SketchDoc, p: Production = productionOf(doc), limit = 1.6): ContrastWarning[] {
+  const out: ContrastWarning[] = [];
+  for (const v of p.variants)
+    for (const m of p.motifs)
+      for (const orig of motifColors(doc, m)) {
+        const c = variantColor(v, orig);
+        const ratio = contrastRatio(c, v.fabric);
+        if (ratio < limit && !out.some((w) => w.variant === v.name && w.color === c)) out.push({ variant: v.name, fabric: v.fabricName ?? v.fabric, color: c, ratio });
+      }
+  return out;
+}
 
 /** Dateiname ohne Sonderzeichen (Umlaute ausgeschrieben). */
 export function fileSafe(s: string): string {

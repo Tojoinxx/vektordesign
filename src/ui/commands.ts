@@ -200,6 +200,7 @@ export function buildCommands(): Command[] {
         a.ui.setState({ placement: d.production?.motifs[0]?.id ?? 'm1' });
       },
     },
+    { id: 'prod.mockup', label: 'Mockup-Vorschau', group: 'Produktion', keywords: 'shirt hoodie tasche vorschau stofffarbe kontrast', run: (a) => a.ui.setState({ mockup: true }) },
     { id: 'prod.package', label: 'ZIP-Paket für LabwearOS exportieren', group: 'Produktion', keywords: 'export zip paket labwearos', run: (a) => void a.exportPackage() },
     { id: 'prod.sheet', label: 'Artwork-Blatt exportieren (PDF)', group: 'Produktion', keywords: 'pdf blatt platzierung', run: (a) => void a.exportArtworkSheet() },
     { id: 'prod.template', label: 'LabwearOS-Vorlage importieren (PDF/AI) …', group: 'Produktion', keywords: 'vorlage import pdf ai illustrator', run: (a) => void a.importTemplate('front') },

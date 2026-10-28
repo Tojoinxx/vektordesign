@@ -242,6 +242,17 @@ function capDrawing(): GarmentDrawing {
   return { fills: [crown, brim], lines };
 }
 
+function bagDrawing(): GarmentDrawing {
+  // Stofftasche 380 × 420 mm, Henkel oben; Bezug: Oberkante Mitte (y = 0)
+  const body: Poly = { pts: [[-190, 0], [190, 0], [190, 420], [-190, 420]], closed: true };
+  const handleL = P(-125, 2).q(-80, -270, -35, 2).l(-55, 2).q(-80, -225, -105, 2).done(true);
+  const handleR: Poly = { pts: handleL.pts.map(([x, y]) => [-x, y] as Pt), closed: true };
+  return {
+    fills: [handleL, handleR, body],
+    lines: [{ pts: [[-186, 18], [186, 18]], closed: false }],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Katalog
 // ---------------------------------------------------------------------------
@@ -290,6 +301,17 @@ export const GARMENTS: Garment[] = [
     reference: { front: 'Schirmnaht Mitte', back: 'Schirmnaht Mitte' },
     areas: [{ id: 'cap-front', name: 'Cap-Front', view: 'front', x: 0, y: -130, w: 110, h: 55 }],
     draw: () => capDrawing(),
+  },
+  {
+    id: 'bag',
+    name: 'Tasche',
+    views: ['front'],
+    reference: { front: 'Oberkante Mitte', back: 'Oberkante Mitte' },
+    areas: [
+      { id: 'bag-front', name: 'Tasche Front', view: 'front', x: 0, y: 70, w: 280, h: 300 },
+      { id: 'bag-small', name: 'Tasche klein', view: 'front', x: 0, y: 120, w: 150, h: 150 },
+    ],
+    draw: () => bagDrawing(),
   },
 ];
 

@@ -21,7 +21,7 @@ import type { BoolOp } from '../model/boolean';
 import { evaluate } from '../params/expr';
 import { docBBox } from '../model/bounds';
 import { loadProfiles, profileById, saveProfiles, type ExportProfile } from '../model/profiles';
-import { productionOf, articleBase, motifEntities } from '../model/production';
+import { productionOf, articleBase, motifEntities, contrastWarnings } from '../model/production';
 import type { GarmentView } from '../model/types';
 import { buildPackage } from '../export/package';
 import { buildArtworkSheet } from '../export/artworkSheet';
@@ -88,6 +88,8 @@ export interface UiState {
   syncConflict: { text: string; meta: FileMeta; mode: 'watch' | 'save' } | null;
   /** Preflight-Ergebnis (Karte offen, solange gesetzt) */
   preflight: { target: PreflightTarget; minLine: number | null; result: PreflightResult | null; busy: boolean } | null;
+  /** Mockup-Vorschau offen */
+  mockup: boolean;
   /** iPad: fertige Datei, die per Knopf geteilt wird */
   shareReady: { name: string; share: () => Promise<void> } | null;
 }
@@ -193,6 +195,7 @@ export class AppController {
       syncConflict: null,
       shareReady: null,
       preflight: null,
+      mockup: false,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -879,6 +882,12 @@ export class AppController {
     const doc = this.editor.s.doc;
     const { outlines } = await textOutlines(doc).catch(() => ({ outlines: new Map() }));
     const result = runPreflight(doc, t, { minLine: ml ?? undefined, outlines });
+    // Kontrast Druckfarbe ↔ Stofffarbe der Varianten
+    const weak = contrastWarnings(doc);
+    if (weak.length) {
+      result.issues = result.issues.filter((i) => i.severity !== 'info' || !/Keine Probleme/.test(i.message));
+      for (const w of weak) result.issues.push({ severity: 'warn', message: `Kontrast: ${w.color.toUpperCase()} auf Stoff „${w.fabric}“ (${w.variant}) ist kaum sichtbar (${w.ratio.toFixed(1).replace('.', ',')} : 1).`, ids: [] });
+    }
     if (run === this.preflightRun && this.ui.getState().preflight) this.ui.setState({ preflight: { target: t, minLine: ml, result, busy: false } });
     return result;
   }

@@ -2356,3 +2356,69 @@ body {
   width: 100%;
   font-size: 11px;
 }
+
+/* Mockup */
+.mockup-stage {
+  background: radial-gradient(ellipse at 50% 35%, #f3f4f6, #d9dce1);
+}
+:root[data-theme='dark'] .mockup-stage {
+  background: radial-gradient(ellipse at 50% 35%, #3a3f47, #1d2025);
+}
+.mockup-row {
+  display: flex;
+  gap: 16px;
+  height: 100%;
+}
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.swatch-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  padding: 0;
+}
+.swatch-btn.on {
+  outline: 2px solid var(--tape);
+  outline-offset: 2px;
+}
+.contrast-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.contrast-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.contrast-list .swatch {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+}
+.contrast-list .tag {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.contrast-list .meh .tag {
+  background: #fff1d6;
+  color: #9a5b00;
+}
+.contrast-list .bad .tag,
+.contrast-list li.bad {
+  color: var(--bad-text);
+}
+.contrast-list .bad .tag {
+  background: var(--bad-soft);
+}

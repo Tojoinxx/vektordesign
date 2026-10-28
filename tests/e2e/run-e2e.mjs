@@ -835,6 +835,27 @@ await step('Abnahme M3: Logo auf Hoodie-Brust, Siebdruck, zwei Farbvarianten →
   results.push(`   Paket: ${names.length} Dateien`);
 });
 
+await step('Mockup-Vorschau: Logo auf dem Hoodie in Stofffarbe, Kontrast je Druckfarbe', async () => {
+  await page.click('[data-testid="tab-production"]');
+  await page.click('[data-testid="mockup-open"]');
+  await page.waitForSelector('[data-testid="mockup"]');
+  await sleep(400);
+  const painted = await app(() => {
+    const c = document.querySelector('[data-testid="mockup"] canvas');
+    const x = c.getContext('2d');
+    const d = x.getImageData(c.width / 2, c.height / 2, 1, 1).data;
+    return d[3] > 0;
+  });
+  assert(painted, 'Mockup leer');
+  const rows = await page.$$eval('[data-testid="mockup-contrast"] li', (l) => l.map((x) => x.textContent));
+  assert(rows.length >= 2, `Kontrastliste: ${rows}`);
+  await shot('32-mockup');
+  // Schwarzer Stoff + dunkelblaue Farbe → schwacher Kontrast wird gemeldet
+  const weak = await page.$$eval('[data-testid="mockup-contrast"] li.bad, [data-testid="mockup-contrast"] li.meh', (l) => l.length);
+  results.push(`   Mockup: ${rows.length} Druckfarben, ${weak} mit schwachem Kontrast`);
+  await page.click('[data-testid="mockup-close"]');
+});
+
 // ---------------------------------------------------------------------------
 // Meilenstein 4: iPad (Touch, Apple Pencil, Web-App, Sync)
 // ---------------------------------------------------------------------------
@@ -1182,8 +1203,8 @@ await step('Preflight: feine Linie für Stick und Plotter markiert, Logo für DT
   await shot('60-preflight-stick');
   await page.select('[data-testid="preflight-target"]', 'dtg');
   await page.waitForFunction(() => window.vektordesign.ui.getState().preflight?.result?.target === 'dtg' && !window.vektordesign.ui.getState().preflight.busy);
-  const ok = await app(() => window.vektordesign.ui.getState().preflight.result.issues.map((i) => i.severity));
-  assert(ok.length === 1 && ok[0] === 'info', `DTG sollte passen: ${ok}`);
+  const ok = await app(() => window.vektordesign.ui.getState().preflight.result.issues.filter((i) => !/^Kontrast/.test(i.message)).map((i) => i.severity));
+  assert(!ok.includes('error') && !ok.includes('warn'), `DTG sollte passen: ${ok}`);
   await app(() => window.vektordesign.closePreflight());
   await page.click('[data-testid="ribbon-sketch"]');
 });
