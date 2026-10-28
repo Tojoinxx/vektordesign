@@ -15,7 +15,7 @@ import type {
 } from '../model/types';
 import { shapeSize } from '../model/shape';
 import { productionOf } from '../model/production';
-import type { Production } from '../model/types';
+import type { ImageEntity, Production } from '../model/types';
 import { DEFAULT_LAYER, groupMembers, isInert, layerIdOf, layersOf } from '../model/layers';
 import { applyXf, cloneInto, type Xf, type XfReport } from './xform';
 import { extendLine, trimLine, type TrimResult } from './trimExtend';
@@ -1315,6 +1315,75 @@ export class Editor {
     );
     this.set({ activeLayer: id });
     return id;
+  }
+
+  /**
+   * Bild einfügen – standardmäßig als Vorlage zum Nachzeichnen (halbtransparent, nicht im
+   * Export) auf einer eigenen Ebene „Vorlage“ ganz unten. Größe: passend in die Ansicht.
+   */
+  insertImage(img: { src: string; pxWidth: number; pxHeight: number; name?: string }, opts: { reference?: boolean; center?: Vec2; widthMm?: number } = {}): CommitOutcome & { imageId?: Id } {
+    let imageId: Id | undefined;
+    const v = this.s.view;
+    const vw = this.viewport.width / v.zoom;
+    const vh = this.viewport.height / v.zoom;
+    const aspect = img.pxHeight / Math.max(1, img.pxWidth);
+    let w = opts.widthMm ?? Math.min(vw * 0.7, (vh * 0.7) / aspect);
+    if (!(w > 0)) w = 100;
+    const center = opts.center ?? { x: v.cx, y: v.cy };
+    const reference = opts.reference ?? true;
+    const out = this.commit(reference ? 'Vorlagenbild einfügen' : 'Bild einfügen', (d) => {
+      if (!d.layers || !d.layers.length) d.layers = [{ ...DEFAULT_LAYER }];
+      let layer = reference ? d.layers.find((l) => l.name === 'Vorlage') : undefined;
+      if (reference && !layer) {
+        // Bisherige Objekte ohne Ebenenangabe behalten ihre (bisher unterste) Ebene
+        const bottom = d.layers[0].id;
+        const known = new Set(d.layers.map((l) => l.id));
+        for (const e of Object.values(d.entities)) if (!e.layer || !known.has(e.layer)) e.layer = bottom;
+        layer = { id: newId(d, 'L'), name: 'Vorlage', visible: true, locked: false };
+        d.layers.unshift(layer);
+      }
+      const id = newId(d, 'img');
+      const anchor = addPoint(d, center, { owner: id });
+      d.entities[id] = {
+        id,
+        kind: 'image',
+        anchor,
+        width: w,
+        height: w * aspect,
+        rotation: 0,
+        src: img.src,
+        pxWidth: img.pxWidth,
+        pxHeight: img.pxHeight,
+        name: img.name,
+        reference,
+        construction: false,
+        style: { fill: null, stroke: null, strokeWidth: 0, opacity: reference ? 0.5 : 1 },
+        ...(layer ? { layer: layer.id } : {}),
+      };
+      d.order.unshift(id);
+      imageId = id;
+    });
+    if (out.ok && imageId) this.select([imageId]);
+    return { ...out, imageId };
+  }
+
+  /** Eigenschaften eines Bildes ändern (Größe proportional, Vorlage ja/nein). */
+  updateImage(id: Id, patch: { width?: number; height?: number; reference?: boolean; rotation?: number }): CommitOutcome {
+    const e = this.s.doc.entities[id];
+    if (!e || e.kind !== 'image') return { ok: false, reason: 'invalid', message: 'Kein Bild ausgewählt.' };
+    return this.commit('Bild ändern', (d) => {
+      const im = d.entities[id] as ImageEntity;
+      const ratio = im.height / im.width;
+      if (patch.width && patch.width > 0) {
+        im.width = patch.width;
+        im.height = patch.width * ratio;
+      } else if (patch.height && patch.height > 0) {
+        im.height = patch.height;
+        im.width = patch.height / ratio;
+      }
+      if (patch.reference !== undefined) im.reference = patch.reference;
+      if (patch.rotation !== undefined) im.rotation = patch.rotation;
+    });
   }
 
   /** Produktionsangaben ändern (Artikel, Motive, Varianten …) – ein Rückgängig-Schritt. */

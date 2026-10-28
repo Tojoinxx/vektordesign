@@ -4,7 +4,7 @@ import { applyVariant, articleBase, cmykOf, cmykText, fileSafe, motifColors, mot
 import { garmentOf, techniqueName, areaOf } from '../model/garments';
 import type { ExportProfile } from '../model/profiles';
 import { serializeDoc, APP_NAME, APP_VERSION } from '../model/serialize';
-import { buildScene, textOutlines } from './scene';
+import { attachImagePixels, buildScene, textOutlines } from './scene';
 import { exportSvg } from './svg';
 import { exportPdf } from './pdf';
 import { exportEps } from './eps';
@@ -21,6 +21,8 @@ export interface PackageOptions extends SheetOptions {
   /** PNG-Erzeugung (braucht eine Zeichenfläche, im Browser vorhanden) */
   renderPng?: (doc: SketchDoc, dpi: number, mirror: boolean, bounds: 'geometry' | 'stroke') => Promise<Uint8Array>;
   onProgress?: (text: string) => void;
+  /** Pixelbilder für PDF dekodieren (Browser) */
+  decodeImage?: (src: string) => Promise<{ rgba: Uint8Array | Uint8ClampedArray; width: number; height: number } | null>;
 }
 
 export interface PackageResult {
@@ -65,6 +67,7 @@ export async function buildPackage(doc: SketchDoc, p: Production, profile: Expor
           put(path, await opts.renderPng(md, profile.pngDpi, profile.mirror, profile.bounds));
         } else {
           const scene = buildScene(md, { bounds: profile.bounds, outlines });
+          if (f === 'pdf' && opts.decodeImage) await attachImagePixels(scene, opts.decodeImage);
           if (f === 'pdf') put(path, exportPdf(scene, { colorMode: profile.colorMode, mirror: profile.mirror, title }));
           else if (f === 'eps') {
             const r = exportEps(scene, { colorMode: profile.colorMode, mirror: profile.mirror, title });

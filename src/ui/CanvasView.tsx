@@ -460,7 +460,23 @@ export function CanvasView() {
   const cursor = tool === 'select' ? 'default' : DRAW_TOOLS.has(tool) ? 'crosshair' : tool === 'gradient' ? 'crosshair' : 'pointer';
 
   return (
-    <div className="canvas-wrap" ref={wrapRef} tabIndex={-1} data-testid="canvas-wrap">
+    <div
+      className="canvas-wrap"
+      ref={wrapRef}
+      tabIndex={-1}
+      data-testid="canvas-wrap"
+      onDragOver={(e) => {
+        if ([...e.dataTransfer.items].some((i) => i.kind === 'file')) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'));
+        if (!f) return;
+        e.preventDefault();
+        const r = canvasRef.current!.getBoundingClientRect();
+        const at = toWorld(vp(), { x: e.clientX - r.left, y: e.clientY - r.top });
+        void f.arrayBuffer().then((b) => app.insertImage({ name: f.name, data: new Uint8Array(b), mime: f.type }, at));
+      }}
+    >
       <canvas
         ref={canvasRef}
         className="sketch-canvas"

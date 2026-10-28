@@ -9,7 +9,9 @@ import { CircleTool, LineTool, PointTool, RectTool, TextTool } from '../tools/dr
 import { DimensionTool } from '../tools/dimensionTool';
 import { ConstraintTool } from '../tools/constraintTool';
 import { GradientTool } from '../tools/gradientTool';
-import { MeasureTool, TrimExtendTool, type MeasureResult } from '../tools/editTools';
+import { CalibrateImageTool, MeasureTool, TrimExtendTool, type MeasureResult } from '../tools/editTools';
+import { readImageFile } from '../model/image';
+import { layersOf } from '../model/layers';
 import { SketchTool } from '../tools/sketchTool';
 import { booleanOp, cornerOp, offsetOp, patternOp, selectionCenter, selectionSize, textToPaths, toShape } from '../store/ops';
 import type { BoolOp } from '../model/boolean';
@@ -26,8 +28,8 @@ import type { DynamicInputSpec, Tool, ToolContext } from '../tools/types';
 import { exportSvg } from '../export/svg';
 import { exportPng, renderPreviewPng } from '../export/png';
 import { parseDoc, serializeDoc, PROJECT_EXT } from '../model/serialize';
-import { isTauri, setShareFallback, AI_TYPE, DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, TEMPLATE_TYPE, ZIP_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
-import { buildScene, textOutlines } from '../export/scene';
+import { isTauri, setShareFallback, IMAGE_JPG_TYPE, IMAGE_PNG_TYPE, IMAGE_WEBP_TYPE, AI_TYPE, DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, TEMPLATE_TYPE, ZIP_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
+import { attachImagePixels, buildScene, sceneHasImages, textOutlines } from '../export/scene';
 import { exportPdf } from '../export/pdf';
 import { exportEps } from '../export/eps';
 import { exportDxf } from '../export/dxf';
@@ -265,6 +267,9 @@ export class AppController {
         break;
       case 'sketch':
         t = new SketchTool(this.ctx);
+        break;
+      case 'imgcalib':
+        t = new CalibrateImageTool(this.ctx, (a, b) => this.finishImageCalibration(a, b));
         break;
       default:
         if (id.startsWith('constraint:')) t = new ConstraintTool(this.ctx, id.slice('constraint:'.length) as ConstraintKind);
@@ -726,6 +731,7 @@ export class AppController {
       const res = await buildPackage(doc, p, profile, {
         renderPng: (d, dpi, mirror, bounds) => this.pngBytes(d, dpi, mirror, bounds),
         decodeTemplate: (t) => decodeImage(t.image),
+        decodeImage: (src) => decodeImage(src, 2400),
         onProgress: (t) => this.ui.setState({ busy: t }),
       });
       this.ui.setState({ busy: null });
@@ -789,6 +795,70 @@ export class AppController {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Bilder (Vorlage zum Nachzeichnen)
+  // -------------------------------------------------------------------------
+
+  private calibrating: string | null = null;
+
+  /** Bild aus Datei (Dialog), Drag & Drop oder Zwischenablage einfügen. */
+  async insertImage(file?: { name: string; data: Uint8Array; mime?: string }, at?: Vec2): Promise<boolean> {
+    try {
+      const f = file ?? (await openFile([IMAGE_PNG_TYPE, IMAGE_JPG_TYPE, IMAGE_WEBP_TYPE]));
+      if (!f) return false;
+      const mime = ('mime' in f && f.mime) || (/\.jpe?g$/i.test(f.name) ? 'image/jpeg' : /\.webp$/i.test(f.name) ? 'image/webp' : 'image/png');
+      const img = await readImageFile(f.data, mime);
+      const out = this.editor.insertImage({ ...img, name: f.name }, { center: at });
+      if (!out.ok) {
+        this.editor.toast(out.message, 'error');
+        return false;
+      }
+      this.setTool('select');
+      this.ui.setState({ side: 'props', sideOpen: true });
+      this.editor.toast('Bild als Vorlage eingefügt (halbtransparent, wird nicht exportiert). Größe unter „Eigenschaften“ einstellen, dann Ebene „Vorlage“ sperren und nachzeichnen.', 'success', 7000);
+      return true;
+    } catch (e) {
+      this.editor.toast(`Bild konnte nicht gelesen werden: ${e instanceof Error ? e.message : String(e)}`, 'error', 6000);
+      return false;
+    }
+  }
+
+  /** Maßstab eines Bildes über eine bekannte Strecke festlegen. */
+  calibrateImage(id: string): void {
+    this.calibrating = id;
+    this.setTool('imgcalib');
+  }
+
+  private finishImageCalibration(a: Vec2, b: Vec2): void {
+    const id = this.calibrating;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    this.setTool('select');
+    if (!id) return;
+    this.ui.setState({
+      paramDialog: {
+        title: 'Maßstab des Bildes',
+        text: `Die angeklickte Strecke ist im Moment ${fmt(len)} mm lang. Wie lang ist sie in Wirklichkeit? Das Bild wird passend skaliert (Bezugspunkt: erster Klick).`,
+        fields: [{ key: 'len', label: 'Echtes Maß', unit: 'mm', value: fmt(len).replace(',', '.') }],
+        ok: 'Übernehmen',
+        run: (v) => {
+          const real = evaluate(v.len.replace(',', '.'));
+          if (!(real > 0)) throw new Error('Bitte ein Maß größer als 0 eingeben.');
+          void this.runOp(this.editor.transform({ kind: 'scale', k: real / len, cx: a.x, cy: a.y }, { ids: [id], label: 'Bild skalieren' }));
+          this.editor.select([id]);
+        },
+      },
+    });
+  }
+
+  /** Bild fixieren: Ebene sperren (nicht mehr versehentlich verschieben). */
+  lockImageLayer(id: string): void {
+    const e = this.editor.s.doc.entities[id];
+    if (!e) return;
+    const layer = e.layer ?? layersOf(this.editor.s.doc)[0].id;
+    const out = this.editor.updateLayer(layer, { locked: true });
+    if (out.ok) this.editor.toast('Ebene gesperrt – das Bild bleibt liegen. Entsperren im Tab „Ebenen“.', 'success', 4000);
+  }
+
   /** Begrenzungsrahmen (mm) der gegebenen Objekte bzw. der ganzen Zeichnung – für Tests und den Assistenten. */
   bbox(ids?: string[]): { minX: number; minY: number; maxX: number; maxY: number } | null {
     return docBBox(this.editor.s.doc, ids ? { only: new Set(ids) } : {});
@@ -836,18 +906,20 @@ export class AppController {
           const scene = buildScene(doc, { bounds: req.bounds, outlines });
           w = scene.widthMm;
           h = scene.heightMm;
+          if (sceneHasImages(scene) && req.format !== 'pdf') note = ` – Hinweis: ${req.format.toUpperCase()} enthält keine Pixelbilder`;
           if (req.format === 'pdf') {
+            await attachImagePixels(scene, (src) => decodeImage(src, 2400));
             data = exportPdf(scene, { colorMode: req.colorMode, mirror: req.mirror, title });
             type = PDF_TYPE;
           } else if (req.format === 'eps') {
             const r = exportEps(scene, { colorMode: req.colorMode, mirror: req.mirror, title });
             data = r.bytes;
             type = EPS_TYPE;
-            if (r.lostTransparency) note = ' – Hinweis: EPS kennt keine Transparenz, Deckkraft wurde ignoriert';
+            if (r.lostTransparency) note += ' – Hinweis: EPS kennt keine Transparenz, Deckkraft wurde ignoriert';
           } else {
             data = exportDxf(scene, { mirror: req.mirror });
             type = DXF_TYPE;
-            note = ' – nur Konturen, ohne Farben';
+            note += ' – nur Konturen, ohne Farben';
           }
         }
         const res = await saveFile(data, `${base}${suffix}.${type.ext}`, type, path);

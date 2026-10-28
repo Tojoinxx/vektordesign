@@ -67,11 +67,15 @@ export function applyXf(d: SketchDoc, ids: Id[], xf: Xf, report: XfReport = { no
       if (e.kind === 'circle') e.r *= Math.abs(xf.k);
       if (e.kind === 'text') e.fontSize *= Math.abs(xf.k);
       if (e.kind === 'shape') e.scale *= Math.abs(xf.k);
+      if (e.kind === 'image') {
+        e.width *= Math.abs(xf.k);
+        e.height *= Math.abs(xf.k);
+      }
     } else if (xf.kind === 'rotate') {
-      if (e.kind === 'shape') e.rotation = norm360(e.rotation + xf.angle);
+      if (e.kind === 'shape' || e.kind === 'image') e.rotation = norm360(e.rotation + xf.angle);
       if (e.kind === 'text' && quarter !== 0) report.notes.add('Texte lassen sich nicht drehen – nur ihre Lage wurde mitgedreht. Für gedrehten Text erst „Text in Pfade“.');
     } else if (xf.kind === 'mirror') {
-      if (e.kind === 'shape') {
+      if (e.kind === 'shape' || e.kind === 'image') {
         e.flipX = !e.flipX;
         e.rotation = norm360(xf.axis === 'y' ? -e.rotation : 180 - e.rotation);
       }
@@ -165,7 +169,7 @@ export function cloneInto(d: SketchDoc, src: SketchDoc, ids: Id[]): Id[] {
       copy.p1 = idMap.get(copy.p1)!;
       copy.p2 = idMap.get(copy.p2)!;
     } else if (copy.kind === 'circle') copy.center = idMap.get(copy.center)!;
-    else if (copy.kind === 'text' || copy.kind === 'shape') copy.anchor = idMap.get(copy.anchor)!;
+    else if (copy.kind === 'text' || copy.kind === 'shape' || copy.kind === 'image') copy.anchor = idMap.get(copy.anchor)!;
     else if (copy.kind === 'path') copy.edges = copy.edges.map((ed) => ({ ...ed, id: mapId(ed.id, 'l') }));
     if (copy.group) {
       let g = groupMap.get(copy.group);

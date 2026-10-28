@@ -1,3 +1,4 @@
+import { imageElement } from '../model/image';
 import type { Entity, Gradient, Id, SketchDoc, Style, Vec2 } from '../model/types';
 import { lineOf, pathVertices, pt } from '../model/doc';
 import { entityBBox } from '../model/bounds';
@@ -19,6 +20,8 @@ export interface DesignTarget {
   scale: number;
   /** Mindestkonturstärke in px (Bildschirm), 0 beim Export */
   minStrokePx: number;
+  /** Nur das Design (Export, Vorschauen): Vorlagenbilder weglassen */
+  design?: boolean;
   /**
    * Nur Bildschirm: Motive, die sich kaum vom Hintergrund abheben (schwarz auf dunkler Fläche,
    * weiß auf weißer), bekommen einen feinen Umriss in `hint`. Nie im Export.
@@ -120,6 +123,7 @@ function buildPath(t: DesignTarget, doc: SketchDoc, e: Entity): boolean {
       return true;
     }
     case 'text':
+    case 'image':
       return false;
   }
 }
@@ -174,10 +178,27 @@ function needsHint(t: DesignTarget, e: Entity): string | null {
 /** Zeichnet ein einzelnes Objekt in seinem echten Stil. */
 export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
   if (e.construction) return;
+  if (e.kind === 'image' && e.reference && t.design) return;
   const ctx = t.ctx;
   const s = e.style;
   ctx.save();
   ctx.globalAlpha = Math.min(1, Math.max(0, s.opacity ?? 1));
+  if (e.kind === 'image') {
+    const img = imageElement(e.src);
+    if (img) {
+      const c = t.toScreen(pt(doc, e.anchor));
+      const w = e.width * t.scale;
+      const h = e.height * t.scale;
+      ctx.translate(c.x, c.y);
+      // Welt: Drehung gegen den Uhrzeigersinn; Bildschirm: y nach unten
+      ctx.rotate((-e.rotation * Math.PI) / 180);
+      if (e.flipX) ctx.scale(-1, 1);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    }
+    ctx.restore();
+    return;
+  }
   if (e.kind === 'text') {
     const a = t.toScreen(pt(doc, e.anchor));
     const size = e.fontSize * t.scale;

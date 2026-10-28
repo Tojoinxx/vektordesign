@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bold, CircleDot, Italic, Repeat, Trash2 } from 'lucide-react';
-import type { Gradient, GradientStop, Id, ShapeEntity, Style, TextEntity } from '../model/types';
+import type { Gradient, GradientStop, Id, ImageEntity, ShapeEntity, Style, TextEntity } from '../model/types';
 import { contoursBBox, shapeWorldContours } from '../model/shape';
 import { DEFAULT_STYLE } from '../model/doc';
 import { colorAt, DIRECTION_LABELS, DIRECTION_POINTS, fadeGradient, isFade, isGradient, paintColor, sortedStops, type GradientDirection } from '../model/paint';
@@ -14,7 +14,7 @@ import { useApp, useAppState } from './hooks';
 import { StyleSuggestions } from './StyleSuggestions';
 import { ArrangeSection } from './ArrangeSection';
 
-const KIND_NAMES: Record<string, string> = { path: 'Fläche', line: 'Linie', circle: 'Kreis', text: 'Text', shape: 'Form' };
+const KIND_NAMES: Record<string, string> = { path: 'Fläche', line: 'Linie', circle: 'Kreis', text: 'Text', shape: 'Form', image: 'Bild' };
 
 /** Wendet Stiländerungen an – live beim Ziehen, als ein Rückgängig-Schritt. */
 function useStyleApply(targets: Id[]) {
@@ -55,6 +55,8 @@ export function PropertiesPanel() {
   const first = targets.length ? doc.entities[targets[0]] : undefined;
   const style: Style = first ? first.style : currentStyle;
   const canFill = !first || first.kind !== 'line';
+  const onlyImages = targets.length > 0 && targets.every((id) => doc.entities[id]?.kind === 'image');
+  const images = targets.map((id) => doc.entities[id]).filter((e): e is ImageEntity => e?.kind === 'image');
   const texts = targets.map((id) => doc.entities[id]).filter((e): e is TextEntity => e?.kind === 'text');
 
   let title = 'Neue Objekte';
@@ -87,7 +89,16 @@ export function PropertiesPanel() {
 
       {targets.length > 0 && <ArrangeSection targets={targets} />}
 
-      {(targets.length > 0 || !selection.length) && (
+      {images.length === 1 && <ImageProps image={images[0]} />}
+
+      {onlyImages && (
+        <section className="props-section">
+          <h4>Deckkraft</h4>
+          <OpacityEditor targets={targets} style={style} />
+        </section>
+      )}
+
+      {!onlyImages && (targets.length > 0 || !selection.length) && (
         <section className="props-section">
           <h4>Füllung</h4>
           {canFill ? <FillEditor targets={targets} style={style} /> : <p className="muted">Offene Linien haben keine Füllung – Farbe über die Kontur.</p>}
@@ -101,7 +112,7 @@ export function PropertiesPanel() {
       {texts.length === 1 && <TextProps text={texts[0]} />}
       {targets.length === 1 && first?.kind === 'shape' && <ShapeProps shape={first} />}
 
-      {(targets.length > 0 || (!selection.length && doc.order.length > 0)) && (
+      {!onlyImages && (targets.length > 0 || (!selection.length && doc.order.length > 0)) && (
         <StyleSuggestions targets={targets.length ? targets : doc.order.filter((id) => !doc.entities[id]?.construction)} whole={!targets.length} />
       )}
 
@@ -390,6 +401,70 @@ function OpacityEditor({ targets, style }: { targets: Id[]; style: Style }) {
       />
       <em>{v} %</em>
     </label>
+  );
+}
+
+/** Bild: Größe in mm, Vorlage (nicht exportieren), Maßstab über Strecke, fixieren. */
+function ImageProps({ image }: { image: ImageEntity }) {
+  const app = useApp();
+  const doc = useAppState((s) => s.doc);
+  const [wv, setWv] = useState('');
+  const [hv, setHv] = useState('');
+  useEffect(() => {
+    setWv(formatNumber(image.width, 1));
+    setHv(formatNumber(image.height, 1));
+  }, [image.width, image.height]);
+  const layer = doc.layers?.find((l) => l.id === image.layer);
+  const apply = (k: 'width' | 'height', v: string) => {
+    const n = Number(v.replace(',', '.'));
+    if (!(n > 0)) return;
+    if (Math.abs(n - (k === 'width' ? image.width : image.height)) < 1e-9) return;
+    const out = app.editor.updateImage(image.id, { [k]: n });
+    if (!out.ok) app.editor.toast(out.message, 'error');
+  };
+  const field = (k: 'width' | 'height', label: string, v: string, set: (x: string) => void) => (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={v}
+        onChange={(e) => set(e.target.value)}
+        onBlur={() => apply(k, v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        style={{ width: 76 }}
+        aria-label={`${label} in mm`}
+        data-testid={`image-${k}`}
+      />
+      <span className="muted">mm</span>
+    </label>
+  );
+  return (
+    <section className="props-section" data-testid="image-props">
+      <h4>Bild{image.name ? ` – ${image.name}` : ''}</h4>
+      <div className="row">
+        {field('width', 'Breite', wv, setWv)}
+        {field('height', 'Höhe', hv, setHv)}
+      </div>
+      <p className="muted small">
+        {image.pxWidth} × {image.pxHeight} px · entspricht {Math.round((image.pxWidth / image.width) * 25.4)} dpi
+      </p>
+      <label className="check">
+        <input type="checkbox" checked={image.reference} onChange={(e) => app.editor.updateImage(image.id, { reference: e.target.checked })} data-testid="image-reference" />
+        Nur Vorlage zum Nachzeichnen (wird nicht exportiert)
+      </label>
+      <div className="stack">
+        <button className="btn" onClick={() => app.calibrateImage(image.id)} data-testid="image-calibrate" title="Zwei Punkte einer bekannten Strecke anklicken und das echte Maß eingeben">
+          Maßstab über bekannte Strecke festlegen
+        </button>
+        <button className="btn" onClick={() => app.lockImageLayer(image.id)} disabled={!!layer?.locked} data-testid="image-lock">
+          {layer?.locked ? 'Fixiert (Ebene gesperrt)' : `Fixieren – Ebene „${layer?.name ?? 'Vorlage'}“ sperren`}
+        </button>
+      </div>
+      <p className="muted small">Tipp: Deckkraft etwa 40–60 %, dann mit Linie, Kreis oder Freihand darübergezeichnet – Fang und Bemaßungen funktionieren wie gewohnt.</p>
+    </section>
   );
 }
 

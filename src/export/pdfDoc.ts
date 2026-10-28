@@ -324,6 +324,11 @@ export class PdfPage {
 
   /** RGBA-Bild (Zeilen von oben nach unten) an Rechteck (pt) zeichnen. */
   image(rgba: Uint8Array | Uint8ClampedArray, pw: number, ph: number, x: number, y: number, w: number, h: number): void {
+    this.imageMatrix(rgba, pw, ph, [w, 0, 0, h, x, y]);
+  }
+
+  /** RGBA-Bild mit beliebiger Abbildung des Einheitsquadrats (PDF-Matrix a b c d e f). */
+  imageMatrix(rgba: Uint8Array | Uint8ClampedArray, pw: number, ph: number, m: number[]): void {
     const rgb = new Uint8Array(pw * ph * 3);
     const alpha = new Uint8Array(pw * ph);
     let hasAlpha = false;
@@ -338,7 +343,7 @@ export class PdfPage {
     const img = this.doc.stream(`/Type /XObject /Subtype /Image /Width ${pw} /Height ${ph} /ColorSpace /DeviceRGB /BitsPerComponent 8${smask ? ` /SMask ${smask} 0 R` : ''}`, rgb, true);
     const name = `Im${this.xobjects.length + 1}`;
     this.xobjects.push(`/${name} ${img} 0 R`);
-    this.ops.push(`q ${num(w)} 0 0 ${num(h)} ${num(x)} ${num(y)} cm /${name} Do Q`);
+    this.ops.push(`q ${m.map(num).join(' ')} cm /${name} Do Q`);
   }
 
   /** Zeichnet eine Export-Szene (Motiv) maßstäblich auf die Seite. */
@@ -398,6 +403,30 @@ export class PdfPage {
         content.push(`/OC /${ocName} BDC`);
       }
       for (const it of layer.items) {
+        if (it.image?.pixels) {
+          const im = it.image;
+          const px = im.pixels!;
+          const cx = X(im.c.x);
+          const cy = Y(im.c.y);
+          const rot = ((pl.mirror ? -im.rotation : im.rotation) * Math.PI) / 180;
+          const flip = (im.flipX ? -1 : 1) * (pl.mirror ? -1 : 1);
+          const w = im.width * k;
+          const h = im.height * k;
+          const cos = Math.cos(rot);
+          const sin = Math.sin(rot);
+          // Einheitsquadrat → (−w/2…w/2, −h/2…h/2), gespiegelt, gedreht, an die Mitte
+          const a = cos * w * flip;
+          const b = sin * w * flip;
+          const c = -sin * h;
+          const d = cos * h;
+          const e = cx - (a + c) / 2;
+          const f = cy - (b + d) / 2;
+          content.push('q');
+          if (it.style.opacity < 1) content.push(`/${this.gs(`a${it.style.opacity}`, `<< /Type /ExtGState /ca ${num(it.style.opacity)} /CA ${num(it.style.opacity)} >>`)} gs`);
+          this.imageMatrix(px.rgba, px.width, px.height, [a, b, c, d, e, f]);
+          content.push('Q');
+          continue;
+        }
         if (!it.contours.length) continue;
         const s: Style = it.style;
         content.push('q');

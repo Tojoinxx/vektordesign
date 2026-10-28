@@ -4,6 +4,7 @@ import { bboxAddPoint, bboxValid, emptyBBox, type BBox } from './geometry';
 import { measureText } from './textMetrics';
 import { contoursBBox, shapeWorldContours } from './shape';
 import { visibleOrder } from './layers';
+import { imageCorners, isReferenceImage } from './image';
 
 /** Umschließendes Rechteck eines Objekts in mm (ohne Konturstärke, außer includeStroke). */
 export function entityBBox(doc: SketchDoc, e: Entity, includeStroke = false): BBox {
@@ -30,6 +31,10 @@ export function entityBBox(doc: SketchDoc, e: Entity, includeStroke = false): BB
     }
     case 'path': {
       for (const v of pathVertices(doc, e)) bboxAddPoint(b, v, pad);
+      break;
+    }
+    case 'image': {
+      for (const q of imageCorners(doc, e)) bboxAddPoint(b, q);
       break;
     }
     case 'shape': {
@@ -68,7 +73,7 @@ export function docBBox(doc: SketchDoc, opts: DocBBoxOptions = {}): BBox | null 
     const e = doc.entities[id];
     if (!e) continue;
     if (opts.only && !opts.only.has(id)) continue;
-    if (e.construction && !opts.construction) continue;
+    if ((e.construction || isReferenceImage(e)) && !opts.construction) continue;
     const eb = entityBBox(doc, e, opts.includeStroke);
     if (bboxValid(eb)) {
       bboxAddPoint(b, { x: eb.minX, y: eb.minY });

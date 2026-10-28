@@ -27,6 +27,8 @@ export interface SceneItem {
   text?: { entity: TextEntity; anchor: Vec2 };
   /** Kreis (für DXF als echter Kreis, für SVG als <circle>) */
   circle?: { c: Vec2; r: number };
+  /** Pixelbild (SVG eingebettet, PDF mit `pixels`; EPS/DXF ohne Bilder) */
+  image?: { src: string; c: Vec2; width: number; height: number; rotation: number; flipX: boolean; pixels?: { rgba: Uint8Array | Uint8ClampedArray; width: number; height: number } };
 }
 
 export interface SceneLayer {
@@ -43,6 +45,19 @@ export interface ExportScene {
 }
 
 export class ExportError extends Error {}
+
+/** Bildpixel für den PDF-Export dekodieren (nur im Browser). */
+export async function attachImagePixels(scene: ExportScene, decode: (src: string) => Promise<{ rgba: Uint8Array | Uint8ClampedArray; width: number; height: number } | null>): Promise<void> {
+  for (const l of scene.layers)
+    for (const it of l.items)
+      if (it.image && !it.image.pixels) {
+        const px = await decode(it.image.src).catch(() => null);
+        if (px) it.image.pixels = px;
+      }
+}
+
+/** Enthält die Szene Bilder (für Hinweise bei EPS/DXF)? */
+export const sceneHasImages = (scene: ExportScene) => scene.layers.some((l) => l.items.some((it) => !!it.image));
 
 /** Schriftumrisse für alle sichtbaren Texte (für Exporte mit „Text in Pfade“). */
 export async function textOutlines(doc: SketchDoc): Promise<{ outlines: Map<Id, Contour[]>; substituted: string[] }> {
@@ -101,6 +116,10 @@ function sceneItem(doc: SketchDoc, e: Entity, outlines?: Map<Id, Contour[]>): Sc
     }
     case 'shape':
       item = { ...base, contours: shapeWorldContours(doc, e), closed: true, fillRule: e.fillRule };
+      break;
+    case 'image':
+      if (e.reference) return null;
+      item = { ...base, contours: [], closed: true, image: { src: e.src, c: { ...pt(doc, e.anchor) }, width: e.width, height: e.height, rotation: e.rotation, flipX: !!e.flipX } };
       break;
     case 'text': {
       const o = outlines?.get(e.id);

@@ -71,7 +71,7 @@ export function motifEntities(doc: SketchDoc, m: Motif): Entity[] {
   const out: Entity[] = [];
   for (const id of visibleOrder(doc)) {
     const e = doc.entities[id];
-    if (!e || e.construction) continue;
+    if (!e || e.construction || (e.kind === 'image' && e.reference)) continue;
     if (layers.size && !layers.has(e.layer ?? layersOf(doc)[0].id)) continue;
     out.push(e);
   }

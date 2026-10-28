@@ -70,6 +70,16 @@ Inventor-Weg: Rechteck irgendwo grob aufziehen, mit `D` die Breite (80) und Höh
 - **Stilvorschläge**: Objekt auswählen – im Bereich *Stilvorschläge* erscheinen zehn Varianten als Vorschau, ein Klick übernimmt (`Strg+Z` nimmt zurück). Mit Claude-Schlüssel gibt es zusätzlich KI-Vorschläge zu einem Stichwort („Vintage“, „Neon“, „Vereinsfarben Blau-Weiß“).
 - **Konstruktionslinien** (`Q`) sind gestrichelt und werden nie exportiert; Bemaßungen und Glyphen ebenso nicht.
 
+### Bild als Vorlage nachzeichnen
+
+1. **Bild** im Band (Gruppe *Zeichnen*) oder ein Foto/Logo einfach auf die Zeichenfläche ziehen bzw. mit `Strg+V` aus der Zwischenablage einfügen (PNG, JPG, WebP).
+2. Das Bild landet auf einer eigenen Ebene **„Vorlage“** ganz unten, halbtransparent, und wird **nicht exportiert**.
+3. Unter *Eigenschaften* die Breite in mm eintragen – oder **„Maßstab über bekannte Strecke festlegen“**: zwei Punkte im Bild anklicken (z. B. linke und rechte Kante eines Logos) und das echte Maß eingeben.
+4. **Fixieren** sperrt die Ebene „Vorlage“, damit das Bild beim Nachzeichnen nicht verrutscht.
+5. Mit Linie, Kreis, Freihand oder Bemaßung darüber zeichnen. Deckkraft nach Geschmack anpassen.
+
+Soll das Bild selbst ins Motiv (z. B. für DTF), das Häkchen „Nur Vorlage“ entfernen: Dann ist es in PNG, SVG und PDF enthalten (EPS und DXF enthalten keine Pixelbilder).
+
 ### Ebenen, Bearbeiten und Messen
 
 - **Ebenen** (Tab *Ebenen*): anlegen, umbenennen, ein-/ausblenden, sperren, Reihenfolge ändern; neue Objekte landen auf der aktiven Ebene. Ebenennamen gehen als benannte Ebenen in SVG, PDF, EPS und DXF.

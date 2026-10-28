@@ -79,7 +79,8 @@ export function buildCommands(): Command[] {
         if (n) a.editor.toast(`${n} Objekt${n === 1 ? '' : 'e'} kopiert`, 'info', 1500);
       },
     },
-    { id: 'edit.paste', label: 'Einfügen', group: 'Bearbeiten', shortcut: 'Strg+V', keys: [{ key: 'v', ctrl: true }], run: (a) => report(a, a.editor.paste()) },
+    // Strg+V läuft über das „paste“-Ereignis (App.tsx): Bilder aus der Zwischenablage oder kopierte Objekte
+    { id: 'edit.paste', label: 'Einfügen', group: 'Bearbeiten', shortcut: 'Strg+V', run: (a) => report(a, a.editor.paste()) },
     { id: 'edit.duplicate', label: 'Duplizieren', group: 'Bearbeiten', shortcut: 'Strg+D', keys: [{ key: 'd', ctrl: true }], run: (a) => report(a, a.editor.duplicate()) },
     {
       id: 'edit.construction',
@@ -116,6 +117,7 @@ export function buildCommands(): Command[] {
     { id: 'tool.circle', label: 'Kreis', group: 'Zeichnen', shortcut: 'C', keys: [{ key: 'c' }], run: (a) => a.setTool('circle') },
     { id: 'tool.text', label: 'Text', group: 'Zeichnen', shortcut: 'T', keys: [{ key: 't' }], run: (a) => a.setTool('text') },
     { id: 'tool.point', label: 'Punkt', group: 'Zeichnen', shortcut: 'P', keys: [{ key: 'p' }], run: (a) => a.setTool('point') },
+    { id: 'insert.image', label: 'Bild einfügen (Vorlage zum Nachzeichnen) …', group: 'Zeichnen', keywords: 'foto png jpg hintergrund nachzeichnen vorlage', run: (a) => void a.insertImage() },
     { id: 'tool.sketch', label: 'Freihandskizze mit Formerkennung', group: 'Zeichnen', shortcut: 'S', keys: [{ key: 's' }], keywords: 'freihand stift pencil skizze erkennung', run: (a) => a.setTool('sketch') },
     {
       id: 'draw.constructionMode',

@@ -157,7 +157,26 @@ export interface ShapeEntity extends EntityBase {
   name?: string;
 }
 
-export type Entity = LineEntity | CircleEntity | TextEntity | PathEntity | ShapeEntity;
+/**
+ * Pixelbild (PNG/JPG), z. B. als Vorlage zum Nachzeichnen. Lage über den Mittelpunkt
+ * (Skizzenpunkt), Größe in mm. Als Vorlage (`reference`) wird es nie exportiert.
+ */
+export interface ImageEntity extends EntityBase {
+  kind: 'image';
+  anchor: Id;
+  width: number;
+  height: number;
+  rotation: number;
+  flipX?: boolean;
+  /** Bild als Data-URL */
+  src: string;
+  pxWidth: number;
+  pxHeight: number;
+  name?: string;
+  reference: boolean;
+}
+
+export type Entity = LineEntity | CircleEntity | TextEntity | PathEntity | ShapeEntity | ImageEntity;
 
 export interface Layer {
   id: Id;

@@ -16,6 +16,7 @@ export type ToolId =
   | 'extend'
   | 'measure'
   | 'sketch'
+  | 'imgcalib'
   | `constraint:${string}`;
 
 export type ExportFormat = 'svg' | 'pdf' | 'eps' | 'dxf' | 'png';

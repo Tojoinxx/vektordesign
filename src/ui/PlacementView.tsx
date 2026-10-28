@@ -187,6 +187,7 @@ function PlacementInner({ motifId }: { motifId: string }) {
           ctx,
           scale: frame.s,
           minStrokePx: 0.5,
+          design: true,
           toScreen: (w) => toScr(left + (w.x - md.box.minX), pl.y + (md.box.maxY - w.y)),
         },
         md.d,

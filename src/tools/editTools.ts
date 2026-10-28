@@ -260,3 +260,70 @@ export class MeasureTool implements Tool {
     if (this.snap) drawSnapMarker(ctx, vp, this.snap, THEME.snap);
   }
 }
+
+/**
+ * Maßstab eines Bildes über eine bekannte Strecke festlegen: zwei Punkte auf dem Bild anklicken,
+ * dann das echte Maß eingeben (z. B. Breite eines Logos auf einem Foto).
+ */
+export class CalibrateImageTool implements Tool {
+  readonly id: ToolId = 'imgcalib';
+  readonly snaps = false;
+  readonly cssCursor = 'crosshair';
+  private a: Vec2 | null = null;
+  private cursor: Vec2 | null = null;
+
+  constructor(
+    private ctx: ToolContext,
+    private done: (a: Vec2, b: Vec2) => void,
+  ) {}
+
+  hint(): string {
+    return this.a ? 'Zweiten Punkt der bekannten Strecke anklicken' : 'Ersten Punkt einer bekannten Strecke auf dem Bild anklicken (z. B. linke Kante des Logos) · Esc bricht ab';
+  }
+
+  pointerMove(p: ToolPointer): void {
+    this.cursor = p.world;
+    if (this.a) this.ctx.requestRender();
+  }
+
+  pointerDown(p: ToolPointer): void {
+    if (p.button !== 0) return;
+    if (!this.a) {
+      this.a = p.world;
+      return;
+    }
+    const a = this.a;
+    this.a = null;
+    if (Math.hypot(p.world.x - a.x, p.world.y - a.y) < 1e-6) return;
+    this.done(a, p.world);
+  }
+
+  cancel(): boolean {
+    if (this.a) {
+      this.a = null;
+      this.ctx.requestRender();
+      return true;
+    }
+    return false;
+  }
+
+  drawOverlay(ctx: CanvasRenderingContext2D, vp: Viewport): void {
+    if (!this.a || !this.cursor) return;
+    const a = toScreen(vp, this.a);
+    const b = toScreen(vp, this.cursor);
+    ctx.strokeStyle = THEME.snap;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.fillStyle = THEME.snap;
+    for (const q of [a, b]) {
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.font = '600 12px "IBM Plex Sans", sans-serif';
+    ctx.fillText(mm(Math.hypot(this.cursor.x - this.a.x, this.cursor.y - this.a.y)), b.x + 8, b.y - 8);
+  }
+}

@@ -1080,6 +1080,86 @@ await step('Abnahme M4: dasselbe Projekt auf dem iPad mit dem Pencil weiterbearb
   });
 });
 await ipadPage.close();
+// Download-Ziel gilt browserweit und geht mit der Sitzung der iPad-Seite verloren
+await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: DL });
+
+await step('Bild als Vorlage: einfügen, auf Maß bringen, fixieren, nachzeichnen – Export ohne Bild', async () => {
+  await page.bringToFront();
+  await newDoc();
+  await app(() => window.vektordesign.editor.setView({ cx: 0, cy: 0, zoom: 4 }));
+  // Testbild: dunkler Kreis auf hellem Grund (400 × 200 px)
+  const ok = await app(async () => {
+    const c = document.createElement('canvas');
+    c.width = 400;
+    c.height = 200;
+    const x = c.getContext('2d');
+    x.fillStyle = '#ffffff';
+    x.fillRect(0, 0, 400, 200);
+    x.fillStyle = '#1f3a93';
+    x.beginPath();
+    x.arc(100, 100, 80, 0, Math.PI * 2);
+    x.fill();
+    x.fillRect(220, 40, 160, 120);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    return window.vektordesign.insertImage({ name: 'skizze.png', data: new Uint8Array(await blob.arrayBuffer()), mime: 'image/png' }, { x: 0, y: 0 });
+  });
+  assert(ok, 'Bild nicht eingefügt');
+  await page.waitForSelector('[data-testid="image-props"]');
+  const img = await app(() => Object.values(window.vektordesign.store.getState().doc.entities).find((e) => e.kind === 'image'));
+  assert(img.reference && img.style.opacity === 0.5, 'Bild ist keine halbtransparente Vorlage');
+  // Breite 100 mm über das Eigenschaftenfeld
+  await page.$eval('[data-testid="image-width"]', (el) => {
+    el.focus();
+    el.select();
+  });
+  await page.keyboard.type('100');
+  await page.keyboard.press('Enter');
+  await sleep(150);
+  let im = await app((id) => window.vektordesign.store.getState().doc.entities[id], img.id);
+  assert(Math.abs(im.width - 100) < 1e-9 && Math.abs(im.height - 50) < 1e-9, `Bildgröße ${im.width} × ${im.height}`);
+  // Maßstab über bekannte Strecke: Kreis im Bild (160 px = 40 mm) soll 50 mm sein
+  await page.click('[data-testid="image-calibrate"]');
+  await clickWorld(-45, 0);
+  await clickWorld(-5, 0);
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await page.$eval('[data-testid="param-len"]', (el) => {
+    el.focus();
+    el.select();
+  });
+  await page.keyboard.type('50');
+  await page.keyboard.press('Enter');
+  await sleep(200);
+  im = await app((id) => window.vektordesign.store.getState().doc.entities[id], img.id);
+  assert(Math.abs(im.width - 125) < 1e-6, `nach Kalibrierung ${im.width} mm statt 125`);
+  // Fixieren: Ebene „Vorlage“ gesperrt
+  await app((id) => window.vektordesign.editor.select([id]), img.id);
+  await sleep(100);
+  await page.click('[data-testid="image-lock"]');
+  const locked = await app(() => window.vektordesign.store.getState().doc.layers.find((l) => l.name === 'Vorlage').locked);
+  assert(locked, 'Ebene nicht gesperrt');
+  // Nachzeichnen: Kreis über das Bild (Mitte des Bildkreises)
+  const c = await app((id) => {
+    const d = window.vektordesign.store.getState().doc;
+    const e = d.entities[id];
+    const a = d.points[e.anchor];
+    return { x: a.x - e.width / 2 + (e.width * 100) / 400, y: a.y + e.height / 2 - (e.height * 100) / 200 };
+  }, img.id);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('c');
+  await clickWorld(c.x, c.y);
+  await moveWorld(c.x + 20, c.y);
+  await page.keyboard.type('50');
+  await page.keyboard.press('Enter');
+  await sleep(150);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('f');
+  await sleep(200);
+  await shot('50-vorlage-nachgezeichnet');
+  // Export: nur der nachgezeichnete Kreis (50 mm), kein Bild
+  const svgFile = await exportVia('svg', 'svg');
+  const svg = readFileSync(svgFile, 'utf8');
+  assert(!svg.includes('<image') && /width="50mm" height="50mm"/.test(svg), `Export enthält Vorlage oder falsche Größe: ${svg.match(/width="[^"]+" height="[^"]+"/)?.[0]}`);
+});
 
 await step('Leistung: 150 Rechtecke mit Bemaßungen, Ziehen bleibt flüssig', async () => {
   await newDoc();

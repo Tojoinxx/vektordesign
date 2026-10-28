@@ -86,8 +86,27 @@ function Shell({ app }: { app: AppController }) {
         }
       }
     };
+    // Einfügen: Bild aus der Zwischenablage → Vorlagenbild, sonst kopierte Objekte
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const s = app.store.getState();
+      if (s.paletteOpen || s.exportOpen || s.confirm) return;
+      const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
+      e.preventDefault();
+      if (file) {
+        void file.arrayBuffer().then((b) => app.insertImage({ name: file.name || 'Bild aus Zwischenablage', data: new Uint8Array(b), mime: file.type }));
+        return;
+      }
+      const out = app.editor.paste();
+      if (!out.ok && out.message) app.editor.toast(out.message, 'error');
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    document.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('paste', onPaste);
+    };
   }, [app]);
 
   // Fenstertitel

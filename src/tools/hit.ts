@@ -3,12 +3,13 @@ import { lineOf, pathVertices, pt } from '../model/doc';
 import { measureText } from '../model/textMetrics';
 import { closestOnSegment, dist, pointInPolygon } from '../model/geometry';
 import { pointInPolys, shapeWorldPolys } from '../model/shape';
+import { imageCorners } from '../model/image';
 import { isInert } from '../model/layers';
 import type { SceneLayout } from '../render/renderer';
 import { hitGlyph } from '../render/glyphs';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
 
-export type HitKind = 'point' | 'line' | 'circle' | 'text' | 'path' | 'shape' | 'dim' | 'glyph';
+export type HitKind = 'point' | 'line' | 'circle' | 'text' | 'path' | 'shape' | 'image' | 'dim' | 'glyph';
 
 export interface Hit {
   kind: HitKind;
@@ -113,6 +114,7 @@ export function hitTest(doc: SketchDoc, vp: Viewport, layout: SceneLayout | null
         }
       }
     }
+    if (opts.fills && e.kind === 'image' && pointInPolys(w, [imageCorners(doc, e)], 'nonzero')) return { kind: 'image', id: e.id, dist: 0 };
     if (opts.fills) {
       if (e.kind === 'path' && e.closed && (e.style.fill || e.construction === false)) {
         const vs = pathVertices(doc, e);
@@ -137,6 +139,7 @@ export function pointsOf(doc: SketchDoc, id: Id): Id[] {
       return [e.center];
     case 'text':
     case 'shape':
+    case 'image':
       return [e.anchor];
     case 'path': {
       const out: Id[] = [];

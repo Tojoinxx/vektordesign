@@ -32,7 +32,7 @@ function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
     const ox = (W - w * s) / 2;
     const oy = (H - h * s) / 2;
     drawDesign(
-      { ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75, contrast: { background: THEME.paper, hint: THEME.contrastHint } },
+      { ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75, design: true, contrast: { background: THEME.paper, hint: THEME.contrastHint } },
       doc,
       { only },
     );

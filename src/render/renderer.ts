@@ -1,3 +1,4 @@
+import { imageCorners } from '../model/image';
 import type { Dimension, Entity, Id, SketchDoc, Vec2 } from '../model/types';
 import { ORIGIN_ID } from '../model/types';
 import { lineOf, pt } from '../model/doc';
@@ -218,6 +219,7 @@ function isFree(s: SceneState, e: Entity): boolean {
       return fp.has(e.center) || a.free.circles.has(e.id);
     case 'text':
     case 'shape':
+    case 'image':
       return fp.has(e.anchor);
     case 'path':
       return false;
@@ -273,6 +275,18 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
       continue;
     }
     const st = statusColor(s, e, problems);
+    if (e.kind === 'image') {
+      // Bilder: Rahmen nur bei Auswahl/Überfahren
+      if (!(s.selection.has(e.id) || s.hover === e.id)) continue;
+      const p = batch(st.color, 1.4, true);
+      imageCorners(doc, e).forEach((q, i) => {
+        const sq = T(q);
+        if (i === 0) p.moveTo(sq.x, sq.y);
+        else p.lineTo(sq.x, sq.y);
+      });
+      p.closePath();
+      continue;
+    }
     if (e.kind === 'shape') {
       // Formen: Umriss nur bei Auswahl/Überfahren (die Form selbst ist das Design)
       if (!(s.selection.has(e.id) || s.hover === e.id)) continue;
@@ -339,7 +353,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     if (problems.has(p.id)) color = THEME.conflict;
     if (hov) color = THEME.hover;
     if (sel) color = THEME.selected;
-    const isCenter = owner?.kind === 'circle' || (p.construction && !owner) || owner?.kind === 'path' || owner?.kind === 'shape';
+    const isCenter = owner?.kind === 'circle' || (p.construction && !owner) || owner?.kind === 'path' || owner?.kind === 'shape' || owner?.kind === 'image';
     const r = sel || hov ? 4 : 2.6;
     if (isCenter || p.construction) {
       const c = get(crosses, color);

@@ -98,6 +98,11 @@ export function exportSvg(doc: SketchDoc, opts: SvgExportOptions = {}): SvgExpor
       ].filter(Boolean);
       return `<text id="${it.id}" ${attrs.join(' ')} xml:space="preserve">${xmlEscape(e.text)}</text>`;
     }
+    if (it.image) {
+      const im = it.image;
+      const tf = `translate(${fmt(X(im.c.x))} ${fmt(Y(im.c.y))})${im.rotation ? ` rotate(${fmt(-im.rotation)})` : ''}${im.flipX ? ' scale(-1 1)' : ''}`;
+      return `<image id="${it.id}" x="${fmt(-im.width / 2)}" y="${fmt(-im.height / 2)}" width="${fmt(im.width)}" height="${fmt(im.height)}" preserveAspectRatio="none" transform="${tf}"${it.style.opacity < 1 ? ` opacity="${fmt(it.style.opacity)}"` : ''} href="${im.src}"/>`;
+    }
     if (it.circle) return `<circle id="${it.id}" cx="${fmt(X(it.circle.c.x))}" cy="${fmt(Y(it.circle.c.y))}" r="${fmt(it.circle.r)}" ${styleAttrs(it.style, it)}/>`;
     const d = contoursToSvgD(it.contours, map, fmt);
     return d ? `<path id="${it.id}" d="${d}" ${styleAttrs(it.style, it)}/>` : null;

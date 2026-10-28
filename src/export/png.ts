@@ -1,3 +1,4 @@
+import { preloadImages } from '../model/image';
 import type { SketchDoc } from '../model/types';
 import { docBBox } from '../model/bounds';
 import { drawDesign } from '../render/drawDesign';
@@ -44,6 +45,7 @@ export async function exportPng(doc: SketchDoc, opts: PngExportOptions): Promise
     throw new ExportError(`Das Bild wäre ${wPx} × ${hPx} px groß – zu groß für den Export. Bitte eine kleinere Auflösung wählen.`);
   }
   const s = opts.dpi / 25.4;
+  await preloadImages(doc);
   let canvas: OffscreenCanvas | HTMLCanvasElement;
   if (typeof OffscreenCanvas !== 'undefined') canvas = new OffscreenCanvas(wPx, hPx);
   else {
@@ -64,9 +66,9 @@ export async function exportPng(doc: SketchDoc, opts: PngExportOptions): Promise
     // Text würde sonst seitenrichtig bleiben: ganzen Inhalt spiegeln
     ctx.translate(wPx, 0);
     ctx.scale(-1, 1);
-    drawDesign({ ctx, toScreen: (p) => ({ x: (p.x - box.minX) * s, y: (box.maxY - p.y) * s }), scale: s, minStrokePx: 0 }, doc);
+    drawDesign({ ctx, toScreen: (p) => ({ x: (p.x - box.minX) * s, y: (box.maxY - p.y) * s }), scale: s, minStrokePx: 0, design: true }, doc);
   } else {
-    drawDesign({ ctx, toScreen, scale: s, minStrokePx: 0 }, doc);
+    drawDesign({ ctx, toScreen, scale: s, minStrokePx: 0, design: true }, doc);
   }
   let blob: Blob;
   if ('convertToBlob' in canvas) blob = await canvas.convertToBlob({ type: 'image/png' });
@@ -96,7 +98,7 @@ export async function renderPreviewPng(doc: SketchDoc, maxPx = 512, background: 
     ctx.fillRect(0, 0, W, H);
   }
   const ox = maxPx * pad;
-  drawDesign({ ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: ox + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75 }, doc);
+  drawDesign({ ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: ox + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75, design: true }, doc);
   let blob: Blob;
   if ('convertToBlob' in canvas) blob = await (canvas as OffscreenCanvas).convertToBlob({ type: 'image/png' });
   else blob = await new Promise<Blob>((res) => (canvas as HTMLCanvasElement).toBlob((b) => res(b!), 'image/png'));
