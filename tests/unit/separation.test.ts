@@ -102,3 +102,30 @@ describe('Siebdruck-Paket', () => {
     }
   });
 });
+
+import { estimateCosts, breakEven, DEFAULT_PRICES } from '../../src/model/costs';
+
+describe('Kostenschätzung', () => {
+  it('rechnet Siebe, DTF-Fläche, Folie und Stiche', async () => {
+    const ed = await logo();
+    const s = separate(ed.s.doc, { fabric: '#ffffff' });
+    const rows = estimateCosts(s, 50, DEFAULT_PRICES);
+    const screen = rows.find((r) => r.id === 'screen')!;
+    expect(screen.oneTime).toBeCloseTo(2 * 30, 6);
+    expect(screen.total).toBeCloseTo(60 + 50 * 2 * 0.55, 6);
+    const dtf = rows.find((r) => r.id === 'dtf')!;
+    expect(dtf.perPiece).toBeCloseTo(((50 * 30) / 1e6) * 22 + 0.9, 6);
+    // kleines Logo: DTF je Stück günstiger → Siebdruck lohnt sich nie
+    expect(breakEven(rows)).toBeNull();
+    // großes Rückenmotiv: ab einer Stückzahl lohnt Siebdruck
+    const big = { ...s, box: { minX: 0, minY: 0, maxX: 300, maxY: 400 } };
+    const r2 = estimateCosts(big, 100, DEFAULT_PRICES);
+    const be = breakEven(r2)!;
+    const s2 = r2.find((r) => r.id === 'screen')!;
+    const d2 = r2.find((r) => r.id === 'dtf')!;
+    expect(be).toBeGreaterThan(1);
+    expect(s2.oneTime + be * s2.perPiece).toBeLessThanOrEqual(be * d2.perPiece + 1e-9);
+    const st = rows.find((r) => r.id === 'embroidery')!;
+    expect(st.details[0]).toContain('960 Stiche');
+  });
+});

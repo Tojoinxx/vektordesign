@@ -41,6 +41,7 @@ import { exportPdf } from '../export/pdf';
 import { gangPieces, layoutGang, type GangSheetSpec } from '../model/gangsheet';
 import { buildSheetDocs, withoutCutLayer } from '../export/gangSheetExport';
 import { buildScreenPrint, type ScreenPrintOptions } from '../export/screenPrint';
+import { withWeeding } from '../model/weeding';
 import { zipSync } from 'fflate';
 import { exportEps } from '../export/eps';
 import { exportDxf } from '../export/dxf';
@@ -102,6 +103,8 @@ export interface UiState {
   gangSheet: boolean;
   /** Siebdruck-Paket offen */
   screenPrint: boolean;
+  /** Kostenschätzung offen */
+  costs: boolean;
   /** iPad: fertige Datei, die per Knopf geteilt wird */
   shareReady: { name: string; share: () => Promise<void> } | null;
 }
@@ -147,6 +150,8 @@ export interface ExportRequest {
   colorMode?: 'rgb' | 'cmyk';
   /** Text als Pfade (SVG; PDF/EPS/DXF immer) – Standard: ja */
   outlines?: boolean;
+  /** Entgitterungsrahmen (Plotter): Abstand in mm, Linien durch freie Streifen */
+  weeding?: { margin: number; lines: boolean } | null;
 }
 
 export class AppController {
@@ -210,6 +215,7 @@ export class AppController {
       mockup: false,
       gangSheet: false,
       screenPrint: false,
+      costs: false,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -1179,7 +1185,7 @@ export class AppController {
 
   /** Exportiert die Zeichnung. Ohne `path` fragt ein Speichern-Dialog nach dem Ziel (mit `path`: nur Desktop). */
   async exportFile(req: ExportRequest, path?: string | null): Promise<boolean> {
-    const doc = this.editor.s.doc;
+    let doc = this.editor.s.doc;
     const base = safeName(this.projectName());
     try {
       const suffix = `${req.mirror ? '_gespiegelt' : ''}${req.colorMode === 'cmyk' && (req.format === 'pdf' || req.format === 'eps') ? '_CMYK' : ''}`;
@@ -1191,6 +1197,7 @@ export class AppController {
           outlines = t.outlines;
           if (t.substituted.length) this.editor.toast(`Schrift nicht gefunden, ersetzt: ${t.substituted.join(', ')}`, 'info', 6000);
         }
+        if (req.weeding) doc = withWeeding(doc, req.weeding, outlines);
         const title = this.projectName();
         let data: Uint8Array | string;
         let w: number;

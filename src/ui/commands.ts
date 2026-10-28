@@ -238,6 +238,7 @@ export function buildCommands(): Command[] {
       },
     },
     { id: 'prod.screen', label: 'Siebdruck-Paket (Farbseparation, Filme)', group: 'Produktion', keywords: 'siebdruck sieb film separation unterlage unterdruck überfüllung trapping passer passermarken farbauszug', run: (a) => a.ui.setState({ screenPrint: true }) },
+    { id: 'prod.costs', label: 'Kostenschätzung (Siebdruck, DTF, Flex, Stick)', group: 'Produktion', keywords: 'kosten preis kalkulation angebot stückzahl folie siebe stiche', run: (a) => a.ui.setState({ costs: true }) },
     { id: 'prod.gangsheet', label: 'DTF-Sammelbogen (Namen und Nummern)', group: 'Produktion', keywords: 'dtf transfer gang sheet bogen rolle trikot namen nummern flock', run: (a) => a.ui.setState({ gangSheet: true }) },
     { id: 'prod.mockup', label: 'Mockup-Vorschau', group: 'Produktion', keywords: 'shirt hoodie tasche vorschau stofffarbe kontrast', run: (a) => a.ui.setState({ mockup: true }) },
     { id: 'prod.package', label: 'ZIP-Paket für LabwearOS exportieren', group: 'Produktion', keywords: 'export zip paket labwearos', run: (a) => void a.exportPackage() },

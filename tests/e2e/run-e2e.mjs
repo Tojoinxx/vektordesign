@@ -937,6 +937,35 @@ await step('Größenstaffel: Vorlage S–XL, Breiten je Größe, Breite eintippe
   results.push('   Größenstaffel S 90 mm … XL 115 mm');
 });
 
+await step('Kostenschätzung und Entgitterungsrahmen beim Export', async () => {
+  await page.click('[data-testid="tab-production"]');
+  await page.click('[data-testid="costs-open"]');
+  await page.waitForSelector('[data-testid="costs-table"] tbody tr');
+  await page.$eval('[data-testid="costs-qty"]', (el) => {
+    el.focus();
+    el.select();
+  });
+  await page.keyboard.type('120');
+  await sleep(200);
+  const rows = await page.$$eval('[data-testid="costs-table"] tbody tr', (l) => l.map((r) => r.textContent));
+  assert(rows.length === 4, `Kostenzeilen: ${rows.length}`);
+  await shot('37-kosten');
+  await page.keyboard.press('Escape');
+  // Entgitterungsrahmen 3 mm: SVG wird 6 mm breiter
+  for (const f of readdirSync(DL)) rmSync(join(DL, f), { force: true });
+  await app(() => window.vektordesign.openExport('svg'));
+  await page.waitForSelector('[data-testid="export-dialog"]');
+  await page.click('[data-testid="format-svg"]');
+  await page.click('[data-testid="export-weed"]');
+  await page.click('[data-testid="export-run"]');
+  const f = await waitDownload('svg', []);
+  await sleep(150);
+  const svg = readFileSync(f, 'utf8');
+  const w = Number(svg.match(/width="([\d.]+)mm"/)[1]);
+  assert(Math.abs(w - 106) < 1e-6 && svg.includes('Entgitterung'), `SVG-Breite mit Rahmen: ${w}`);
+  results.push(`   Kosten: ${rows.map((r) => r.split('€')[0]).length} Verfahren verglichen; Rahmen-SVG ${w} mm breit`);
+});
+
 await step('Neue Zeichenwerkzeuge: Bogen (3 Punkte und Mittelpunkt), Vieleck, Stern, Ellipse, Zeichenstift', async () => {
   await newDoc();
   await app(() => window.vektordesign.editor.setView({ cx: 15, cy: 20, zoom: 4 }));

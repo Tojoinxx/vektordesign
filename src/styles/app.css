@@ -2528,3 +2528,52 @@ body {
   font-size: 12px;
   color: var(--danger, #c8102e);
 }
+
+.weed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+.field.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Kostenschätzung */
+.cost-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cost-table th,
+.cost-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.cost-table th:not(:first-child),
+.cost-table td:not(:first-child) {
+  text-align: right;
+  white-space: nowrap;
+}
+.cost-table tr.best td {
+  background: color-mix(in srgb, var(--tape, #f5c518) 14%, transparent);
+}
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+.price-grid fieldset {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.price-grid .field.inline span:first-child {
+  flex: 1;
+}

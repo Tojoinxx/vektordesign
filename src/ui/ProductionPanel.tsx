@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Shirt, LayoutGrid, Layers3, Copy, FileArchive, FileText, MapPin, Plus, Settings2, Trash2, TriangleAlert } from 'lucide-react';
+import { Shirt, LayoutGrid, Layers3, Calculator, Copy, FileArchive, FileText, MapPin, Plus, Settings2, Trash2, TriangleAlert } from 'lucide-react';
 import type { Motif, Production, SizeGrade, Technique, Variant } from '../model/types';
 import { GARMENTS, TECHNIQUES, areaOf, garmentOf } from '../model/garments';
 import { allColors, cmykOf, cmykText, motifColors, motifSize, motifWarnings, nextListId, productionOf, variantColor } from '../model/production';
@@ -183,6 +183,9 @@ export function ProductionPanel() {
           </button>
           <button className="btn wide" onClick={() => app.ui.setState({ mockup: true })} data-testid="mockup-open">
             <Shirt size={16} /> Mockup-Vorschau
+          </button>
+          <button className="btn wide" onClick={() => app.ui.setState({ costs: true })} data-testid="costs-open">
+            <Calculator size={16} /> Kostenschätzung
           </button>
           <button className="btn wide" onClick={() => app.ui.setState({ screenPrint: true })} data-testid="screen-open">
             <Layers3 size={16} /> Siebdruck-Filme

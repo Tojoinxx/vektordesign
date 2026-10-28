@@ -363,6 +363,9 @@ export function ExportDialog() {
   const [mirror, setMirror] = useState(false);
   const [cmyk, setCmyk] = useState(false);
   const [outlines, setOutlines] = useState(true);
+  const [weed, setWeed] = useState(false);
+  const [weedMargin, setWeedMargin] = useState('3');
+  const [weedLines, setWeedLines] = useState(true);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open && preset) {
@@ -384,6 +387,7 @@ export function ExportDialog() {
       mirror,
       colorMode: cmyk ? 'cmyk' : 'rgb',
       outlines,
+      weeding: weed && format !== 'png' ? { margin: Math.max(0, Number(weedMargin.replace(',', '.')) || 0), lines: weedLines } : null,
     });
     setBusy(false);
     if (ok) close();
@@ -434,6 +438,27 @@ export function ExportDialog() {
           <input type="checkbox" checked={mirror} onChange={(e) => setMirror(e.target.checked)} />
           Spiegeln (für Flexfolie / Transferdruck)
         </label>
+        {format !== 'png' && (
+          <div className="weed-row">
+            <label className="check">
+              <input type="checkbox" checked={weed} onChange={(e) => setWeed(e.target.checked)} data-testid="export-weed" />
+              Entgitterungsrahmen (Plotter)
+            </label>
+            {weed && (
+              <>
+                <label className="field inline">
+                  <span>Abstand</span>
+                  <input type="text" inputMode="decimal" value={weedMargin} onChange={(e) => setWeedMargin(e.target.value)} aria-label="Abstand des Rahmens in mm" style={{ width: 56 }} />
+                  <span>mm</span>
+                </label>
+                <label className="check">
+                  <input type="checkbox" checked={weedLines} onChange={(e) => setWeedLines(e.target.checked)} />
+                  Entgitterungslinien zwischen Motivteilen
+                </label>
+              </>
+            )}
+          </div>
+        )}
         <div className="export-info" data-testid="export-info">
           {box ? (
             <>
@@ -450,6 +475,8 @@ export function ExportDialog() {
                 {format === 'pdf' && 'Vektor-PDF in Originalgröße mit benannten Ebenen; Text immer als Pfade. '}
                 {format === 'eps' && 'EPS kennt keine Transparenz – Deckkraft und Verblassen werden ignoriert; Text immer als Pfade. '}
                 {format === 'dxf' && 'DXF enthält nur Konturen in mm (keine Farben); Text immer als Pfade. '}
+                {weed &&
+                  `Mit Entgitterungsrahmen ${formatNumber(box.maxX - box.minX + 2 * (Number(weedMargin.replace(',', '.')) || 0), 2)} × ${formatNumber(box.maxY - box.minY + 2 * (Number(weedMargin.replace(',', '.')) || 0), 2)} mm (eigene Ebene „Entgitterung“). `}
                 Bemaßungen, Abhängigkeitssymbole und Konstruktionsgeometrie werden nicht exportiert.
               </p>
             </>
