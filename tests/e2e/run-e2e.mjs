@@ -1161,6 +1161,33 @@ await step('Bild als Vorlage: einfügen, auf Maß bringen, fixieren, nachzeichne
   assert(!svg.includes('<image') && /width="50mm" height="50mm"/.test(svg), `Export enthält Vorlage oder falsche Größe: ${svg.match(/width="[^"]+" height="[^"]+"/)?.[0]}`);
 });
 
+await step('Preflight: feine Linie für Stick und Plotter markiert, Logo für DTF in Ordnung', async () => {
+  await newDoc();
+  await app(() => {
+    const a = window.vektordesign;
+    a.editor.setView({ cx: 0, cy: 0, zoom: 4 });
+    const r = a.editor.createRectangle({ pos: { x: -30, y: -10 } }, { pos: { x: 30, y: 10 } }, 'corner');
+    a.editor.setStyle([r.pathId], { fill: '#1f3a93', stroke: null });
+    // schmaler Steg 0,4 mm
+    const s = a.editor.createRectangle({ pos: { x: 30, y: -0.2 } }, { pos: { x: 45, y: 0.2 } }, 'corner');
+    a.editor.setStyle([s.pathId], { fill: '#1f3a93', stroke: null });
+  });
+  await page.click('[data-testid="ribbon-edit"]');
+  await page.click('[data-testid="preflight-open"]');
+  await page.waitForSelector('[data-testid="preflight"]');
+  await page.select('[data-testid="preflight-target"]', 'embroidery');
+  await page.waitForFunction(() => window.vektordesign.ui.getState().preflight?.result?.target === 'embroidery' && !window.vektordesign.ui.getState().preflight.busy);
+  const txt = await page.$eval('[data-testid="preflight"]', (e) => e.textContent);
+  assert(/Details schmaler als 1 mm/.test(txt), `Stick-Prüfung: ${txt}`);
+  await shot('60-preflight-stick');
+  await page.select('[data-testid="preflight-target"]', 'dtg');
+  await page.waitForFunction(() => window.vektordesign.ui.getState().preflight?.result?.target === 'dtg' && !window.vektordesign.ui.getState().preflight.busy);
+  const ok = await app(() => window.vektordesign.ui.getState().preflight.result.issues.map((i) => i.severity));
+  assert(ok.length === 1 && ok[0] === 'info', `DTG sollte passen: ${ok}`);
+  await app(() => window.vektordesign.closePreflight());
+  await page.click('[data-testid="ribbon-sketch"]');
+});
+
 await step('Leistung: 150 Rechtecke mit Bemaßungen, Ziehen bleibt flüssig', async () => {
   await newDoc();
   const t = await app(() => {

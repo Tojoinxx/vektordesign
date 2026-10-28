@@ -9,7 +9,7 @@ import { AssistantPanel } from './AssistantPanel';
 import { LayersPanel } from './LayersPanel';
 import { ProductionPanel, ProfileEditor } from './ProductionPanel';
 import { PlacementView } from './PlacementView';
-import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, MeasureCard, ParamDialog, ShareReadyDialog, SyncConflictDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
+import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, MeasureCard, PreflightCard, ParamDialog, ShareReadyDialog, SyncConflictDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
 import { buildCommands, matchKey } from './commands';
 
 function SidePanel({ app }: { app: AppController }) {
@@ -132,6 +132,7 @@ function Shell({ app }: { app: AppController }) {
         <CanvasView />
         <TutorialCard />
         <MeasureCard />
+        <PreflightCard />
         <Toasts />
       </main>
       {sideOpen && <SidePanel app={app} />}

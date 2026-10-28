@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ImagePlus, ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Copy, FileImage, FileCode2, FileText, FileDown, Grid3x3, Maximize, Palette, Ruler, Sparkles, Trash2, Eye, EyeOff, Magnet } from 'lucide-react';
+import { ShieldCheck, ImagePlus, ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Copy, FileImage, FileCode2, FileText, FileDown, Grid3x3, Maximize, Palette, Ruler, Sparkles, Trash2, Eye, EyeOff, Magnet } from 'lucide-react';
 import type { ConstraintKind } from '../model/types';
 import { CONSTRAINT_LABELS } from '../solver/analysis';
 import type { ToolId } from '../store/state';
@@ -140,8 +140,9 @@ function EditRibbon() {
           <Small icon={<IconExclude size={18} />} label="Ausschließen" onClick={cmd('exclude')} testId="bool-exclude" />
         </div>
       </Group>
-      <Group title="Messen">
+      <Group title="Messen und Prüfen">
         <Big icon={<IconMeasure />} label="Messen" kbd="M" active={tool === 'measure'} onClick={() => app.setTool('measure')} testId="tool-measure" />
+        <Big icon={<ShieldCheck size={24} strokeWidth={1.75} />} label="Prüfen" onClick={() => void app.preflight()} testId="preflight-open" />
       </Group>
       <Group title="Export">
         <Big icon={<FileCode2 size={24} strokeWidth={1.75} />} label="SVG" onClick={() => app.openExport('svg')} />

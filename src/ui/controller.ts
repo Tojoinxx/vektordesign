@@ -11,6 +11,7 @@ import { ConstraintTool } from '../tools/constraintTool';
 import { GradientTool } from '../tools/gradientTool';
 import { CalibrateImageTool, MeasureTool, TrimExtendTool, type MeasureResult } from '../tools/editTools';
 import { readImageFile } from '../model/image';
+import { preflightTargetFor, runPreflight, type PreflightResult, type PreflightTarget } from '../model/preflight';
 import { layersOf } from '../model/layers';
 import { SketchTool } from '../tools/sketchTool';
 import { booleanOp, cornerOp, offsetOp, patternOp, selectionCenter, selectionSize, textToPaths, toShape } from '../store/ops';
@@ -18,7 +19,7 @@ import type { BoolOp } from '../model/boolean';
 import { evaluate } from '../params/expr';
 import { docBBox } from '../model/bounds';
 import { loadProfiles, profileById, saveProfiles, type ExportProfile } from '../model/profiles';
-import { productionOf, articleBase } from '../model/production';
+import { productionOf, articleBase, motifEntities } from '../model/production';
 import type { GarmentView } from '../model/types';
 import { buildPackage } from '../export/package';
 import { buildArtworkSheet } from '../export/artworkSheet';
@@ -83,6 +84,8 @@ export interface UiState {
   /** Mit Datei verbunden (Sync) */
   syncLinked: string | null;
   syncConflict: { text: string; meta: FileMeta; mode: 'watch' | 'save' } | null;
+  /** Preflight-Ergebnis (Karte offen, solange gesetzt) */
+  preflight: { target: PreflightTarget; minLine: number | null; result: PreflightResult | null; busy: boolean } | null;
   /** iPad: fertige Datei, die per Knopf geteilt wird */
   shareReady: { name: string; share: () => Promise<void> } | null;
 }
@@ -186,6 +189,7 @@ export class AppController {
       syncLinked: null,
       syncConflict: null,
       shareReady: null,
+      preflight: null,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -722,10 +726,31 @@ export class AppController {
   }
 
   /** Ein-Klick-Paket (ZIP) mit allen Motiven, Varianten und dem Artwork-Blatt. */
-  async exportPackage(path?: string | null): Promise<boolean> {
+  async exportPackage(path?: string | null, force = false): Promise<boolean> {
     const doc = this.editor.s.doc;
     const p = productionOf(doc);
     const profile = this.currentProfile();
+    if (!force) {
+      // Vorher je Motiv prüfen (Veredelungsart)
+      const { outlines } = await textOutlines(doc).catch(() => ({ outlines: new Map() }));
+      const problems: string[] = [];
+      for (const m of p.motifs) {
+        const only = new Set(motifEntities(doc, m).map((e) => e.id));
+        if (!only.size) continue;
+        const r = runPreflight(doc, preflightTargetFor(m.technique), { only, outlines });
+        for (const i of r.issues) if (i.severity === 'error') problems.push(`${m.name}: ${i.message}`);
+      }
+      if (problems.length) {
+        this.editor.confirm({
+          title: 'Prüfung meldet Probleme',
+          text: `${problems.slice(0, 4).join('\n')}${problems.length > 4 ? `\n… und ${problems.length - 4} weitere` : ''}\n\nDetails unter „Bearbeiten → Prüfen“. Trotzdem exportieren?`,
+          confirm: 'Trotzdem exportieren',
+          cancel: 'Abbrechen',
+          onConfirm: () => void this.exportPackage(path, true),
+        });
+        return false;
+      }
+    }
     this.ui.setState({ busy: 'Paket wird erstellt …' });
     try {
       const res = await buildPackage(doc, p, profile, {
@@ -793,6 +818,31 @@ export class AppController {
       this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 8000);
       return false;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Preflight (Prüfung je Veredelungsart)
+  // -------------------------------------------------------------------------
+
+  private preflightRun = 0;
+
+  /** Prüfung öffnen bzw. neu rechnen. Ohne Angabe: Veredelung des ersten Motivs. */
+  async preflight(target?: PreflightTarget, minLine?: number | null): Promise<PreflightResult> {
+    const cur = this.ui.getState().preflight;
+    const t = target ?? cur?.target ?? preflightTargetFor(productionOf(this.editor.s.doc).motifs[0]?.technique);
+    const ml = minLine !== undefined ? minLine : (cur?.minLine ?? null);
+    const run = ++this.preflightRun;
+    this.ui.setState({ preflight: { target: t, minLine: ml, result: cur?.result ?? null, busy: true } });
+    const doc = this.editor.s.doc;
+    const { outlines } = await textOutlines(doc).catch(() => ({ outlines: new Map() }));
+    const result = runPreflight(doc, t, { minLine: ml ?? undefined, outlines });
+    if (run === this.preflightRun && this.ui.getState().preflight) this.ui.setState({ preflight: { target: t, minLine: ml, result, busy: false } });
+    return result;
+  }
+
+  closePreflight(): void {
+    this.preflightRun++;
+    this.ui.setState({ preflight: null });
   }
 
   // -------------------------------------------------------------------------

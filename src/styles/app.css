@@ -2257,3 +2257,80 @@ body {
     padding: 0 10px;
   }
 }
+
+/* Prüfung (Preflight) */
+.preflight-card {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 7;
+  width: min(360px, calc(100% - 28px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 10px 12px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+}
+.preflight-card h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.preflight-card select {
+  flex: 1;
+  min-width: 0;
+}
+.preflight-list {
+  list-style: none;
+  margin: 8px 0 4px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.preflight-list button {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.preflight-list button:disabled {
+  cursor: default;
+}
+.preflight-list .sev {
+  flex: 0 0 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 11px;
+  color: #fff;
+}
+.sev-error .sev {
+  background: var(--bad);
+}
+.sev-warn .sev {
+  background: #e08a0c;
+}
+.sev-info .sev {
+  background: var(--ok);
+}
+.preflight-colors {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.preflight-colors .swatch {
+  width: 16px;
+  height: 16px;
+}
