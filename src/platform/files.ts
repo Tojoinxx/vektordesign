@@ -160,6 +160,7 @@ export const IMAGE_WEBP_TYPE: FileType = { description: 'WebP-Bild', mime: 'imag
 export const ZIP_TYPE: FileType = { description: 'ZIP-Paket', mime: 'application/zip', ext: 'zip' };
 export const TEMPLATE_TYPE: FileType = { description: 'PDF-Vorlage', mime: 'application/pdf', ext: 'pdf' };
 export const AI_TYPE: FileType = { description: 'Illustrator-Datei (PDF-kompatibel)', mime: 'application/postscript', ext: 'ai' };
+export const LIBRARY_TYPE: FileType = { description: 'Vektordesign-Bibliothek', mime: 'application/json', ext: 'vdlib' };
 export const DXF_TYPE: FileType = { description: 'DXF-Zeichnung', mime: 'application/dxf', ext: 'dxf' };
 
 /** Dateiname ohne verbotene Zeichen. */

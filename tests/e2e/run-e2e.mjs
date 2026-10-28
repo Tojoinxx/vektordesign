@@ -695,6 +695,7 @@ await step('Abnahme M2: Logo aus Text und Formen, 100 mm breit, zwei Farben, Tex
   await app((id) => window.vektordesign.editor.select([id]), logo);
   await page.click('[data-testid="tab-props"]').catch(() => {});
   await page.waitForSelector('[data-testid="shape-width"]');
+  await sleep(200);
   await page.$eval('[data-testid="shape-width"]', (el) => {
     el.focus();
     el.select();
@@ -853,6 +854,11 @@ await step('Mockup-Vorschau: Logo auf dem Hoodie in Stofffarbe, Kontrast je Druc
   // Schwarzer Stoff + dunkelblaue Farbe → schwacher Kontrast wird gemeldet
   const weak = await page.$$eval('[data-testid="mockup-contrast"] li.bad, [data-testid="mockup-contrast"] li.meh', (l) => l.length);
   results.push(`   Mockup: ${rows.length} Druckfarben, ${weak} mit schwachem Kontrast`);
+  await page.click('[data-testid="mockup-compare"]');
+  await sleep(300);
+  const panels = await page.$$eval('[data-testid="mockup-panels"] figure', (l) => l.length);
+  assert(panels === 2, `Variantenvergleich: ${panels}`);
+  await shot('32b-mockup-varianten');
   await page.click('[data-testid="mockup-close"]');
 });
 
@@ -1145,6 +1151,42 @@ await step('Symmetrie-Modus: Kreis wird beim Zeichnen gespiegelt (4-fach), ein R
   assert(m === 0, `nach Rückgängig: ${m}`);
   await page.click('[data-testid="symmetry"]');
   results.push('   Symmetrie 4-fach: 4 Kreise aus einem Klick');
+});
+
+await step('Bibliothek, Paletten, Format übertragen', async () => {
+  await newDoc();
+  const ids = await app(() => {
+    const ed = window.vektordesign.editor;
+    const a = ed.createRectangle({ pos: { x: -40, y: -10 } }, { pos: { x: -10, y: 10 } }, 'corner', { style: { fill: '#c8102e', stroke: '#1e2328', strokeWidth: 1, opacity: 1 } });
+    const b = ed.createCircle({ pos: { x: 25, y: 0 } }, 10, { style: { fill: '#f5c518', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    return [a.pathId, b.circleId];
+  });
+  await page.keyboard.press('f');
+  // Format übertragen: Rechteck-Stil auf den Kreis
+  await app((id) => window.vektordesign.editor.select([id]), ids[0]);
+  await page.click('[data-testid="ribbon-sketch"]');
+  await page.click('[data-testid="tool-format"]');
+  await clickWorld(25, 0);
+  await sleep(100);
+  const fill = await app((id) => window.vektordesign.store.getState().doc.entities[id].style.fill, ids[1]);
+  assert(fill === '#c8102e', `Format nicht übertragen: ${fill}`);
+  await page.keyboard.press('Escape');
+  // Bibliothek: Rechteck speichern, Palette aus Zeichnung, Element einfügen
+  await page.click('[data-testid="tab-library"]');
+  await app((id) => window.vektordesign.editor.select([id]), ids[0]);
+  await page.click('[data-testid="lib-save"]');
+  await page.waitForSelector('[data-testid="lib-elements"] [data-testid="lib-insert"]');
+  await page.click('[data-testid="lib-pal-doc"]');
+  await page.click('[data-testid="lib-pal-harmony"]');
+  const pals = await page.$$('[data-testid="lib-palette"]');
+  assert(pals.length >= 2, `Paletten: ${pals.length}`);
+  const before = await app(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
+  await page.click('[data-testid="lib-insert"]');
+  await sleep(150);
+  const after = await app(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
+  assert(after > before, 'Element nicht eingefügt');
+  await shot('44-bibliothek');
+  results.push(`   Bibliothek: 1 Element, ${pals.length} Paletten; Format übertragen`);
 });
 
 // ---------------------------------------------------------------------------

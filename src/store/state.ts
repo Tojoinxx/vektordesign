@@ -13,6 +13,7 @@ export type ToolId =
   | 'polygon'
   | 'star'
   | 'pen'
+  | 'format'
   | 'text'
   | 'point'
   | 'dimension'

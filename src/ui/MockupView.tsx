@@ -182,6 +182,7 @@ function MockupInner() {
   const refs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [ready, setReady] = useState(0);
+  const [compare, setCompare] = useState(false);
   const close = () => app.ui.setState({ mockup: false });
 
   useEffect(() => {
@@ -206,20 +207,26 @@ function MockupInner() {
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const views = g.views;
-  const cw = Math.floor((size.w - 16 * (views.length - 1)) / views.length);
+  // Vergleich: alle Varianten nebeneinander (Ansicht, auf der Motive liegen)
+  const compareView = (p.motifs.find((m) => views.includes(m.placement.view))?.placement.view ?? views[0]) as GarmentView;
+  const panels = compare
+    ? p.variants.map((v) => ({ key: v.id, view: compareView, variant: v, fabric: v.fabric, label: v.name }))
+    : views.map((v) => ({ key: v, view: v, variant, fabric: fab, label: v === 'front' ? 'Vorderansicht' : 'Rückansicht' }));
+  const cw = Math.floor((size.w - 16 * (panels.length - 1)) / panels.length);
+  const capH = compare ? 24 : 0;
   useEffect(() => {
     const dpr = window.devicePixelRatio || 1;
-    for (const v of views) {
-      const c = refs.current[v];
+    for (const pn of panels) {
+      const c = refs.current[pn.key];
       if (!c) continue;
       c.width = Math.round(cw * dpr);
-      c.height = Math.round(size.h * dpr);
+      c.height = Math.round((size.h - capH) * dpr);
       const ctx = c.getContext('2d')!;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, cw, size.h);
-      renderMockup(ctx, { doc, garmentId, view: v, variant, fabric: fab, width: cw, height: size.h });
+      ctx.clearRect(0, 0, cw, size.h - capH);
+      renderMockup(ctx, { doc, garmentId, view: pn.view, variant: pn.variant, fabric: pn.fabric, width: cw, height: size.h - capH });
     }
-  }, [doc, garmentId, variant, fab, cw, size.h, views, ready]);
+  }, [doc, garmentId, variant, fab, cw, size.h, views, ready, compare]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kontrast der Druckfarben auf diesem Stoff
   const colors = useMemo(() => {
@@ -231,8 +238,8 @@ function MockupInner() {
   const allWarn = contrastWarnings(doc, p);
 
   const savePng = async () => {
-    const W = 1600 * views.length;
-    const H = 1800;
+    const W = 1600 * panels.length;
+    const H = compare ? 1900 : 1800;
     const c = document.createElement('canvas');
     c.width = W;
     c.height = H;
@@ -240,16 +247,22 @@ function MockupInner() {
     ctx.fillStyle = '#eceef1';
     ctx.fillRect(0, 0, W, H);
     await preloadImages(doc);
-    views.forEach((v, i) => {
+    panels.forEach((pn, i) => {
       ctx.save();
       ctx.translate(i * 1600, 0);
-      renderMockup(ctx, { doc, garmentId, view: v, variant, fabric: fab, width: 1600, height: H, pad: 120 });
+      renderMockup(ctx, { doc, garmentId, view: pn.view, variant: pn.variant, fabric: pn.fabric, width: 1600, height: 1800, pad: 120 });
+      if (compare) {
+        ctx.fillStyle = '#1e2328';
+        ctx.font = '600 56px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(pn.label, 800, 1860);
+      }
       ctx.restore();
     });
     const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
     if (!blob) return;
     const bytes = new Uint8Array(await blob.arrayBuffer());
-    const name = `${p.article}_Mockup_${variant.name}.png`.replace(/[\\/:*?"<>|]+/g, '_');
+    const name = `${p.article}_Mockup_${compare ? 'Varianten' : variant.name}.png`.replace(/[\\/:*?"<>|]+/g, '_');
     const res = await saveFile(bytes, name, PNG_TYPE).catch(() => null);
     if (res) app.editor.toast(`Mockup gespeichert: ${res.name}`, 'success');
   };
@@ -281,6 +294,11 @@ function MockupInner() {
               </option>
             ))}
           </select>
+          {p.variants.length > 1 && (
+            <label className="check">
+              <input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} data-testid="mockup-compare" /> Alle Varianten vergleichen
+            </label>
+          )}
           <span className="spacer" />
           <button className="btn" onClick={() => void savePng()} data-testid="mockup-save">
             <Download size={15} /> Als Bild speichern
@@ -291,16 +309,18 @@ function MockupInner() {
         </div>
         <div className="placement-body">
           <div className="placement-canvas mockup-stage" ref={wrapRef}>
-            <div className="mockup-row">
-              {views.map((v) => (
-                <canvas
-                  key={v}
-                  ref={(el) => {
-                    refs.current[v] = el;
-                  }}
-                  style={{ width: cw, height: size.h }}
-                  aria-label={v === 'front' ? 'Vorderansicht' : 'Rückansicht'}
-                />
+            <div className="mockup-row" data-testid="mockup-panels">
+              {panels.map((pn) => (
+                <figure key={pn.key} className="mockup-panel">
+                  <canvas
+                    ref={(el) => {
+                      refs.current[pn.key] = el;
+                    }}
+                    style={{ width: cw, height: size.h - capH }}
+                    aria-label={pn.label}
+                  />
+                  {compare && <figcaption>{pn.label}</figcaption>}
+                </figure>
               ))}
             </div>
           </div>
@@ -329,7 +349,9 @@ function MockupInner() {
                 </li>
               ))}
             </ul>
-            {weak.length > 0 && <p className="error-text small">Diese Farbe{weak.length > 1 ? 'n heben' : ' hebt'} sich auf diesem Stoff kaum ab. Hellere/dunklere Druckfarbe wählen oder eine Kontur ergänzen.</p>}
+            {weak.length > 0 && (
+              <p className="error-text small">Diese Farbe{weak.length > 1 ? 'n heben' : ' hebt'} sich auf diesem Stoff kaum ab. Hellere/dunklere Druckfarbe wählen oder eine Kontur ergänzen.</p>
+            )}
             {allWarn.length > 0 && (
               <>
                 <h4>Alle Varianten</h4>

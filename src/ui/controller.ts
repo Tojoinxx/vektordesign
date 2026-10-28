@@ -1,4 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { FormatTool } from '../tools/formatTool';
 import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
 import type { ConstraintKind, Id, Vec2 } from '../model/types';
 import { createAppStore, type AppStore, type ToolId } from '../store/state';
@@ -69,7 +70,7 @@ import { loadApiKey, loadModel } from '../assistant/api';
 import { TUTORIALS, isTutorialSeen, markTutorialSeen, tutorialsEnabled, type TutorialId } from './tutorials';
 import { applyAppearance, loadAppearance, onSystemThemeChange, saveAppearance, type Appearance } from './appearance';
 
-export type SidePanel = 'props' | 'layers' | 'production' | 'claude';
+export type SidePanel = 'props' | 'layers' | 'production' | 'library' | 'claude';
 
 export interface TextEditState {
   id: Id | null;
@@ -313,6 +314,9 @@ export class AppController {
         break;
       case 'pen':
         t = new PenTool(this.ctx);
+        break;
+      case 'format':
+        t = new FormatTool(this.ctx);
         break;
       case 'text':
         t = new TextTool(this.ctx);

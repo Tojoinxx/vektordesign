@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Layers, Settings2, Shirt, Sparkles } from 'lucide-react';
+import { LibraryPanel } from './LibraryPanel';
+import { BookMarked, Layers, Settings2, Shirt, Sparkles } from 'lucide-react';
 import type { AppController } from './controller';
 import { AppCtx, useUi } from './hooks';
 import { CanvasView } from './CanvasView';
@@ -14,7 +15,22 @@ import { GangSheetView } from './GangSheetView';
 import { ScreenPrintView } from './ScreenPrintView';
 import { CostView } from './CostView';
 import { GeneratorView } from './GeneratorView';
-import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, MeasureCard, PreflightCard, ParamDialog, ShareReadyDialog, SyncConflictDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
+import {
+  AboutDialog,
+  CommandPalette,
+  ConfirmDialog,
+  ExportDialog,
+  MeasureCard,
+  PreflightCard,
+  ParamDialog,
+  ShareReadyDialog,
+  SyncConflictDialog,
+  StatusBar,
+  Toasts,
+  TopBar,
+  TutorialCard,
+  TutorialList,
+} from './Chrome';
 import { buildCommands, matchKey } from './commands';
 
 function SidePanel({ app }: { app: AppController }) {
@@ -28,8 +44,25 @@ function SidePanel({ app }: { app: AppController }) {
         <button role="tab" aria-selected={side === 'layers'} className={side === 'layers' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'layers' })} data-testid="tab-layers" title="Ebenen">
           <Layers size={15} /> <span className="tab-label">Ebenen</span>
         </button>
-        <button role="tab" aria-selected={side === 'production'} className={side === 'production' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'production' })} data-testid="tab-production" title="Produktion: Artikel, Platzierung, Varianten, Export für LabwearOS">
+        <button
+          role="tab"
+          aria-selected={side === 'production'}
+          className={side === 'production' ? 'on' : ''}
+          onClick={() => app.ui.setState({ side: 'production' })}
+          data-testid="tab-production"
+          title="Produktion: Artikel, Platzierung, Varianten, Export für LabwearOS"
+        >
           <Shirt size={15} /> <span className="tab-label">Produktion</span>
+        </button>
+        <button
+          role="tab"
+          aria-selected={side === 'library'}
+          className={side === 'library' ? 'on' : ''}
+          onClick={() => app.ui.setState({ side: 'library' })}
+          data-testid="tab-library"
+          title="Bibliothek: Elemente, Logos und Farbpaletten für alle Projekte"
+        >
+          <BookMarked size={15} /> <span className="tab-label">Bibliothek</span>
         </button>
         <button
           role="tab"
@@ -45,7 +78,9 @@ function SidePanel({ app }: { app: AppController }) {
           <Sparkles size={15} /> <span className="tab-label">Claude</span>
         </button>
       </div>
-      <div className="side-body">{side === 'props' ? <PropertiesPanel /> : side === 'layers' ? <LayersPanel /> : side === 'production' ? <ProductionPanel /> : <AssistantPanel />}</div>
+      <div className="side-body">
+        {side === 'props' ? <PropertiesPanel /> : side === 'layers' ? <LayersPanel /> : side === 'production' ? <ProductionPanel /> : side === 'library' ? <LibraryPanel /> : <AssistantPanel />}
+      </div>
     </aside>
   );
 }
@@ -60,7 +95,23 @@ function Shell({ app }: { app: AppController }) {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
       const s = app.store.getState();
-      if (typing || s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().paramDialog || app.ui.getState().placement || app.ui.getState().mockup || app.ui.getState().gangSheet || app.ui.getState().screenPrint || app.ui.getState().costs || app.ui.getState().generator || app.ui.getState().profileEditor || app.ui.getState().syncConflict || app.ui.getState().shareReady) return;
+      if (
+        typing ||
+        s.paletteOpen ||
+        s.exportOpen ||
+        s.confirm ||
+        app.ui.getState().paramDialog ||
+        app.ui.getState().placement ||
+        app.ui.getState().mockup ||
+        app.ui.getState().gangSheet ||
+        app.ui.getState().screenPrint ||
+        app.ui.getState().costs ||
+        app.ui.getState().generator ||
+        app.ui.getState().profileEditor ||
+        app.ui.getState().syncConflict ||
+        app.ui.getState().shareReady
+      )
+        return;
       if (e.key === 'Escape') {
         e.preventDefault();
         app.escape();

@@ -2620,3 +2620,103 @@ body {
   flex: 1;
   min-width: 0;
 }
+
+/* Bibliothek */
+.library .row input[type='text'] {
+  flex: 1;
+  min-width: 0;
+}
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.lib-item {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.lib-thumb {
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: repeating-conic-gradient(#d9dce1 0% 25%, #eef0f3 0% 50%) 50% / 12px 12px;
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  cursor: pointer;
+}
+.lib-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+}
+.lib-item figcaption {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11.5px;
+}
+.lib-item figcaption span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lib-palette {
+  margin-top: 10px;
+}
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.swatch.big {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  border: 0;
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: pointer;
+}
+.harmony {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.cp-palette-name {
+  display: block;
+  font-size: 11px;
+  opacity: 0.7;
+  margin: 6px 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mockup-panel {
+  margin: 0;
+  display: grid;
+  justify-items: center;
+}
+.mockup-panel figcaption {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 24px;
+}
+/* Fünf Reiter: inaktive nur als Symbol, aktiver mit Beschriftung */
+.side-tabs button:not(.on) .tab-label {
+  display: none;
+}
+.side-tabs button:not(.on) {
+  flex: 0 0 auto;
+  padding-inline: 10px;
+}
+.side-tabs button.on {
+  flex: 1 1 auto;
+}
+.harmony .swatch.big {
+  display: inline-block;
+  cursor: default;
+}

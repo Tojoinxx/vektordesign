@@ -220,6 +220,7 @@ export function buildCommands(): Command[] {
     { id: 'draw.symmetry.h', label: 'Symmetrie: waagrechte Achse', group: 'Zeichnen', keywords: 'spiegeln symmetrisch live achse', run: (a) => a.store.setState({ symmetry: 'h' }) },
     { id: 'draw.symmetry.vh', label: 'Symmetrie: beide Achsen (4-fach)', group: 'Zeichnen', keywords: 'spiegeln symmetrisch live vierfach', run: (a) => a.store.setState({ symmetry: 'vh' }) },
     { id: 'draw.symmetry.off', label: 'Symmetrie aus', group: 'Zeichnen', keywords: 'spiegeln symmetrisch', run: (a) => a.store.setState({ symmetry: 'off' }) },
+    { id: 'design.format', label: 'Format übertragen', group: 'Gestalten', keywords: 'pinsel stil kopieren farbe kontur übernehmen format painter', run: (a) => a.setTool('format') },
     { id: 'insert.generator', label: 'Vorlagen-Generator (Badge, Wappen, Banner, Rahmen, QR-Code, Nackendruck) …', group: 'Zeichnen', keywords: 'vorlage generator badge emblem wappen schild banner band rahmen qr code nacken etikett label', run: (a) => a.ui.setState({ generator: true }) },
     { id: 'edit.textcircle', label: 'Text auf Kreis …', group: 'Textil', keywords: 'text kreis bogen biegen rund badge', run: (a) => a.editCommand('text-circle') },
     { id: 'edit.halftone', label: 'Halbtonraster …', group: 'Textil', keywords: 'halbton raster punkte verlauf siebdruck transparenz', run: (a) => a.editCommand('halftone') },

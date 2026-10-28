@@ -14,6 +14,7 @@ import {
   Grid3x3,
   Maximize,
   Palette,
+  Paintbrush,
   Ruler,
   Sparkles,
   Trash2,
@@ -371,6 +372,7 @@ function SketchRibbon() {
             setTimeout(() => document.getElementById('stilvorschlaege')?.scrollIntoView({ behavior: 'smooth' }), 50);
           }}
         />
+        <Big icon={<Paintbrush size={24} strokeWidth={1.75} />} label="Format übertragen" active={tool === 'format'} onClick={() => set('format')} testId="tool-format" />
         <div className="rb-col">
           <Small icon={<ArrowUpToLine size={17} />} label="Ganz nach vorne" kbd="Strg+Umschalt+]" onClick={() => app.editor.arrange(app.editor.s.selection, 'front')} />
           <Small icon={<ArrowDownToLine size={17} />} label="Ganz nach hinten" kbd="Strg+Umschalt+[" onClick={() => app.editor.arrange(app.editor.s.selection, 'back')} />

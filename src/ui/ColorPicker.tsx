@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pipette } from 'lucide-react';
+import { loadLibrary } from '../model/library';
 import { cmykToRgb, hexToRgb, hsvToRgb, normalizeHex, rgbToCmyk, rgbToHex, rgbToHsv, type HSV } from '../model/color';
 
 /** Grundfarben für Textildruck (keine Pantone-Bibliothek – lizenzpflichtig). */
@@ -63,6 +64,7 @@ export function ColorPicker({ value, onPreview, onChange, onClose }: ColorPicker
   const rgb = hexToRgb(hex);
   const cmyk = rgbToCmyk(rgb);
   const recent = loadRecent();
+  const palettes = loadLibrary().palettes.slice(0, 3);
 
   useEffect(() => setHexText(hex), [hex]);
 
@@ -208,24 +210,22 @@ export function ColorPicker({ value, onPreview, onChange, onClose }: ColorPicker
           <button key={c} className="swatch" style={{ background: c }} title={c} aria-label={c} onClick={() => setFromHex(c)} />
         ))}
       </div>
+      {palettes.map((p) => (
+        <div key={p.id} className="cp-palette" title={p.name}>
+          <span className="cp-palette-name">{p.name}</span>
+          <div className="cp-swatches">
+            {p.colors.slice(0, 16).map((c) => (
+              <button key={c} className="swatch" style={{ background: c }} title={`${p.name}: ${c}`} aria-label={c} onClick={() => setFromHex(c)} />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
 /** Farbknopf, der den Farbwähler öffnet. */
-export function ColorButton({
-  value,
-  onChange,
-  onPreview,
-  label,
-  testId,
-}: {
-  value: string;
-  onChange: (hex: string) => void;
-  onPreview?: (hex: string) => void;
-  label: string;
-  testId?: string;
-}) {
+export function ColorButton({ value, onChange, onPreview, label, testId }: { value: string; onChange: (hex: string) => void; onPreview?: (hex: string) => void; label: string; testId?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="color-button-wrap">

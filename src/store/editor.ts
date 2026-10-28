@@ -887,6 +887,23 @@ export class Editor {
     return { ...out, shapeId };
   }
 
+  /** Zeichnung (z. B. Bibliothekselement) einfügen; Mitte bei `at`, mehrteilig als Gruppe. */
+  insertDoc(src: SketchDoc, label: string, at: Vec2 = { x: 0, y: 0 }): CommitOutcome & { ids?: Id[] } {
+    const roots = src.order.filter((id) => src.entities[id]);
+    if (!roots.length) return { ok: false, reason: 'invalid', message: 'Das Element ist leer.' };
+    let ids: Id[] = [];
+    const out = this.commit(label, (d) => {
+      ids = cloneInto(d, src, roots);
+      if (at.x || at.y) applyXf(d, ids, { kind: 'move', dx: at.x, dy: at.y });
+      if (ids.length > 1 && !ids.some((id) => d.entities[id]?.group)) {
+        const g = newId(d, 'g');
+        for (const id of ids) d.entities[id].group = g;
+      }
+    });
+    if (out.ok) this.select(ids);
+    return { ...out, ids };
+  }
+
   /** Fertige Formen (Generatoren) als Gruppe einfügen, verschoben um `at`. */
   insertParts(parts: { name: string; contours: Contour[]; style: Style; fillRule?: 'nonzero' | 'evenodd' }[], label: string, at: Vec2 = { x: 0, y: 0 }): CommitOutcome & { ids?: Id[] } {
     const usable = parts.filter((p) => p.contours.length);
