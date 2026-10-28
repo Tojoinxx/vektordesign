@@ -24,7 +24,11 @@ Jeder Push baut außerdem einen Test-Installer: im Reiter **Actions** → Lauf �
 - **Einzeldatei:** `Vektordesign.html` aus dem Release herunterladen und doppelklicken. Die ganze App steckt in dieser einen Datei und läuft offline in Chrome, Edge oder Firefox.
 - **Web-Version:** <https://tojoinxx.github.io/vektordesign/> im Browser öffnen.
 
-Die installierbare iPad-Version mit Offline-Betrieb, Touch- und Pencil-Bedienung folgt in Meilenstein 4.
+### iPad (Web-App auf dem Home-Bildschirm)
+
+1. In **Safari** <https://tojoinxx.github.io/vektordesign/> öffnen.
+2. Teilen-Knopf → **Zum Home-Bildschirm**. Vektordesign startet dann wie eine App im Vollbild und funktioniert nach dem ersten Öffnen auch **ohne Internet**.
+3. Neue Versionen lädt die App im Hintergrund; sie fragt, bevor sie neu startet. Die Zeichnung bleibt erhalten.
 
 ### Aus dem Quellcode
 
@@ -105,6 +109,33 @@ Die Tech-Packs entstehen in LabwearOS. Vektordesign liefert die passenden Artwor
 3. **Variante** hinzufügen, Stofffarbe und Druckfarben der zweiten Variante ändern, Pantone-Code als Freitext eintragen.
 4. **ZIP-Paket exportieren**: Das Paket enthält je Variante PDF, SVG und PNG (300 dpi) sowie das Artwork-Blatt.
 
+### iPad, Apple Pencil und Sync
+
+| Geste | Wirkung |
+| --- | --- |
+| Apple Pencil | zeichnet und wählt aus (präzise, mit Fang) |
+| ein Finger | zeichnet, solange kein Stift benutzt wurde; danach verschiebt er nur (Handballen werden ignoriert) |
+| Tipp mit dem Finger (bei Stiftbedienung) | Markierungsmenü zum schnellen Werkzeugwechsel |
+| zwei Finger auseinander/zusammen | Zoom und Verschieben |
+| Zwei-Finger-Tipp / Drei-Finger-Tipp | Rückgängig / Wiederholen |
+| langes Drücken | Kontextmenü |
+| Doppeltipp | wie Doppelklick (z. B. Bemaßung ändern) |
+
+- **Freihand** (`S`, auch im Markierungsmenü): grob zeichnen, beim Absetzen entsteht saubere Geometrie – Linie (fast waagrecht/senkrecht wird exakt), Kreis, Rechteck, Dreieck/Vieleck oder Linienzug. Danach wie gewohnt bemaßen.
+- **Ziffernblock:** Auf Touch-Geräten erscheint beim Bemaßen ein großer Ziffernblock statt der Bildschirmtastatur (Ausdrücke wie `30+5` gehen auch).
+- **Teilen-Menü:** Exporte und „Speichern“ öffnen auf dem iPad das Teilen-Menü – „In Dateien sichern“ (iCloud Drive, OneDrive), AirDrop, Mail oder direkt die Cricut-App.
+- Oberfläche: größere Bedienelemente bei Touch, Werkzeugband einklappbar (Pfeil rechts neben den Registerkarten), Seitenleiste schiebt sich auf schmalen Bildschirmen über die Zeichnung.
+- Der Doppeltipp auf den Apple Pencil kann von Web-Apps nicht abgefragt werden (Einschränkung von Safari); der Werkzeugwechsel geht über den Finger-Tipp und das Markierungsmenü.
+
+**Sync zwischen PC und iPad** über einen Ordner in iCloud Drive oder OneDrive:
+
+1. Am PC das Projekt in den Cloud-Ordner speichern (iCloud für Windows bzw. OneDrive). Desktop-App und Chrome/Edge bleiben mit der Datei verbunden – unten in der Statusleiste steht dann der Dateiname mit Wolke.
+2. Auf dem iPad **Datei → Öffnen** und die Datei in *Dateien* (iCloud Drive/OneDrive) wählen, weiterzeichnen.
+3. Auf dem iPad **Speichern** → Teilen-Menü → **In Dateien sichern** → denselben Ordner wählen → **Ersetzen**.
+4. Der PC merkt die Änderung innerhalb weniger Sekunden und übernimmt sie („Änderungen von iPad übernommen“).
+
+Jede Speicherung erhöht eine Revisionsnummer in der Datei und vermerkt das Gerät. Hat der PC gleichzeitig eigene ungespeicherte Änderungen, fragt er nach: Version vom iPad laden, eigene Version behalten (überschreibt beim Speichern) oder beide behalten (eigene als Kopie sichern). Safari erlaubt Web-Apps keinen dauerhaften Zugriff auf einen Ordner – deshalb öffnet und sichert das iPad über *Dateien*.
+
 ### Darstellung
 
 Standard ist das dunkle Design. Über das Mond-Symbol oben rechts lassen sich das **Design** (Dunkel, Hell, Wie System) und unabhängig davon die **Zeichenfläche** (Passend, Hell, Dunkel) umschalten; die Wahl bleibt auf dem Gerät gespeichert. Eine helle Zeichenfläche im dunklen Design zeigt dunkle Motive so, wie sie auf hellem Stoff wirken. Motive, die sich kaum vom Hintergrund abheben (schwarz auf dunkler Fläche, weiß auf weißer), bekommen am Bildschirm einen feinen Umriss. Exportiert wird immer ohne Hintergrund und in den echten Farben.
@@ -149,6 +180,7 @@ Optional beim Export: Rand inklusive Konturstärke und horizontal spiegeln (Flex
 | `E` | Dehnen | | `Strg+G` | Gruppieren |
 | `O` | Versatz | | `Strg+Umschalt+G` | Gruppierung aufheben |
 | `M` | Messen | | | |
+| `S` | Freihandskizze mit Formerkennung | | | |
 | `Esc` | Abbrechen, zurück zur Auswahl | | | |
 
 Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Ziehen verschiebt die Ansicht, Rechtsklick öffnet das Markierungsmenü (wie in Inventor; Rechtsklick gedrückt halten und in eine Richtung ziehen startet den Befehl direkt). Fang an Endpunkt, Mitte, Schnittpunkt, Kreismittelpunkt, Kurve und Raster lässt sich unten in der Statusleiste umschalten.
@@ -161,7 +193,7 @@ Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Zieh
 | `npm run build` | Typprüfung und Produktionsbuild nach `dist/` |
 | `npm run build:single` | Ganze App als eine HTML-Datei: `dist-single/Vektordesign.html` |
 | `npm test` | Unit-Tests: Ausdrücke, Solver, Abnahme M1, Export, Claude-Werkzeuge |
-| `npm run test:e2e` | Bedienung im echten Browser inkl. Abnahme M1, M2 und M3 (`CHROME_PATH` auf Chrome/Chromium setzen) |
+| `npm run test:e2e` | Bedienung im echten Browser inkl. Abnahme M1–M4 (iPad-Emulation mit Touch und Stift, offline, Sync) (`CHROME_PATH` setzen) |
 | `npm run test:desktop` | Startet die Desktop-App und prüft Solver, Export und Dateibefehle im echten Fenster |
 | `npm run desktop:build` | Windows-Installer (NSIS-Setup und MSI) |
 | `npm run version:set -- 0.2.0` | Versionsnummer überall gleich setzen |
@@ -211,7 +243,7 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 1. ✅ MVP Desktop
 2. ✅ Gestaltung und Bearbeiten: Ebenen, Gruppen, Ausrichten, boolesche Operationen, Stutzen/Dehnen/Abrunden/Versatz, Muster, Messen, Text in Pfade, PDF/EPS/DXF
 3. ✅ LabwearOS-Export: Vorlagen-Import, Platzierung auf dem Kleidungsstück, Artwork-Blatt, Export-Profile, ZIP-Paket
-4. iPad: installierbare Web-App, Touch- und Apple-Pencil-Bedienung, Formerkennung, Sync über iCloud Drive/OneDrive
+4. ✅ iPad: installierbare Web-App, Touch- und Apple-Pencil-Bedienung, Formerkennung, Sync über iCloud Drive/OneDrive
 5. Textil- und Komfortfunktionen: Mockups, Farbseparation, Plotter-Prüfung, Rapport, Größenstaffel, Kostenschätzung
 
 ## Lizenz

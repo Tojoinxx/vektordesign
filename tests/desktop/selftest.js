@@ -89,6 +89,27 @@
       const proj = JSON.parse(text(await read(projPath)));
       const nDims = Object.keys(proj.dims || {}).length;
       check('Projektdatei gespeichert und wieder lesbar', nDims === 3 && app.store.getState().dirty === false, `${nDims} Bemaßungen ${lastToast()}`);
+      check('Projektdatei trägt Revision und Gerät (Sync)', proj.revision === 1 && typeof proj.projectId === 'string' && proj.savedBy !== '', `Revision ${proj.revision}, ${proj.savedBy}`);
+
+      // Sync: „iPad“ speichert eine neuere Fassung in dieselbe Datei → die App übernimmt sie
+      const stat0 = await invoke('file_stat', { path: projPath });
+      check('Änderungszeit der Datei lesbar', Array.isArray(stat0) && stat0[0] > 0, JSON.stringify(stat0));
+      await new Promise((r) => setTimeout(r, 1100));
+      const fromIpad = { ...proj, revision: 2, savedBy: 'iPad', savedAt: new Date().toISOString() };
+      fromIpad.dims = { ...fromIpad.dims };
+      const d0 = Object.values(fromIpad.dims)[0];
+      fromIpad.dims[d0.id] = { ...d0, expr: '90' };
+      await write(projPath, new TextEncoder().encode(JSON.stringify(fromIpad)));
+      // Die App beobachtet die Datei selbst (alle 3 s); zusätzlich direkt prüfen
+      let dimNow = null;
+      for (let i = 0; i < 20; i++) {
+        const ev = await app.sync.check(false);
+        if (ev && ev.kind === 'reloaded') app.editor.replaceDocument(JSON.parse(ev.text));
+        dimNow = app.store.getState().doc.dims[d0.id];
+        if (dimNow?.expr === '90') break;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      check('Änderung vom iPad wird übernommen', dimNow?.expr === '90', `${dimNow?.expr} ${lastToast()}`);
 
       // Binärdaten mit allen Bytewerten, Leerzeichen und Umlaute im Pfad
       const bin = new Uint8Array(70000).map((_, i) => (i * 7 + (i >> 8)) & 255);

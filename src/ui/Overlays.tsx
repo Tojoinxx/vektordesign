@@ -1,3 +1,4 @@
+import { Keypad, applyKey, touchUi } from './Keypad';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SceneLayout } from '../render/renderer';
 import { toScreen, type Viewport } from '../render/viewport';
@@ -96,10 +97,14 @@ function DimensionEditorInner({ layout, vp, dimId }: { layout: () => SceneLayout
   const inputRef = useRef<HTMLInputElement>(null);
   const [, force] = useState(0);
   const closing = useRef(false);
+  const [pad] = useState(touchUi);
+  // Markierung im Feld (für den Ziffernblock; DOM-Werte hinken bei schnellem Tippen hinterher)
+  const sel = useRef<{ start: number; end: number } | null>(null);
 
   useLayoutEffect(() => {
     inputRef.current?.focus({ preventScroll: true });
     inputRef.current?.select();
+    sel.current = { start: 0, end: inputRef.current?.value.length ?? 0 };
     // Position steht erst nach dem nächsten Zeichnen fest
     const raf = requestAnimationFrame(() => force((n) => n + 1));
     return () => cancelAnimationFrame(raf);
@@ -131,7 +136,12 @@ function DimensionEditorInner({ layout, vp, dimId }: { layout: () => SceneLayout
           ref={inputRef}
           data-testid="dim-input"
           value={value}
-          inputMode="decimal"
+          inputMode={pad ? 'none' : 'decimal'}
+          onClick={(e) => {
+            // Nutzer setzt den Cursor selbst (Tippen ins Feld)
+            const el = e.currentTarget;
+            sel.current = { start: el.selectionStart ?? el.value.length, end: el.selectionEnd ?? el.value.length };
+          }}
           onChange={(e) => {
             setValue(e.target.value);
             setError(null);
@@ -162,7 +172,19 @@ function DimensionEditorInner({ layout, vp, dimId }: { layout: () => SceneLayout
         />
         <span className="dim-unit">{dim.kind === 'angle' || dim.kind === 'angleX' ? '°' : 'mm'}</span>
       </div>
-      {error ? <div className="dim-error">{error}</div> : <div className="dim-hint">Enter übernimmt · Ausdrücke wie 20+5 oder d0*2</div>}
+      {error ? <div className="dim-error">{error}</div> : <div className="dim-hint">{pad ? 'OK übernimmt · Ausdrücke wie 20+5 oder d0*2' : 'Enter übernimmt · Ausdrücke wie 20+5 oder d0*2'}</div>}
+      {pad && (
+        <Keypad
+          onKey={(k) => {
+            const r = applyKey(value, k, sel.current);
+            sel.current = { start: r.caret, end: r.caret };
+            setValue(r.value);
+            setError(null);
+            requestAnimationFrame(() => inputRef.current?.setSelectionRange(r.caret, r.caret));
+          }}
+          onOk={apply}
+        />
+      )}
     </div>
   );
 }

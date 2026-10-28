@@ -22,6 +22,47 @@ export interface OpenResult {
   data: Uint8Array;
 }
 
+/** iPad/iPhone (auch iPadOS, das sich als Mac ausgibt) */
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Teilen braucht in Safari eine frische Nutzeraktion. Dauert das Erzeugen der Datei zu lange,
+ * zeigt die App einen Knopf „Teilen“ an (vom Controller gesetzt).
+ */
+let shareFallback: ((name: string, share: () => Promise<void>) => void) | null = null;
+export function setShareFallback(fn: typeof shareFallback): void {
+  shareFallback = fn;
+}
+
+async function shareBytes(bytes: Uint8Array, name: string, mime: string): Promise<'shared' | 'aborted' | 'unsupported' | 'deferred'> {
+  const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
+  if (!nav.share || !nav.canShare) return 'unsupported';
+  const file = new File([bytes as BlobPart], name, { type: mime });
+  if (!nav.canShare({ files: [file] })) return 'unsupported';
+  const run = () => nav.share({ files: [file], title: name });
+  try {
+    await run();
+    return 'shared';
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return 'aborted';
+    if (e instanceof DOMException && e.name === 'NotAllowedError' && shareFallback) {
+      shareFallback(name, async () => {
+        try {
+          await run();
+        } catch {
+          /* abgebrochen */
+        }
+      });
+      return 'deferred';
+    }
+    return 'unsupported';
+  }
+}
+
 const toBytes = (data: Uint8Array | string): Uint8Array => (typeof data === 'string' ? new TextEncoder().encode(data) : data);
 
 function baseName(path: string): string {
@@ -42,6 +83,12 @@ export async function saveFile(data: Uint8Array | string, suggestedName: string,
     }
     await invoke('write_file', bytes, { headers: { 'x-path': encodeURIComponent(target) } });
     return { name: baseName(target), path: target };
+  }
+  // iPad: Teilen-Menü (In Dateien sichern, AirDrop, Mail, Cricut-App …)
+  if (isIOS()) {
+    const r = await shareBytes(bytes, suggestedName, type.mime);
+    if (r === 'shared' || r === 'deferred') return { name: suggestedName, path: null };
+    if (r === 'aborted') return null;
   }
   const w = window as unknown as {
     showSaveFilePicker?: (o: unknown) => Promise<{ name: string; createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> }>;
@@ -88,7 +135,8 @@ export async function openFile(types: FileType[]): Promise<OpenResult | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = types.map((t) => `.${t.ext},${t.mime}`).join(',');
+    // iOS graut unbekannte Endungen (.vdp) sonst aus
+    if (!isIOS()) input.accept = types.map((t) => `.${t.ext},${t.mime}`).join(',');
     input.style.display = 'none';
     input.onchange = async () => {
       const f = input.files?.[0];

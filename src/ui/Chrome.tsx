@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleHelp, Command as CommandIcon, FilePlus2, FolderOpen, Menu, Moon, PanelRightClose, PanelRightOpen, Redo2, Save, Search, Sparkles, Sun, SunMoon, Undo2, X, Download } from 'lucide-react';
+import { Cloud, CloudOff, Share2, CircleHelp, Command as CommandIcon, FilePlus2, FolderOpen, Menu, Moon, PanelRightClose, PanelRightOpen, Redo2, Save, Search, Sparkles, Sun, SunMoon, Undo2, X, Download } from 'lucide-react';
 import { formatNumber } from '../params/expr';
 import { describeItem } from '../solver/analysis';
 import { pngSize } from '../export/png';
@@ -210,6 +210,7 @@ export function StatusBar() {
         {app.current.hint()}
       </span>
       <span className="spacer" />
+      <SyncBadge />
       <span className="coords" aria-label="Mausposition">
         {cursor ? `X ${formatNumber(cursor.x, 2)}  Y ${formatNumber(cursor.y, 2)} mm` : '—'}
       </span>
@@ -788,5 +789,77 @@ export function MeasureCard() {
       </dl>
       <p className="muted">Die Zeichnung bleibt unverändert · Esc beendet</p>
     </div>
+  );
+}
+
+
+/** Anzeige der Datei-Verbindung (Abgleich mit dem iPad über iCloud Drive/OneDrive). */
+function SyncBadge() {
+  const linked = useUi((s) => s.syncLinked);
+  const dirty = useAppState((s) => s.dirty);
+  if (!linked) return null;
+  return (
+    <span className={`sync-badge ${dirty ? 'dirty' : ''}`} title={`Verbunden mit „${linked}“: Änderungen anderer Geräte werden automatisch übernommen.${dirty ? ' Es gibt ungespeicherte Änderungen.' : ''}`} data-testid="sync-badge">
+      {dirty ? <CloudOff size={14} /> : <Cloud size={14} />} {linked}
+    </span>
+  );
+}
+
+/** Konflikt: Die Datei wurde auf einem anderen Gerät geändert, während hier ungespeicherte Änderungen bestehen. */
+export function SyncConflictDialog() {
+  const app = useApp();
+  const c = useUi((s) => s.syncConflict);
+  if (!c) return null;
+  const when = c.meta.savedAt ? new Date(c.meta.savedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  const who = c.meta.savedBy || 'einem anderen Gerät';
+  return (
+    <Modal title="Datei wurde woanders geändert" onClose={() => app.ui.setState({ syncConflict: null })} testId="sync-conflict">
+      <div className="stack">
+        <p>
+          Die Projektdatei wurde auf <strong>{who}</strong>
+          {when ? ` (${when})` : ''} gespeichert, während du hier ungespeicherte Änderungen hast. Welche Fassung soll gelten?
+        </p>
+        <button className="btn wide" onClick={() => void app.resolveConflict('theirs')} data-testid="conflict-theirs">
+          Version von {who} laden <small className="muted">– meine Änderungen verwerfen</small>
+        </button>
+        <button className="btn wide" onClick={() => void app.resolveConflict('mine')} data-testid="conflict-mine">
+          Meine Version behalten <small className="muted">– {c.mode === 'save' ? 'jetzt speichern und Datei überschreiben' : 'beim nächsten Speichern überschreiben'}</small>
+        </button>
+        <button className="btn accent wide" onClick={() => void app.resolveConflict('both')} data-testid="conflict-both">
+          Beide behalten <small>– meine als Kopie sichern, dann {who} laden</small>
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** iPad: Teilen braucht eine frische Berührung – Datei ist fertig, Knopf startet das Teilen-Menü. */
+export function ShareReadyDialog() {
+  const app = useApp();
+  const r = useUi((s) => s.shareReady);
+  if (!r) return null;
+  const close = () => app.ui.setState({ shareReady: null });
+  return (
+    <Modal title="Datei ist bereit" onClose={close} testId="share-ready">
+      <div className="stack">
+        <p>
+          <strong>{r.name}</strong> kann jetzt geteilt werden – „In Dateien sichern“ (iCloud Drive, OneDrive), AirDrop, Mail oder die Cricut-App.
+        </p>
+        <div className="row end">
+          <button className="btn" onClick={close}>
+            Schließen
+          </button>
+          <button
+            className="btn accent"
+            onClick={() => {
+              void r.share();
+              close();
+            }}
+          >
+            <Share2 size={16} /> Teilen
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }

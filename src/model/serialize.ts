@@ -8,8 +8,8 @@ export const APP_VERSION: string = version;
 export const PROJECT_EXT = 'vdp';
 
 /** Projektdatei (.vdp) = JSON des Skizzenmodells plus Metadaten. */
-export function serializeDoc(doc: SketchDoc): string {
-  const out = { ...doc, savedWith: `${APP_NAME} ${APP_VERSION}`, savedAt: new Date().toISOString() };
+export function serializeDoc(doc: SketchDoc, meta?: { revision: number; savedBy: string; projectId: string }): string {
+  const out = { ...doc, savedWith: `${APP_NAME} ${APP_VERSION}`, savedAt: new Date().toISOString(), ...(meta ?? {}) };
   return JSON.stringify(out, null, 1);
 }
 

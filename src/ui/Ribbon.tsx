@@ -69,17 +69,34 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 export function Ribbon() {
   const app = useApp();
   const tab = useUi((s) => s.ribbonTab);
+  const collapsed = useUi((s) => s.ribbonCollapsed);
+  const setCollapsed = (v: boolean) => {
+    app.ui.setState({ ribbonCollapsed: v });
+    try {
+      localStorage.setItem('vd.ribbon', v ? 'collapsed' : 'open');
+    } catch {
+      /* kein Speicher */
+    }
+  };
+  const pick = (t: 'sketch' | 'edit') => {
+    app.ui.setState({ ribbonTab: t });
+    if (collapsed) setCollapsed(false);
+  };
   return (
     <div className="ribbon-wrap">
       <div className="ribbon-tabs" role="tablist" aria-label="Werkzeugleisten">
-        <button role="tab" aria-selected={tab === 'sketch'} className={tab === 'sketch' ? 'on' : ''} onClick={() => app.ui.setState({ ribbonTab: 'sketch' })} data-testid="ribbon-sketch">
+        <button role="tab" aria-selected={tab === 'sketch'} className={tab === 'sketch' ? 'on' : ''} onClick={() => pick('sketch')} data-testid="ribbon-sketch">
           Skizze
         </button>
-        <button role="tab" aria-selected={tab === 'edit'} className={tab === 'edit' ? 'on' : ''} onClick={() => app.ui.setState({ ribbonTab: 'edit' })} data-testid="ribbon-edit">
+        <button role="tab" aria-selected={tab === 'edit'} className={tab === 'edit' ? 'on' : ''} onClick={() => pick('edit')} data-testid="ribbon-edit">
           Bearbeiten
         </button>
+        <span className="spacer" />
+        <button className="ribbon-collapse" onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Werkzeugband einblenden' : 'Werkzeugband einklappen (mehr Platz zum Zeichnen)'} aria-label={collapsed ? 'Werkzeugband einblenden' : 'Werkzeugband einklappen'} data-testid="ribbon-collapse">
+          {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+        </button>
       </div>
-      {tab === 'sketch' ? <SketchRibbon /> : <EditRibbon />}
+      {collapsed ? null : tab === 'sketch' ? <SketchRibbon /> : <EditRibbon />}
     </div>
   );
 }

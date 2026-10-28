@@ -65,6 +65,20 @@ fn read_file(path: String) -> Result<Response, String> {
         .map_err(|e| format!("Datei konnte nicht gelesen werden: {e}"))
 }
 
+/// Änderungszeit (ms seit 1970) und Größe einer Datei – für den Abgleich mit dem iPad
+/// über einen Cloud-Ordner (iCloud Drive, OneDrive). `null`, wenn die Datei fehlt.
+#[tauri::command]
+fn file_stat(path: String) -> Option<(u64, u64)> {
+    let meta = std::fs::metadata(&path).ok()?;
+    let mtime = meta
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_millis() as u64;
+    Some((mtime, meta.len()))
+}
+
 /// Schreibt Binärdaten; der Zielpfad steht URL-kodiert im Header `x-path`.
 #[tauri::command]
 fn write_file(request: Request<'_>) -> Result<(), String> {
@@ -89,7 +103,7 @@ pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![list_fonts, font_file, read_file, write_file]);
+        .invoke_handler(tauri::generate_handler![list_fonts, font_file, read_file, write_file, file_stat]);
 
     #[cfg(any(debug_assertions, feature = "selftest"))]
     if let Some(plugin) = selftest::plugin() {

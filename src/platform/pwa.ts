@@ -12,8 +12,12 @@ export function registerServiceWorker(onUpdate: (apply: () => void) => void): vo
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+      // Nur nach bestätigtem Update neu laden – nicht, wenn der Service Worker beim ersten
+      // Besuch die Seite übernimmt
+      let wantReload = false;
       const offer = (w: ServiceWorker) =>
         onUpdate(() => {
+          wantReload = true;
           w.postMessage('skipWaiting');
         });
       if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
@@ -26,7 +30,7 @@ export function registerServiceWorker(onUpdate: (apply: () => void) => void): vo
       });
       let reloading = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloading) return;
+        if (reloading || !wantReload) return;
         reloading = true;
         location.reload();
       });

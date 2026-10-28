@@ -835,6 +835,252 @@ await step('Abnahme M3: Logo auf Hoodie-Brust, Siebdruck, zwei Farbvarianten →
   results.push(`   Paket: ${names.length} Dateien`);
 });
 
+// ---------------------------------------------------------------------------
+// Meilenstein 4: iPad (Touch, Apple Pencil, Web-App, Sync)
+// ---------------------------------------------------------------------------
+
+/** Touch-Gesten über das Chrome-DevTools-Protokoll (echte Touch-Ereignisse). */
+async function touch(session, type, pts) {
+  await session.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], i) => ({ x, y, id: i, radiusX: 8, radiusY: 8, force: 1 })) });
+}
+/** Stift (Apple Pencil) über das Protokoll: pointerType „pen“. */
+async function pen(session, pts) {
+  const ev = (type, [x, y], buttons) => session.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons, clickCount: 1, pointerType: 'pen', force: 0.5 });
+  await ev('mouseMoved', pts[0], 0);
+  await ev('mousePressed', pts[0], 1);
+  for (const p of pts.slice(1)) await ev('mouseMoved', p, 1);
+  await ev('mouseReleased', pts[pts.length - 1], 0);
+}
+
+await step('Web-App: Manifest, Service Worker und Start ohne Internet', async () => {
+  const manifest = await page.$eval('link[rel="manifest"]', (l) => l.href);
+  assert(manifest.endsWith('manifest.webmanifest'), 'Manifest fehlt');
+  const m = await app(async (u) => (await fetch(u)).json(), manifest);
+  assert(m.display === 'standalone' && m.icons.some((i) => i.sizes === '512x512'), 'Manifest unvollständig');
+  await page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.ready.then(() => true), { timeout: 15000 });
+  await app(() => navigator.serviceWorker.ready);
+  // Alle Dateien im Speicher, dann offline neu laden
+  await page.waitForFunction(async () => (await caches.keys()).some((k) => k.startsWith('vektordesign-')), { timeout: 15000 });
+  await page.setOfflineMode(true);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.vektordesign?.store.getState().solverReady, { timeout: 20000 });
+  await page.setOfflineMode(false);
+  results.push('   offline neu geladen: App und Solver bereit');
+});
+
+const ipadPage = await browser.newPage();
+ipadPage.on('pageerror', (e) => errors.push(`pageerror (iPad): ${e.message}`));
+await ipadPage.emulate({
+  viewport: { width: 1180, height: 820, deviceScaleFactor: 2, isMobile: true, hasTouch: true, isLandscape: true },
+  userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+});
+const ipadCdp = await ipadPage.createCDPSession();
+await ipadCdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+await ipadCdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: DL });
+await ipadPage.evaluateOnNewDocument(() => {
+  try {
+    localStorage.setItem('vd.tutorials.off', '1');
+  } catch {
+    /* egal */
+  }
+  // Teilen-Menü gibt es im Test-Browser nicht → Download (wie „In Dateien sichern“);
+  // Datei-Dialoge von Chrome gibt es in Safari nicht
+  try {
+    Object.defineProperty(navigator, 'share', { value: undefined });
+    window.showSaveFilePicker = undefined;
+    window.showOpenFilePicker = undefined;
+  } catch {
+    /* egal */
+  }
+});
+await ipadPage.goto(url);
+await ipadPage.waitForFunction(() => window.vektordesign?.store.getState().solverReady, { timeout: 20000 });
+const ipad = (fn, ...a) => ipadPage.evaluate(fn, ...a);
+async function ipadScreen(x, y) {
+  return ipad(
+    ([wx, wy]) => {
+      const vp = window.vektordesign.canvas.vp();
+      const c = document.querySelector('[data-testid="canvas"]').getBoundingClientRect();
+      return [c.left + (wx - vp.cx) * vp.zoom + vp.width / 2, c.top + vp.height / 2 - (wy - vp.cy) * vp.zoom];
+    },
+    [x, y],
+  );
+}
+
+await step('iPad: Touch-Gesten (Zwei-Finger-Zoom, Zwei-/Drei-Finger-Tipp, langes Drücken)', async () => {
+  await ipad(() => {
+    const a = window.vektordesign;
+    a.editor.newDocument();
+    a.editor.setView({ cx: 0, cy: 0, zoom: 4 });
+    a.editor.createRectangle({ pos: { x: -20, y: -10 } }, { pos: { x: 20, y: 10 } }, 'corner');
+  });
+  const coarse = await ipad(() => matchMedia('(pointer: coarse)').matches);
+  // Zwei-Finger-Zoom
+  const z0 = await ipad(() => window.vektordesign.store.getState().view.zoom);
+  await touch(ipadCdp, 'touchStart', [[500, 400], [600, 400]]);
+  for (let i = 1; i <= 8; i++) await touch(ipadCdp, 'touchMove', [[500 - i * 12, 400], [600 + i * 12, 400]]);
+  await touch(ipadCdp, 'touchEnd', []);
+  const z1 = await ipad(() => window.vektordesign.store.getState().view.zoom);
+  assert(z1 > z0 * 1.6, `Zoom ${z0} → ${z1}`);
+  // Zwei-Finger-Tipp = Rückgängig, Drei-Finger-Tipp = Wiederholen
+  const n0 = await ipad(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
+  await touch(ipadCdp, 'touchStart', [[300, 300], [360, 300]]);
+  await touch(ipadCdp, 'touchEnd', []);
+  await sleep(150);
+  const n1 = await ipad(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
+  assert(n1 < n0, `Zwei-Finger-Tipp hat nicht rückgängig gemacht (${n0} → ${n1})`);
+  await touch(ipadCdp, 'touchStart', [[300, 300], [360, 300], [420, 300]]);
+  await touch(ipadCdp, 'touchEnd', []);
+  await sleep(150);
+  const n2 = await ipad(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
+  assert(n2 === n0, `Drei-Finger-Tipp hat nicht wiederholt (${n2})`);
+  // Langes Drücken = Kontextmenü
+  await touch(ipadCdp, 'touchStart', [[300, 600]]);
+  await sleep(700);
+  await touch(ipadCdp, 'touchEnd', []);
+  await ipadPage.waitForSelector('.marking', { timeout: 2000 });
+  await ipadPage.screenshot({ path: join(OUT, '40-ipad-langdruck-menue.png') });
+  await ipad(() => window.vektordesign.ui.setState({ marking: null }));
+  results.push(`   iPad-Emulation: pointer coarse = ${coarse}`);
+});
+
+await step('iPad: Apple Pencil zeichnet freihand, Formerkennung macht daraus einen Kreis; Finger zeichnen danach nicht', async () => {
+  await ipad(() => {
+    const a = window.vektordesign;
+    a.editor.newDocument();
+    a.editor.setView({ cx: 0, cy: 0, zoom: 4 });
+    a.setTool('sketch');
+  });
+  const pts = [];
+  for (let i = 0; i <= 48; i++) {
+    const t = (i / 48) * Math.PI * 2.04;
+    const r = 20 + Math.sin(t * 5) * 0.6;
+    pts.push(await ipadScreen(r * Math.cos(t), r * Math.sin(t)));
+  }
+  await pen(ipadCdp, pts);
+  await sleep(200);
+  const circles = await ipad(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'circle').map((e) => e.r));
+  assert(circles.length === 1 && Math.abs(circles[0] - 20) < 1.5, `Kreise: ${JSON.stringify(circles)}`);
+  await ipadPage.screenshot({ path: join(OUT, '41-ipad-pencil-kreis.png') });
+  // Handballen: Finger-Strich verschiebt nur
+  const before = await ipad(() => [Object.keys(window.vektordesign.store.getState().doc.entities).length, window.vektordesign.store.getState().view.cx]);
+  await touch(ipadCdp, 'touchStart', [[300, 300]]);
+  for (let i = 1; i <= 6; i++) await touch(ipadCdp, 'touchMove', [[300 + i * 20, 300 + i * 5]]);
+  await touch(ipadCdp, 'touchEnd', []);
+  const after = await ipad(() => [Object.keys(window.vektordesign.store.getState().doc.entities).length, window.vektordesign.store.getState().view.cx]);
+  assert(after[0] === before[0] && after[1] !== before[1], `Finger hat gezeichnet oder nicht verschoben: ${before} → ${after}`);
+});
+
+await step('iPad: Bemaßung über eingeblendeten Ziffernblock', async () => {
+  await ipad(() => {
+    const a = window.vektordesign;
+    a.editor.newDocument();
+    a.editor.setView({ cx: 0, cy: 0, zoom: 4 });
+    const r = a.editor.createCircle({ pos: { x: 0, y: 0 } }, 12);
+    const out = a.editor.addDimension({ kind: 'diameter', refs: [r.circleId], angle: 0.6, offset: 4 });
+    a.openDimEditorFor?.(out.dimId);
+    if (!a.openDimEditorFor) a.store.setState({ dimPrompt: { dimId: out.dimId, isNew: true } });
+  });
+  await ipadPage.waitForSelector('[data-testid="keypad"]', { timeout: 3000 });
+  await ipadPage.screenshot({ path: join(OUT, '42-ipad-ziffernblock.png') });
+  // Feld leeren (alles markiert) und 30 + 5 eintippen
+  const trace = [];
+  for (const k of ['3', '0', '+', '5']) {
+    await ipadPage.tap(`[data-testid="key-${k}"]`);
+    trace.push(await ipad(() => document.querySelector('[data-testid="dim-input"]')?.value));
+  }
+  await ipadPage.tap('[data-testid="key-ok"]');
+  await sleep(200);
+  const d = await ipad(() => Object.values(window.vektordesign.store.getState().doc.dims)[0]);
+  assert(d && Math.abs(d.value - 35) < 1e-9, `Bemaßung ${d?.expr} = ${d?.value} (Verlauf ${trace.join(' → ')})`);
+});
+
+await step('Abnahme M4: dasselbe Projekt auf dem iPad mit dem Pencil weiterbearbeiten, Änderungen erscheinen am PC', async () => {
+  // PC: Logo-Projekt liegt in einem Cloud-Ordner (hier simuliert: geteilte Datei)
+  await page.bringToFront();
+  await app(async () => {
+    const a = window.vektordesign;
+    a.editor.newDocument();
+    const r = a.editor.createRectangle({ pos: { x: 0, y: 0 } }, { pos: { x: 40, y: 20 } }, 'center', { width: '80', height: '40' });
+    a.editor.setStyle([r.pathId], { fill: '#f5c518' });
+    window.__cloud = { text: '', mtime: 1 };
+    const link = {
+      kind: 'memory',
+      name: 'Logo.vdp',
+      stat: async () => (window.__cloud.text ? { mtime: window.__cloud.mtime, size: window.__cloud.text.length } : null),
+      read: async () => window.__cloud.text,
+      write: async (t) => {
+        window.__cloud = { text: t, mtime: window.__cloud.mtime + 1 };
+      },
+    };
+    a.sync.attach(link, null, 0);
+    a.store.setState({ fileName: 'Logo.vdp' });
+    await a.saveDocument();
+  });
+  const pcFile = await app(() => window.__cloud.text);
+  const meta = JSON.parse(pcFile);
+  assert(meta.revision === 1 && meta.savedBy, `PC-Datei: Revision ${meta.revision}`);
+  const pcBadge = await page.$eval('[data-testid="sync-badge"]', (e) => e.textContent);
+  assert(pcBadge.includes('Logo.vdp'), 'Sync-Anzeige fehlt');
+
+  // iPad: Datei aus „Dateien“ (iCloud Drive) öffnen, mit dem Pencil einen Kreis ergänzen, speichern
+  await ipadPage.bringToFront();
+  await ipad((text) => window.vektordesign.openDocumentNow({ name: 'Logo.vdp', text }), pcFile);
+  await ipad(() => {
+    window.vektordesign.editor.setView({ cx: 0, cy: 0, zoom: 4 });
+    window.vektordesign.setTool('sketch');
+  });
+  const pts = [];
+  for (let i = 0; i <= 48; i++) {
+    const t = (i / 48) * Math.PI * 2.04;
+    pts.push(await ipadScreen(8 * Math.cos(t), 8 * Math.sin(t)));
+  }
+  await pen(ipadCdp, pts);
+  await sleep(200);
+  for (const f of readdirSync(DL)) rmSync(join(DL, f), { force: true });
+  await ipad(() => window.vektordesign.saveDocument());
+  const saved = await waitDownload('vdp', []);
+  await sleep(150);
+  const ipadText = readFileSync(saved, 'utf8');
+  const im = JSON.parse(ipadText);
+  assert(im.revision === 2 && im.savedBy === 'iPad' && im.projectId === meta.projectId, `iPad-Datei: Revision ${im.revision}, ${im.savedBy}`);
+  await ipadPage.screenshot({ path: join(OUT, '43-ipad-weiterbearbeitet.png') });
+
+  // Cloud-Ordner gleicht ab → PC übernimmt automatisch (Beobachtung alle 3 s)
+  await page.bringToFront();
+  await app((t) => {
+    window.__cloud = { text: t, mtime: window.__cloud.mtime + 1 };
+  }, ipadText);
+  await page.waitForFunction(() => Object.values(window.vektordesign.store.getState().doc.entities).some((e) => e.kind === 'circle'), { timeout: 8000 });
+  const toast = await app(() => window.vektordesign.store.getState().toasts.map((t) => t.text).join(' | '));
+  assert(toast.includes('iPad'), `Kein Hinweis auf iPad: ${toast}`);
+  await page.keyboard.press('f');
+  await sleep(200);
+  await shot('44-pc-uebernimmt-ipad');
+
+  // Konflikt: PC ändert, iPad speichert gleichzeitig → Rückfrage
+  await app(() => {
+    const a = window.vektordesign;
+    a.editor.createCircle({ pos: { x: 30, y: 0 } }, 3);
+    const cur = JSON.parse(window.__cloud.text);
+    window.__cloud = { text: JSON.stringify({ ...cur, revision: cur.revision + 1, savedBy: 'iPad', name: 'iPad-Fassung' }), mtime: window.__cloud.mtime + 1 };
+  });
+  await page.waitForSelector('[data-testid="sync-conflict"]', { timeout: 8000 });
+  await shot('45-sync-konflikt');
+  await page.click('[data-testid="conflict-mine"]');
+  await sleep(100);
+  const st = await app(() => window.vektordesign.store.getState().dirty);
+  assert(st === true, 'eigene Änderungen verloren');
+  await app(() => window.vektordesign.saveDocument());
+  const finalMeta = await app(() => JSON.parse(window.__cloud.text));
+  assert(finalMeta.revision === 4 && finalMeta.savedBy !== 'iPad', `nach Überschreiben: Revision ${finalMeta.revision} von ${finalMeta.savedBy}`);
+  await app(() => {
+    window.vektordesign.sync.detach();
+    window.vektordesign.ui.setState({ syncLinked: null });
+  });
+});
+await ipadPage.close();
+
 await step('Leistung: 150 Rechtecke mit Bemaßungen, Ziehen bleibt flüssig', async () => {
   await newDoc();
   const t = await app(() => {

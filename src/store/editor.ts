@@ -420,6 +420,12 @@ export class Editor {
     this.zoomToFit();
   }
 
+  /** Stand aus der Cloud-Datei übernehmen (Ansicht und Werkzeug bleiben). */
+  replaceDocument(doc: SketchDoc): void {
+    this.set({ doc, past: [], future: [], selection: [], hover: null, dirty: false, dimPrompt: null, textEdit: null });
+    this.resolveAll();
+  }
+
   // -------------------------------------------------------------------------
   // Zeichnen
   // -------------------------------------------------------------------------

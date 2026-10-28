@@ -21,11 +21,12 @@ import type { GarmentView } from '../model/types';
 import { buildPackage } from '../export/package';
 import { buildArtworkSheet } from '../export/artworkSheet';
 import { decodeImage, renderPdfPage } from '../platform/pdfImport';
+import { deviceName, tauriLink, pickProjectWithLink, pickSaveTarget, ProjectSync, readMeta, type FileMeta, type ProjectLink, type SyncEvent } from '../platform/sync';
 import type { DynamicInputSpec, Tool, ToolContext } from '../tools/types';
 import { exportSvg } from '../export/svg';
 import { exportPng, renderPreviewPng } from '../export/png';
 import { parseDoc, serializeDoc, PROJECT_EXT } from '../model/serialize';
-import { AI_TYPE, DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, TEMPLATE_TYPE, ZIP_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
+import { isTauri, setShareFallback, AI_TYPE, DXF_TYPE, EPS_TYPE, openFile, PDF_TYPE, TEMPLATE_TYPE, ZIP_TYPE, PNG_TYPE, PROJECT_TYPE, safeName, saveFile, SVG_TYPE } from '../platform/files';
 import { buildScene, textOutlines } from '../export/scene';
 import { exportPdf } from '../export/pdf';
 import { exportEps } from '../export/eps';
@@ -68,6 +69,8 @@ export interface UiState {
   /** Eingabedialog für Bearbeiten-Befehle */
   paramDialog: ParamDialogSpec | null;
   ribbonTab: 'sketch' | 'edit';
+  /** Werkzeugband eingeklappt (nur Registerkarten sichtbar) */
+  ribbonCollapsed: boolean;
   /** Platzierungsansicht für ein Motiv (Id) */
   placement: Id | null;
   /** Export-Profile (Gerät) und Profil-Dialog */
@@ -75,6 +78,11 @@ export interface UiState {
   profileEditor: string | null;
   /** Fortschritt langer Exporte */
   busy: string | null;
+  /** Mit Datei verbunden (Sync) */
+  syncLinked: string | null;
+  syncConflict: { text: string; meta: FileMeta; mode: 'watch' | 'save' } | null;
+  /** iPad: fertige Datei, die per Knopf geteilt wird */
+  shareReady: { name: string; share: () => Promise<void> } | null;
 }
 
 export interface ParamField {
@@ -125,6 +133,8 @@ export class AppController {
   readonly editor: Editor;
   readonly ui: StoreApi<UiState>;
   readonly agent: Agent;
+  /** Verbindung zur geöffneten Projektdatei (Abgleich mit dem iPad) */
+  readonly sync = new ProjectSync();
   private tools = new Map<string, Tool>();
   current: Tool;
   /** Wird von der Zeichenfläche gesetzt */
@@ -138,6 +148,7 @@ export class AppController {
   constructor() {
     this.store = createAppStore();
     this.editor = new Editor(this.store);
+    setShareFallback((name, share) => this.ui.setState({ shareReady: { name, share } }));
     this.ui = createStore<UiState>()(() => ({
       dynamic: null,
       dynValues: {},
@@ -159,10 +170,20 @@ export class AppController {
       measure: null,
       paramDialog: null,
       ribbonTab: 'sketch',
+      ribbonCollapsed: (() => {
+        try {
+          return localStorage.getItem('vd.ribbon') === 'collapsed';
+        } catch {
+          return false;
+        }
+      })(),
       placement: null,
       profiles: loadProfiles(),
       profileEditor: null,
       busy: null,
+      syncLinked: null,
+      syncConflict: null,
+      shareReady: null,
     }));
     applyAppearance(this.ui.getState().appearance);
     // „Wie System“: Wechsel des Betriebssystem-Designs sofort übernehmen
@@ -320,6 +341,8 @@ export class AppController {
   newDocument(): void {
     const run = () => {
       this.editor.newDocument();
+      this.sync.detach();
+      this.ui.setState({ syncLinked: null });
       this.ui.setState({ chat: [] });
       this.agent.reset();
       this.editor.zoomToFit();
@@ -336,23 +359,135 @@ export class AppController {
   }
 
   async openDocument(): Promise<void> {
+    if (this.editor.s.dirty && Object.keys(this.editor.s.doc.entities).length) {
+      this.editor.confirm({
+        title: 'Projekt öffnen',
+        text: 'Die aktuelle Zeichnung hat ungespeicherte Änderungen. Trotzdem ein anderes Projekt öffnen?',
+        confirm: 'Öffnen',
+        cancel: 'Abbrechen',
+        onConfirm: () => void this.openDocumentNow(),
+      });
+      return;
+    }
+    await this.openDocumentNow();
+  }
+
+  /** Öffnet eine Projektdatei; Desktop-App und Chrome/Edge bleiben mit der Datei verbunden (Sync). */
+  async openDocumentNow(file?: { name: string; text: string; link?: ProjectLink | null; mtime?: number }): Promise<boolean> {
     try {
-      const f = await openFile([PROJECT_TYPE]);
-      if (!f) return;
-      const doc = parseDoc(new TextDecoder().decode(f.data));
-      this.editor.loadDocument(doc, f.name, f.path);
-      this.editor.toast(`„${f.name}“ geöffnet`, 'success', 2500);
+      let f = file ?? null;
+      if (!f) {
+        const picked = await pickProjectWithLink();
+        if (picked === null) return false;
+        if (picked === 'unsupported') {
+          const o = await openFile([PROJECT_TYPE]);
+          if (!o) return false;
+          f = { name: o.name, text: new TextDecoder().decode(o.data), link: null };
+        } else f = picked;
+      }
+      const doc = parseDoc(f.text);
+      const meta = readMeta(f.text);
+      this.sync.stopWatching();
+      this.sync.attach(f.link ?? null, meta, f.mtime ?? 0);
+      this.editor.loadDocument(doc, f.name, null);
+      this.watchFile();
+      const by = meta?.savedBy ? `, zuletzt gespeichert auf ${meta.savedBy}${meta.savedAt ? ` (${new Date(meta.savedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })})` : ''}` : '';
+      this.editor.toast(`„${f.name}“ geöffnet${by}`, 'success', 3500);
+      return true;
     } catch (e) {
       this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 6000);
+      return false;
     }
+  }
+
+  private watchFile(): void {
+    if (!this.sync.link) return;
+    this.ui.setState({ syncLinked: this.sync.link.name });
+    this.sync.startWatching(
+      () => this.editor.s.dirty,
+      (ev) => this.onSyncEvent(ev),
+    );
+  }
+
+  private onSyncEvent(ev: SyncEvent): void {
+    if (ev.kind === 'reloaded') {
+      try {
+        this.editor.replaceDocument(parseDoc(ev.text));
+        this.editor.toast(`Änderungen von ${ev.meta.savedBy || 'einem anderen Gerät'} übernommen`, 'success', 4000);
+      } catch (e) {
+        this.editor.toast(`Neuer Stand konnte nicht gelesen werden: ${e instanceof Error ? e.message : String(e)}`, 'error', 6000);
+      }
+    } else if (ev.kind === 'conflict') {
+      this.ui.setState({ syncConflict: { text: ev.text, meta: ev.meta, mode: 'watch' } });
+    }
+  }
+
+  /** Konflikt auflösen: fremde Version laden, eigene behalten oder beide behalten. */
+  async resolveConflict(choice: 'theirs' | 'mine' | 'both'): Promise<void> {
+    const c = this.ui.getState().syncConflict;
+    if (!c) return;
+    this.ui.setState({ syncConflict: null });
+    if (choice === 'theirs') {
+      this.editor.replaceDocument(parseDoc(c.text));
+      this.sync.adopt(c.meta);
+      this.editor.toast(`Version von ${c.meta.savedBy || 'dem anderen Gerät'} geladen`, 'success');
+      return;
+    }
+    if (choice === 'mine') {
+      this.sync.acknowledge(c.meta);
+      if (c.mode === 'save') await this.saveDocument();
+      else this.editor.toast('Deine Version bleibt. Beim nächsten Speichern wird die Datei überschrieben.', 'info', 5000);
+      return;
+    }
+    // Beide behalten: eigene Fassung als Kopie sichern, dann fremde laden
+    const copyName = `${safeName(this.projectName())} (Konflikt ${deviceName()}).${PROJECT_EXT}`;
+    const res = await saveFile(serializeDoc({ ...this.editor.s.doc, name: this.projectName() }, { revision: this.sync.revision, savedBy: deviceName(), projectId: this.sync.projectId }), copyName, PROJECT_TYPE, null);
+    if (!res) {
+      this.ui.setState({ syncConflict: c });
+      return;
+    }
+    this.editor.replaceDocument(parseDoc(c.text));
+    this.sync.adopt(c.meta);
+    this.editor.toast(`Deine Fassung liegt in „${res.name}“, geöffnet ist jetzt die Version von ${c.meta.savedBy || 'dem anderen Gerät'}.`, 'success', 6000);
   }
 
   async saveDocument(saveAs = false): Promise<void> {
     const s = this.editor.s;
     try {
       const name = `${safeName(this.projectName())}.${PROJECT_EXT}`;
-      const res = await saveFile(serializeDoc({ ...s.doc, name: this.projectName() }), name, PROJECT_TYPE, saveAs ? null : s.filePath);
+      let link = saveAs ? null : this.sync.link;
+      if (!link && !saveAs && s.filePath && isTauri()) {
+        link = tauriLink(s.filePath);
+        this.sync.attach(link, { revision: this.sync.revision, savedBy: '', savedAt: '', projectId: this.sync.projectId }, 0);
+      }
+      if (!link) {
+        const picked = await pickSaveTarget(s.fileName && !saveAs ? s.fileName : name);
+        if (picked === null) return;
+        if (picked !== 'unsupported') {
+          link = picked;
+          this.sync.stopWatching();
+          this.sync.attach(link, { revision: this.sync.revision, savedBy: '', savedAt: '', projectId: this.sync.projectId }, 0);
+        }
+      }
+      if (link) {
+        const check = await this.sync.checkBeforeSave();
+        if (check.kind === 'conflict') {
+          this.ui.setState({ syncConflict: { text: check.text, meta: check.meta, mode: 'save' } });
+          return;
+        }
+        const text = serializeDoc({ ...s.doc, name: this.projectName() }, { revision: check.nextRevision, savedBy: deviceName(), projectId: this.sync.projectId });
+        await link.write(text);
+        await this.sync.saved(check.nextRevision);
+        this.store.setState({ fileName: link.name, filePath: null, dirty: false });
+        this.watchFile();
+        this.editor.toast(`Gespeichert: ${link.name}`, 'success', 2500);
+        return;
+      }
+      // Ohne Dateizugriff (iPad/Safari): Teilen-Menü bzw. Download – „In Dateien sichern“ → ersetzen
+      const rev = this.sync.revision + 1;
+      const res = await saveFile(serializeDoc({ ...s.doc, name: this.projectName() }, { revision: rev, savedBy: deviceName(), projectId: this.sync.projectId }), s.fileName ?? name, PROJECT_TYPE, null);
       if (!res) return;
+      await this.sync.saved(rev);
       this.store.setState({ fileName: res.name, filePath: res.path, dirty: false });
       this.editor.toast(`Gespeichert: ${res.name}`, 'success', 2500);
     } catch (e) {

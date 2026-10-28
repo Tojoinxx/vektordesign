@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Copy, Lock, Maximize, Palette, RotateCcw, Trash2, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
 import type { AppController } from './controller';
 import { useApp, useAppState, useUi } from './hooks';
-import { IconCircle, IconConstruction, IconDimension, IconGradient, IconLine, IconRect, IconText } from './icons';
+import { IconCircle, IconConstruction, IconDimension, IconLine, IconRect, IconSketch, IconText } from './icons';
 
 interface Item {
   label: string;
@@ -19,7 +19,7 @@ const RADIAL: Item[] = [
   { label: 'Rechteck', icon: <IconRect size={18} />, run: (a) => a.setTool('rect') },
   { label: 'Text', icon: <IconText size={18} />, run: (a) => a.setTool('text') },
   { label: 'Bemaßung', icon: <IconDimension size={18} />, run: (a) => a.setTool('dimension') },
-  { label: 'Verlauf', icon: <IconGradient size={18} />, run: (a) => a.setTool('gradient') },
+  { label: 'Freihand', icon: <IconSketch size={18} />, run: (a) => a.setTool('sketch') },
   { label: 'Rückgängig', icon: <RotateCcw size={18} />, run: (a) => void a.editor.undo() },
   { label: 'Alles anzeigen', icon: <Maximize size={18} />, run: (a) => a.editor.zoomToFit() },
 ];

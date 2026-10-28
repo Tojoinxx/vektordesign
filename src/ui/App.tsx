@@ -9,7 +9,7 @@ import { AssistantPanel } from './AssistantPanel';
 import { LayersPanel } from './LayersPanel';
 import { ProductionPanel, ProfileEditor } from './ProductionPanel';
 import { PlacementView } from './PlacementView';
-import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, MeasureCard, ParamDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
+import { AboutDialog, CommandPalette, ConfirmDialog, ExportDialog, MeasureCard, ParamDialog, ShareReadyDialog, SyncConflictDialog, StatusBar, Toasts, TopBar, TutorialCard, TutorialList } from './Chrome';
 import { buildCommands, matchKey } from './commands';
 
 function SidePanel({ app }: { app: AppController }) {
@@ -17,14 +17,14 @@ function SidePanel({ app }: { app: AppController }) {
   return (
     <aside className="side" aria-label="Seitenleiste">
       <div className="side-tabs" role="tablist">
-        <button role="tab" aria-selected={side === 'props'} className={side === 'props' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'props' })} data-testid="tab-props">
-          <Settings2 size={15} /> Eigenschaften
+        <button role="tab" aria-selected={side === 'props'} className={side === 'props' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'props' })} data-testid="tab-props" title="Eigenschaften">
+          <Settings2 size={15} /> <span className="tab-label">Eigenschaften</span>
         </button>
-        <button role="tab" aria-selected={side === 'layers'} className={side === 'layers' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'layers' })} data-testid="tab-layers">
-          <Layers size={15} /> Ebenen
+        <button role="tab" aria-selected={side === 'layers'} className={side === 'layers' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'layers' })} data-testid="tab-layers" title="Ebenen">
+          <Layers size={15} /> <span className="tab-label">Ebenen</span>
         </button>
         <button role="tab" aria-selected={side === 'production'} className={side === 'production' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'production' })} data-testid="tab-production" title="Produktion: Artikel, Platzierung, Varianten, Export für LabwearOS">
-          <Shirt size={15} /> Produktion
+          <Shirt size={15} /> <span className="tab-label">Produktion</span>
         </button>
         <button
           role="tab"
@@ -35,8 +35,9 @@ function SidePanel({ app }: { app: AppController }) {
             app.showTutorialFor('claude');
           }}
           data-testid="tab-claude"
+          title="Claude-Assistent"
         >
-          <Sparkles size={15} /> Claude
+          <Sparkles size={15} /> <span className="tab-label">Claude</span>
         </button>
       </div>
       <div className="side-body">{side === 'props' ? <PropertiesPanel /> : side === 'layers' ? <LayersPanel /> : side === 'production' ? <ProductionPanel /> : <AssistantPanel />}</div>
@@ -54,7 +55,7 @@ function Shell({ app }: { app: AppController }) {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
       const s = app.store.getState();
-      if (typing || s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().paramDialog || app.ui.getState().placement || app.ui.getState().profileEditor) return;
+      if (typing || s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().paramDialog || app.ui.getState().placement || app.ui.getState().profileEditor || app.ui.getState().syncConflict || app.ui.getState().shareReady) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         app.escape();
@@ -119,6 +120,8 @@ function Shell({ app }: { app: AppController }) {
       <ExportDialog />
       <ParamDialog />
       <PlacementView />
+      <SyncConflictDialog />
+      <ShareReadyDialog />
       <ProfileEditor />
       <CommandPalette />
       <ConfirmDialog />
