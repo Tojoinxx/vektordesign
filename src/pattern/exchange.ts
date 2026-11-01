@@ -23,6 +23,8 @@ export interface ExchangePiece {
   role: PieceRole;
   cut: 1 | 2;
   material: Id | null;
+  /** Eigene Farbe (sonst Materialfarbe) */
+  color: string | null;
   seamAllowance: number;
   grain: number;
   polygon: [number, number][];
@@ -76,6 +78,7 @@ export function patternExchange(doc: SketchDoc): PatternExchange | null {
       role: pc.role,
       cut: pc.cut,
       material: pc.material ?? null,
+      color: pc.color ?? null,
       seamAllowance: pc.seamAllowance,
       grain: pc.grain,
       polygon,

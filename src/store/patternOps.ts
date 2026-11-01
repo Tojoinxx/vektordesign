@@ -7,6 +7,7 @@ import { canBePiece, emptyPattern, pieceGeom, sameEdge } from '../pattern/geomet
 import { generateBlock, layoutPieces, BLOCK_KINDS } from '../pattern/blocks';
 import { SIZE_TABLE } from '../pattern/body';
 import type { CommitOutcome, Editor } from './editor';
+import { lookInto, materialInto, type PieceLookPatch } from '../pattern/edit';
 
 /**
  * Editor-Befehle für Schnittteile und Nähte. Alles läuft über `Editor.commit`, damit Rückgängig,
@@ -210,11 +211,7 @@ export function updatePiece(ed: Editor, id: Id, patch: Partial<Omit<PatternPiece
       // Nähte zur gespiegelten Kopie werden ungültig
       p.seams = p.seams.filter((s) => !((s.a.piece === id && s.a.copy) || (s.b.piece === id && s.b.copy)));
     }
-    if (patch.material) {
-      const m = p.materials.find((x) => x.id === patch.material);
-      const e = d.entities[pc.outline];
-      if (m && e && typeof e.style.fill === 'string') e.style.fill = m.color;
-    }
+    if (patch.material) lookInto(d, pc, { material: patch.material });
   });
 }
 
@@ -254,17 +251,14 @@ export function removeSeam(ed: Editor, id: Id): CommitOutcome {
 }
 
 export function updateMaterial(ed: Editor, id: Id, patch: Partial<Omit<PatternMaterial, 'id'>>): CommitOutcome {
-  return updatePattern(ed, 'Material ändern', (p, d) => {
-    const m = p.materials.find((x) => x.id === id);
-    if (!m) return;
-    Object.assign(m, patch);
-    if (patch.color) {
-      for (const pc of p.pieces) {
-        if (pc.material !== id) continue;
-        const e = d.entities[pc.outline];
-        if (e) e.style.fill = patch.color;
-      }
-    }
+  return updatePattern(ed, 'Material ändern', (_p, d) => materialInto(d, id, patch));
+}
+
+/** Farbe/Stoff eines Teils (aus der 3D-Ansicht). `color: null` = wieder Materialfarbe. */
+export function setPieceLook(ed: Editor, id: Id, patch: PieceLookPatch): CommitOutcome {
+  return updatePattern(ed, patch.color !== undefined ? 'Teil einfärben' : 'Stoff des Teils ändern', (p, d) => {
+    const pc = p.pieces.find((x) => x.id === id);
+    if (pc) lookInto(d, pc, patch);
   });
 }
 

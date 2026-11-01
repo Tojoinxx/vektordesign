@@ -422,6 +422,8 @@ export interface PatternPiece {
   grain: number;
   /** Material-Id (aus `Pattern.materials`) */
   material?: Id;
+  /** Eigene Farbe für dieses Teil (sonst Farbe des Materials) */
+  color?: string;
   /** Teil gehört zu einem Grundschnitt (wird beim Aktualisieren ersetzt) */
   block?: boolean;
 }
