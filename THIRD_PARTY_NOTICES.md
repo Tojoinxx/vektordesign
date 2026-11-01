@@ -15,6 +15,8 @@ Vektordesign selbst steht unter der MIT-Lizenz (siehe [LICENSE](LICENSE)). In de
 | [fflate](https://github.com/101arrowz/fflate) | ZIP-Paket, PDF-Kompression | MIT |
 | [ImageTracer.js](https://github.com/jankovicsandras/imagetracerjs) | Bilder vektorisieren | Unlicense (gemeinfrei) |
 | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) | QR-Codes erzeugen („QR Code“ ist eine Marke der DENSO WAVE INCORPORATED) | MIT |
+| [three.js](https://threejs.org) | 3D-Ansicht (Puppe, Kleidungsstück, Licht, Kamera) | MIT |
+| [Delaunator](https://github.com/mapbox/delaunator), robust-predicates | Vernetzung der Schnittteile für die Stoffsimulation | ISC, Unlicense (gemeinfrei) |
 | [IBM Plex Sans](https://github.com/IBM/plex) über Fontsource | Schrift der Oberfläche; Ersatzschrift für „Text in Pfade“, wenn eine Schrift nicht verfügbar ist | SIL Open Font License 1.1 |
 | [Tauri](https://tauri.app), tauri-plugin-dialog | Desktop-App, Datei-Dialoge | MIT oder Apache-2.0 |
 | [fontdb](https://github.com/RazrFalcon/fontdb) | Liste der installierten Schriftarten | MIT |

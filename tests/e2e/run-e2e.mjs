@@ -23,7 +23,8 @@ if (!chromePath) {
   console.error('CHROME_PATH fehlt (Pfad zu Chrome/Chromium).');
   process.exit(2);
 }
-const extraArgs = (process.env.CHROME_ARGS ?? '--no-sandbox --disable-gpu').split(/\s+/).filter(Boolean);
+// WebGL für die 3D-Ansicht: Software-Rendering (SwiftShader), läuft auch ohne Grafikkarte
+const extraArgs = (process.env.CHROME_ARGS ?? '--no-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader').split(/\s+/).filter(Boolean);
 
 let server = null;
 const url = process.env.E2E_URL ?? 'http://localhost:4173/';
@@ -1860,6 +1861,61 @@ await step('Schnitt: Neues Projekt „Schnittmuster“, zwei Vierecke zu Schnitt
   const summary2 = await page.$eval('[data-testid="seam-summary"]', (e) => e.textContent);
   assert(/Alle 26 Nähte passen/.test(summary2), `Nahtprüfung Hoodie: ${summary2}`);
   await shot('16-schnitt-hoodie');
+});
+
+await step('3D: Hoodie auf der Puppe drapieren, Teil anklicken und Stoff wechseln, Passform, Bild, Vektordesign 3D live', async () => {
+  // Fortsetzung des Schnitt-Tests: Hoodie liegt vor, die beiden Vierecke vom Anfang kommen weg
+  await app(() => {
+    const ed = window.vektordesign.editor;
+    ed.deleteIds(ed.s.doc.pattern.pieces.filter((p) => p.role === 'other').map((p) => p.outline));
+  });
+  await page.click('[data-testid="pattern-3d"]');
+  await page.waitForSelector('[data-testid="viewer3d"]', { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('[data-testid="v3-status"]')?.dataset.state === 'ready', { timeout: 180000 });
+  const line = await page.$eval('[data-testid="v3-status"]', (e) => e.textContent);
+  assert(/Nähte geschlossen/.test(line), `Status: ${line}`);
+  await shot('17-3d-hoodie');
+  // Mitte der 3D-Ansicht anklicken → Vorderteil gewählt (auch im Schnitt-Tab)
+  await app(() => window.vektordesign3d.view('front'));
+  await sleep(300);
+  const box = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return window.vektordesign3d.screenPointOf(d.pattern.pieces.find((p) => p.role === 'front').id);
+  });
+  assert(box, 'Vorderteil nicht in der 3D-Ansicht');
+  await page.mouse.click(box.x, box.y);
+  await page.waitForSelector('[data-testid="v3-piece"]', { timeout: 5000 });
+  const picked = await app(() => {
+    const s = window.vektordesign.store.getState();
+    return s.doc.pattern.pieces.find((p) => s.selection.includes(p.outline))?.role;
+  });
+  assert(picked === 'front', `Gewählt: ${picked}`);
+  await page.select('[data-testid="v3-piece-material"]', 'm-rib');
+  const mat = await app(() => window.vektordesign.store.getState().doc.pattern.pieces.find((p) => p.role === 'front').material);
+  assert(mat === 'm-rib', `Stoff: ${mat}`);
+  await app(() => window.vektordesign.editor.undo());
+  // Passform-Karte und Bild
+  await page.click('[data-testid="v3-fit"]');
+  await sleep(300);
+  await shot('18-3d-passform');
+  const before = readdirSync(DL);
+  await page.click('[data-testid="v3-snapshot"]');
+  let png = null;
+  for (let i = 0; i < 40 && !png; i++) {
+    await sleep(150);
+    png = readdirSync(DL).find((n) => n.endsWith('_3D.png') && !before.includes(n));
+  }
+  assert(png, '3D-Bild nicht gespeichert');
+  // Vektordesign 3D im eigenen Fenster: verbindet sich live
+  const p3 = await browser.newPage();
+  p3.on('pageerror', (e) => errors.push(`pageerror (3D): ${e.message}`));
+  await p3.goto(url.replace(/\/?$/, '/') + '3d.html', { waitUntil: 'networkidle0' });
+  await p3.waitForFunction(() => document.querySelector('[data-testid="a3-source"]')?.textContent.includes('Live'), { timeout: 10000 });
+  const pieces = await p3.$$eval('[data-testid="a3-pieces"] li', (l) => l.length);
+  assert(pieces === 7, `Teile in Vektordesign 3D: ${pieces}`);
+  await p3.close();
+  await page.bringToFront();
+  await page.click('[data-testid="v3-close"]');
 });
 
 await browser.close();

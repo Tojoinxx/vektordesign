@@ -162,6 +162,18 @@ Grundlage für die 3D-Passform in **Vektordesign 3D** (nächster Meilenstein). �
 - Je Teil: Rolle in 3D, Zuschnitt 1× / 2× gegengleich, Nahtzugabe (gestrichelt angezeigt), Fadenlauf, Stoff. Stoffe mit Art, Farbe und Flächengewicht; Stoffbedarf in m².
 - **DXF-Export** der Schnittteile mit Schnittlinie, Nahtlinie, Fadenlauf, Passzeichen und Beschriftung. Schnittteile liegen auf einer eigenen Ebene „Schnitt“ und gehören nie zum Motiv-Export.
 
+### 3D-Vorschau und Vektordesign 3D
+
+Der Knopf **3D** oben (`Strg+3`) oder „In 3D ansehen“ im Tab „Schnitt“ öffnet rechts neben der Zeichenfläche die 3D-Vorschau. Projektart **3D-Modell** im Dialog „Neues Projekt“ startet direkt mit Schnitt-Tab und 3D-Vorschau.
+
+- **Puppe aus deinen Körpermaßen** (Größe, Brust, Taille, Hüfte, Schultern, Arme, Rücken, Hals, Kopf). Die Schnittteile werden um die Puppe gelegt, an den Nähten zusammengezogen und fallen dann mit Schwerkraft auf den Körper. Stoffart und Flächengewicht bestimmen Dehnung, Steifigkeit und Fall; Bündchen werden beim Annähen gedehnt.
+- **Live:** jede Änderung am Schnitt – Maß, Kante, Naht – drapiert neu. Die Simulation läuft im Hintergrund, die Oberfläche bleibt flüssig.
+- **Aussehen:** Teil in 3D anklicken → eigene Farbe oder anderer Stoff. Stoffarten mit eigener Oberfläche (Jersey-Maschen, Sweat, Fleece, Rippe, Webware, Denim-Köper, Nylon mit leichtem Glanz, Mesh). Motive aus dem Tab „Produktion“ erscheinen an ihrer Druckposition (Abstand zur Kragennaht), Farbvarianten lassen sich umschalten.
+- **Passform-Karte:** rot = spannt, gelb = leicht gedehnt, grün = liegt an, blau = locker.
+- Ansichten vorne, hinten, seitlich, schräg; Puppe ein-/ausblenden; „Fein“ für ein feineres Netz; **Bild speichern** als PNG.
+- Freie Teile, die an keinem Körperteil hängen (z. B. zwei verbundene Vierecke), hängen wie auf einer Stange vor der Puppe.
+- **Vektordesign 3D** als eigenes Fenster (Pfeil-Symbol in der Vorschau oder `3d.html` der Web-Version): verbindet sich automatisch live mit einem offenen Vektordesign im selben Browser – Farben und Stoffe, die du dort änderst, landen im Projekt. Ohne Vektordesign öffnet es die zuletzt bearbeitete Zeichnung oder eine `.vdp`-Datei (auch per Ziehen und Ablegen).
+
 ### Bibliothek
 
 Im Bereich **Bibliothek** der Seitenleiste: Auswahl als Element oder Logo speichern und in jedem Projekt per Klick einfügen; Farbpaletten aus der Zeichnung, aus einem Bild oder als Farbharmonie anlegen; ein Farbfeld färbt die Auswahl (Alt oder Rechtsklick: Kontur). **Format übertragen** (Gestalten-Gruppe) überträgt Füllung, Kontur und Linienart per Klick. Die Bibliothek lässt sich als `.vdlib`-Datei sichern und auf anderen Geräten laden.
@@ -239,6 +251,7 @@ Optional beim Export: Rand inklusive Konturstärke und horizontal spiegeln (Flex
 | `E` | Dehnen | | `Strg+G` | Gruppieren |
 | `O` | Versatz | | `Strg+Umschalt+G` | Gruppierung aufheben |
 | `M` | Messen | | `J` | Naht verbinden (Schnitt) |
+| | | | `Strg+3` | 3D-Vorschau ein/aus |
 | `S` | Freihandskizze mit Formerkennung | | | |
 | `A` | Bogen (3 Punkte; Mittelpunktbogen im Werkzeugmenü) | | | |
 | `N` | Vieleck (erneuter Klick: Umkreis/Inkreis) | | | |
@@ -274,6 +287,9 @@ src/
   render/     Canvas-Darstellung: Raster, Maßband-Lineale, Bemaßungen, Glyphen
   tools/      Werkzeuge: Auswahl, Zeichnen, Bemaßung, Abhängigkeiten, Verlauf, Stutzen/Dehnen, Messen, Fang
   pattern/    Schnitt: Körpermaße, Grundschnitt-Generator, Kanten/Nähte/Nahtzugabe, Austauschformat für 3D
+  sim3d/      Stoffsimulation (XPBD) und Puppe aus Körpermaßen, läuft im Web Worker
+  viewer3d/   3D-Ansicht (three.js): Stoffe, Farben, Motive, Passform-Karte, Verbindung zu Vektordesign 3D
+  app3d/      Vektordesign 3D (eigenes Fenster, 3d.html)
   export/     SVG, PDF, EPS, DXF, PNG, Artwork-Blatt, ZIP-Paket, Schnitt-DXF
   assistant/  Claude-Anbindung (Messages-API mit Werkzeugen und Bildern)
   design/     Stilvorschläge
@@ -309,7 +325,7 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 4. ✅ iPad: installierbare Web-App, Touch- und Apple-Pencil-Bedienung, Formerkennung, Sync über iCloud Drive/OneDrive
 5. ✅ Textil- und Komfortfunktionen: Preflight, Mockups, Vektorisieren, DTF-Sammelbogen, Siebdruck-Filme, Größenstaffel, Halbton, Used-Look, Rapport, Kostenschätzung, Generatoren, Symmetrie, Bibliothek, SVG-/DXF-Import
 6. ✅ Schnitt: Projektart wählen, Grundschnitt aus Körpermaßen, eigene Schnittteile, Nähte verbinden und prüfen, Stoffe, Schnitt-DXF
-7. Vektordesign 3D: Körper aus Maßen, Teile drapieren, Passform-Karte, Teile einfärben, Materialien, Motive auf dem 3D-Modell
+7. ✅ Vektordesign 3D: Puppe aus Maßen, Stoffsimulation, Passform-Karte, Teile einfärben, Stoffarten, Motive auf dem 3D-Modell, Live-Vorschau und eigenes Fenster
 8. Tech-Pack automatisch aus dem fertigen Modell, Referenzen per Drag & Drop
 
 ## Lizenz
