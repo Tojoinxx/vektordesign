@@ -4,7 +4,7 @@ import type { BodyMeasures, PatternBlock, PatternMaterial, PieceRole } from '../
 import { BLOCK_KINDS, FIT_NAMES, defaultBlock } from '../pattern/blocks';
 import { BODY_FIELDS, DEFAULT_SIZE, SIZE_TABLE, bodyForSize, checkBody } from '../pattern/body';
 import { canBePiece, checkSeams, fabricArea, freeEdges, pieceById, pieceGeom } from '../pattern/geometry';
-import { FABRICS, ROLE_NAMES, addMaterial, generatePattern, makePieces, removePiece, removeSeam, setBody, updateMaterial, updatePiece, updateSeam } from '../store/patternOps';
+import { FABRICS, ROLE_NAMES, addMaterial, generatePattern, makePieces, removePiece, removeSeam, setBody, setPieceLook, updateMaterial, updatePiece, updateSeam } from '../store/patternOps';
 import { formatNumber } from '../params/expr';
 import { ColorButton } from './ColorPicker';
 import { Field } from './ProductionPanel';
@@ -69,7 +69,7 @@ export function PatternPanel() {
                 <li key={p.id} className={open ? 'on' : ''}>
                   <button className="piece-row" onClick={() => ed.select(open ? [] : [p.outline])} data-testid={`piece-${p.name}`}>
                     {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <span className="swatch" style={{ background: pat.materials.find((m) => m.id === p.material)?.color ?? 'transparent' }} />
+                    <span className="swatch" style={{ background: p.color ?? pat.materials.find((m) => m.id === p.material)?.color ?? 'transparent' }} />
                     <span className="spacer">{p.name}</span>
                     <span className="muted small">
                       {p.cut === 2 ? '2× ' : ''}
@@ -99,8 +99,8 @@ export function PatternPanel() {
           <button className="btn wide" onClick={() => void app.exportPatternDxf()} disabled={!pat?.pieces.length} data-testid="pattern-dxf">
             <Download size={16} /> Schnittteile als DXF
           </button>
-          <button className="btn wide" disabled title="Kommt mit dem nächsten Meilenstein: Vektordesign 3D liest diese Datei">
-            <Box size={16} /> In 3D ansehen (bald)
+          <button className="btn accent wide" onClick={() => app.toggle3D(true)} disabled={!pat?.pieces.length} data-testid="pattern-3d">
+            <Box size={16} /> In 3D ansehen
           </button>
         </div>
         <p className="muted small">DXF mit Schnittlinie, Nahtlinie, Fadenlauf, Passzeichen und Beschriftung, 1:1 in mm. Schnittteile gehören nie zum Motiv-Export.</p>
@@ -332,6 +332,22 @@ function PieceCard({ id }: { id: string }) {
             }}
           />
           <span className="muted">°</span>
+        </span>
+        <span>Farbe</span>
+        <span className="row">
+          <ColorButton
+            value={p.color ?? pat.materials.find((m) => m.id === p.material)?.color ?? '#888888'}
+            label={`Farbe ${p.name}`}
+            onChange={(c) => setPieceLook(ed, p.id, { color: c })}
+            testId="piece-color"
+          />
+          {p.color ? (
+            <button className="link-btn small" onClick={() => setPieceLook(ed, p.id, { color: null })}>
+              wie Stoff
+            </button>
+          ) : (
+            <span className="muted small">vom Stoff</span>
+          )}
         </span>
         <span>Stoff</span>
         <select value={p.material ?? ''} aria-label="Stoff" data-testid="piece-material" onChange={(e) => upd({ material: e.target.value })}>

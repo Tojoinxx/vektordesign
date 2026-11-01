@@ -49,6 +49,7 @@ export function TopBar() {
   const canRedo = useAppState((s) => s.future.length > 0);
   const undoLabel = useAppState((s) => s.past[s.past.length - 1]?.label);
   const redoLabel = useAppState((s) => s.future[s.future.length - 1]?.label);
+  const preview3d = useUi((s) => s.preview3d);
   const sideOpen = useUi((s) => s.sideOpen);
   const side = useUi((s) => s.side);
   const menu = useUi((s) => s.fileMenu);
@@ -110,6 +111,9 @@ export function TopBar() {
       </div>
       <button className="topbtn icon" onClick={() => app.ui.setState({ tutorialList: true })} title="Tutorials und Hilfe" aria-label="Tutorials und Hilfe">
         <CircleHelp size={17} />
+      </button>
+      <button className={`topbtn claude-btn ${preview3d ? 'on' : ''}`} onClick={() => app.toggle3D()} title="3D-Vorschau: Kleidungsstück auf der Puppe (Strg+3)" data-testid="toggle-3d">
+        <Box size={16} /> <span>3D</span>
       </button>
       <button
         className={`topbtn claude-btn ${sideOpen && side === 'claude' ? 'on' : ''}`}
@@ -773,7 +777,7 @@ export function NewProjectDialog() {
   const open = useUi((s) => s.newProject);
   if (!open) return null;
   const card = (kind: 'motif' | 'pattern' | '3d', icon: ReactNode, title: string, text: string, disabled = false) => (
-    <button className="kind-card" disabled={disabled} onClick={() => kind !== '3d' && app.startProject(kind)} data-testid={`new-${kind}`}>
+    <button className="kind-card" disabled={disabled} onClick={() => app.startProject(kind)} data-testid={`new-${kind}`}>
       <span className="kind-icon">{icon}</span>
       <strong>{title}</strong>
       <span className="muted small">{text}</span>
@@ -786,7 +790,7 @@ export function NewProjectDialog() {
       <div className="kind-grid">
         {card('motif', <PenTool size={26} />, '2D-Motiv', 'Logo, Print oder Stick maßgenau zeichnen und für LabwearOS, Plotter, DTF oder Siebdruck exportieren.')}
         {card('pattern', <Scissors size={26} />, 'Schnittmuster', 'Grundschnitt aus Körpermaßen erzeugen oder Teile selbst zeichnen und Kanten zu Nähten verbinden.')}
-        {card('3d', <Box size={26} />, '3D-Modell', 'Schnittteile am Körper drapieren, Teile einfärben und Stoffe wählen – kommt mit Vektordesign 3D.', true)}
+        {card('3d', <Box size={26} />, '3D-Modell', 'Schnittmuster mit 3D-Vorschau: Teile am Körper drapieren, einfärben, Stoffe und Passform prüfen.')}
       </div>
     </Modal>
   );

@@ -2906,3 +2906,311 @@ body {
   color: var(--muted);
   font-size: 11px;
 }
+
+/* ---------------------------------------------------------------------------
+   3D-Vorschau
+   --------------------------------------------------------------------------- */
+.app:has(> .preview3d) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'top top top'
+    'ribbon ribbon ribbon'
+    'main preview side'
+    'status status status';
+}
+.preview3d {
+  grid-area: preview;
+  position: relative;
+  min-width: 280px;
+  max-width: 70vw;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+}
+.preview3d-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 3;
+}
+.preview3d-handle:hover {
+  background: var(--focus);
+}
+.viewer3d {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.viewer3d.loading {
+  align-items: center;
+  justify-content: center;
+}
+.v3-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--chrome);
+  flex-wrap: wrap;
+}
+.v3-bar .icon-btn {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.v3-bar .sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--line);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+.seg button.on {
+  background: var(--tape-soft);
+  color: var(--ink);
+  font-weight: 500;
+}
+.preview3d .seg .lbl {
+  display: none;
+}
+@container (min-width: 380px) {
+  .preview3d .seg .lbl {
+    display: inline;
+  }
+}
+.preview3d {
+  container-type: inline-size;
+}
+.v3-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.v3-canvas {
+  position: absolute;
+  inset: 0;
+}
+.v3-status {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+  padding: 4px 9px;
+  border-radius: 99px;
+  background: var(--glass);
+  color: var(--ink-2);
+  font-size: 12px;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+.v3-status.ready {
+  color: var(--ok);
+}
+.v3-status.error {
+  color: var(--bad-text);
+}
+.spin {
+  animation: v3spin 1s linear infinite;
+}
+@keyframes v3spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.v3-legend {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--glass);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  box-shadow: var(--shadow-sm);
+}
+.v3-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+.v3-variant {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  max-width: 50%;
+}
+.v3-quality {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: var(--glass);
+}
+.v3-piece {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--chrome);
+}
+.v3-piece .form-grid {
+  grid-template-columns: 70px minmax(0, 1fr);
+}
+.v3-hint {
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line-2);
+}
+@media (max-width: 760px) {
+  .app:has(> .preview3d) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'top'
+      'ribbon'
+      'main'
+      'status';
+  }
+  .preview3d {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 30px;
+    width: auto !important;
+    max-width: none;
+    height: 48vh;
+    z-index: 55;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .preview3d-handle {
+    display: none;
+  }
+}
+
+/* Vektordesign 3D (eigenes Fenster) */
+.app3d {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-areas:
+    'top top'
+    'side main';
+  background: var(--bench);
+  color: var(--ink);
+}
+.a3-top {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+}
+.a3-top .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.a3-src {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+}
+.a3-src.live {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.a3-side {
+  grid-area: side;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+  background: var(--chrome);
+}
+.a3-main {
+  grid-area: main;
+  min-height: 0;
+  min-width: 0;
+}
+.a3-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  color: var(--muted);
+}
+.a3-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--toast-bg);
+  color: var(--toast-fg);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  z-index: 100;
+}
+.link-like {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.material-row.a3 {
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr);
+}
+@media (max-width: 760px) {
+  .app3d {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 44px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'top'
+      'main'
+      'side';
+  }
+  .a3-side {
+    max-height: 34vh;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+  }
+}

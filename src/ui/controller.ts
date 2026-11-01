@@ -9,6 +9,8 @@ import { normalizeHex } from '../model/color';
 import { FormatTool } from '../tools/formatTool';
 import { SeamTool } from '../tools/seamTool';
 import { exportPatternDxf } from '../export/patternDxf';
+import { openChannel, type BridgeMessage } from '../viewer3d/bridge';
+import { setPieceLook, updateMaterial } from '../store/patternOps';
 import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
 import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
 import { createAppStore, type AppStore, type ToolId } from '../store/state';
@@ -94,7 +96,16 @@ import { loadApiKey, loadModel } from '../assistant/api';
 import { TUTORIALS, isTutorialSeen, markTutorialSeen, tutorialsEnabled, type TutorialId } from './tutorials';
 import { applyAppearance, loadAppearance, onSystemThemeChange, saveAppearance, type Appearance } from './appearance';
 
-export type ProjectKind = 'motif' | 'pattern';
+export type ProjectKind = 'motif' | 'pattern' | '3d';
+
+function storedWidth(): number {
+  try {
+    const n = Number(localStorage.getItem('vd.preview3dWidth'));
+    return Number.isFinite(n) && n >= 280 ? n : 460;
+  } catch {
+    return 460;
+  }
+}
 
 export type SidePanel = 'props' | 'layers' | 'production' | 'pattern' | 'library' | 'claude';
 
@@ -121,6 +132,9 @@ export interface UiState {
   about: boolean;
   /** Dialog „Neues Projekt“ (Projektart wählen) */
   newProject: boolean;
+  /** 3D-Vorschau rechts */
+  preview3d: boolean;
+  preview3dWidth: number;
   fileMenu: boolean;
   /** Design der Oberfläche und der Zeichenfläche */
   appearance: Appearance;
@@ -251,6 +265,8 @@ export class AppController {
       statusDetail: false,
       about: false,
       newProject: false,
+      preview3d: false,
+      preview3dWidth: storedWidth(),
       fileMenu: false,
       appearance: loadAppearance(),
       appearanceMenu: false,
@@ -463,14 +479,14 @@ export class AppController {
   startProject(kind: ProjectKind): void {
     this.ui.setState({ newProject: false });
     const run = () => {
-      this.editor.newDocument(kind === 'pattern' ? 'Schnittmuster' : 'Unbenannt');
+      this.editor.newDocument(kind === 'motif' ? 'Unbenannt' : 'Schnittmuster');
       this.sync.detach();
       this.ui.setState({ syncLinked: null });
       this.ui.setState({ chat: [] });
       this.agent.reset();
       this.editor.zoomToFit();
-      if (kind === 'pattern') this.ui.setState({ side: 'pattern', sideOpen: true });
-      else this.ui.setState({ side: 'props' });
+      if (kind === 'motif') this.ui.setState({ side: 'props', preview3d: false });
+      else this.ui.setState({ side: 'pattern', sideOpen: true, preview3d: kind === '3d' || this.ui.getState().preview3d });
     };
     if (this.editor.s.dirty && Object.keys(this.editor.s.doc.entities).length) {
       this.editor.confirm({
@@ -1032,6 +1048,70 @@ export class AppController {
       this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
       return false;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // 3D
+  // -------------------------------------------------------------------------
+
+  private bridge: { post: (m: BridgeMessage) => void; close: () => void } | null = null;
+  private bridgeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Ein Vektordesign-3D-Fenster hat sich gemeldet */
+  private peer3d = false;
+
+  /** 3D-Vorschau rechts ein/aus. */
+  toggle3D(on = !this.ui.getState().preview3d): void {
+    this.ui.setState({ preview3d: on });
+  }
+
+  /** Vektordesign 3D in eigenem Fenster öffnen und live verbinden. */
+  openWindow3D(): void {
+    this.startBridge();
+    const w = window.open('./3d.html', 'vektordesign3d');
+    if (!w) this.editor.toast('Das Fenster wurde blockiert. Bitte Pop-ups für Vektordesign erlauben – oder die 3D-Vorschau rechts nutzen.', 'info', 6000);
+    else this.ui.setState({ preview3d: false });
+  }
+
+  /** Kanal zu Vektordesign 3D öffnen (beim Start; sendet erst, wenn sich ein 3D-Fenster meldet). */
+  startBridge(): void {
+    if (this.bridge) return;
+    this.bridge = openChannel((m) => {
+      const ed = this.editor;
+      if (m.type === 'hello') {
+        this.peer3d = true;
+        this.postDoc();
+      } else if (m.type === 'bye') this.peer3d = false;
+      else if (m.type === 'piece') setPieceLook(ed, m.pieceId, m.patch);
+      else if (m.type === 'material') updateMaterial(ed, m.materialId, m.patch);
+      else if (m.type === 'select') {
+        const pc = m.pieceId ? ed.s.doc.pattern?.pieces.find((p) => p.id === m.pieceId) : null;
+        ed.select(pc ? [pc.outline] : []);
+      }
+    });
+    if (!this.bridge) return;
+    let last: unknown = null;
+    let lastSel: unknown = null;
+    this.store.subscribe((s) => {
+      if (!this.peer3d || (s.doc === last && s.selection === lastSel)) return;
+      last = s.doc;
+      lastSel = s.selection;
+      if (this.bridgeTimer) clearTimeout(this.bridgeTimer);
+      this.bridgeTimer = setTimeout(() => this.postDoc(), 120);
+    });
+    window.addEventListener('beforeunload', () => this.bridge?.post({ type: 'bye', from: 'main' }));
+  }
+
+  private postDoc(): void {
+    const s = this.editor.s;
+    const selected = s.doc.pattern?.pieces.find((p) => s.selection.includes(p.outline))?.id ?? null;
+    this.bridge?.post({ type: 'doc', doc: s.doc, name: this.projectName(), selected });
+  }
+
+  async saveSnapshot3D(dataUrl: string): Promise<void> {
+    const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const res = await saveFile(bytes, `${safeName(this.projectName())}_3D.png`, PNG_TYPE, null);
+    if (res) this.editor.toast(`3D-Bild als ${res.name} gespeichert`, 'success');
   }
 
   /** Schnittteile als DXF (Schnittlinie, Nahtlinie, Fadenlauf, Passzeichen, Beschriftung). */

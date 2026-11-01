@@ -371,6 +371,16 @@ export function buildCommands(): Command[] {
         else a.ui.setState({ side: 'pattern', sideOpen: true });
       },
     },
+    {
+      id: 'pattern.3d',
+      label: '3D-Vorschau ein/aus',
+      group: 'Schnitt',
+      shortcut: 'Strg+3',
+      keys: [{ key: '3', ctrl: true }],
+      keywords: '3d vorschau puppe drapieren passform modell anprobe',
+      run: (a) => a.toggle3D(),
+    },
+    { id: 'pattern.3dwindow', label: 'Vektordesign 3D in eigenem Fenster öffnen', group: 'Schnitt', keywords: '3d fenster vollbild modell visualisierung', run: (a) => a.openWindow3D() },
     { id: 'pattern.dxf', label: 'Schnittteile als DXF exportieren', group: 'Schnitt', keywords: 'dxf schnittmuster plotter zuschnitt nahtzugabe export', run: (a) => void a.exportPatternDxf() },
 
     // Ansicht

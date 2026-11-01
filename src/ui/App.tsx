@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { LibraryPanel } from './LibraryPanel';
 import { BookMarked, Layers, Scissors, Settings2, Shirt, Sparkles } from 'lucide-react';
 import { PatternPanel } from './PatternPanel';
+import { Preview3D } from './Preview3D';
 import type { AppController } from './controller';
 import { AppCtx, useUi } from './hooks';
 import { CanvasView } from './CanvasView';
@@ -216,6 +217,7 @@ function Shell({ app }: { app: AppController }) {
         <PreflightCard />
         <Toasts />
       </main>
+      <Preview3D />
       {sideOpen && <SidePanel app={app} />}
       <StatusBar />
       <ExportDialog />

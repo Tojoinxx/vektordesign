@@ -1,0 +1,231 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Camera, ExternalLink, Eye, EyeOff, Gauge, Loader2, Palette, RotateCcw, Shirt, X } from 'lucide-react';
+import type { Id, PatternMaterial, SketchDoc } from '../model/types';
+import { productionOf } from '../model/production';
+import { FABRICS } from '../store/patternOps';
+import { ColorButton } from '../ui/ColorPicker';
+import { GarmentViewer, type CameraView, type ViewMode, type ViewerStatus } from './viewer';
+import type { MaterialPatch, PieceLookPatch } from '../pattern/edit';
+
+/**
+ * 3D-Ansicht als Bedienfeld: Werkzeugleiste (Aussehen/Passform, Puppe, Ansichten, Variante, Bild),
+ * Statuszeile und – bei angeklicktem Teil – Farbe und Stoff dieses Teils.
+ * Wird rechts im Hauptprogramm und als ganzes Fenster in „Vektordesign 3D“ benutzt.
+ */
+
+export interface ViewerPanelProps {
+  doc: SketchDoc;
+  dark: boolean;
+  selected: Id | null;
+  onSelect: (pieceId: Id | null) => void;
+  onPieceLook: (pieceId: Id, patch: PieceLookPatch) => void;
+  onMaterial: (materialId: Id, patch: MaterialPatch) => void;
+  onSnapshot: (dataUrl: string) => void;
+  onClose?: () => void;
+  onPopOut?: () => void;
+  /** Großes Fenster: Stoffliste dauerhaft zeigen */
+  full?: boolean;
+}
+
+const fmt = (n: number, d = 1) => n.toLocaleString('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });
+
+export default function ViewerPanel(p: ViewerPanelProps) {
+  const host = useRef<HTMLDivElement | null>(null);
+  const viewer = useRef<GarmentViewer | null>(null);
+  const [status, setStatus] = useState<ViewerStatus | null>(null);
+  const [mode, setMode] = useState<ViewMode>('look');
+  const [body, setBody] = useState(true);
+  const [variant, setVariant] = useState<string | null>(null);
+  const [quality, setQuality] = useState<'preview' | 'high'>('preview');
+  const [glError, setGlError] = useState<string | null>(null);
+  const onSelect = useRef(p.onSelect);
+  onSelect.current = p.onSelect;
+
+  useEffect(() => {
+    if (!host.current) return;
+    try {
+      viewer.current = new GarmentViewer(host.current, { onStatus: setStatus, onPick: (id) => onSelect.current(id) });
+    } catch (e) {
+      setGlError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    (window as unknown as { vektordesign3d?: GarmentViewer }).vektordesign3d = viewer.current;
+    return () => {
+      viewer.current?.dispose();
+      viewer.current = null;
+    };
+  }, []);
+  useEffect(() => viewer.current?.setOptions({ dark: p.dark }), [p.dark]);
+  useEffect(() => viewer.current?.setDoc(p.doc), [p.doc]);
+  useEffect(() => viewer.current?.select(p.selected), [p.selected]);
+  useEffect(() => viewer.current?.setOptions({ mode, showBody: body, variantId: variant, quality }), [mode, body, variant, quality]);
+
+  const pattern = p.doc.pattern;
+  const variants = useMemo(() => productionOf(p.doc).variants, [p.doc]);
+  const piece = pattern?.pieces.find((x) => x.id === p.selected) ?? null;
+  const pieceMat = piece ? pattern?.materials.find((m) => m.id === piece.material) : undefined;
+  const view = (v: CameraView) => viewer.current?.view(v);
+
+  let line: string;
+  if (glError) line = '3D wird auf diesem Gerät nicht unterstützt (WebGL fehlt).';
+  else if (!status || status.state === 'empty') line = status?.message ?? 'Lädt …';
+  else if (status.state === 'error') line = `Fehler: ${status.message}`;
+  else if (status.state === 'simulating') line = `Stoff fällt … ${fmt(status.stats?.time ?? 0)} s`;
+  else {
+    const gap = status.stats?.seamGap ?? 0;
+    line = `Fertig · ${status.parts} Teile · Nähte ${gap < 8 ? 'geschlossen' : `bis ${fmt(gap, 0)} mm offen`}`;
+  }
+
+  return (
+    <div className={`viewer3d ${p.full ? 'full' : ''}`} data-testid="viewer3d">
+      <div className="v3-bar" role="toolbar" aria-label="3D-Ansicht">
+        <div className="seg" role="radiogroup" aria-label="Darstellung">
+          <button className={mode === 'look' ? 'on' : ''} onClick={() => setMode('look')} title="Aussehen: Farben, Stoffe, Motive" data-testid="v3-look">
+            <Shirt size={15} /> <span className="lbl">Aussehen</span>
+          </button>
+          <button className={mode === 'fit' ? 'on' : ''} onClick={() => setMode('fit')} title="Passform-Karte: wo es spannt, anliegt oder locker sitzt" data-testid="v3-fit">
+            <Gauge size={15} /> <span className="lbl">Passform</span>
+          </button>
+        </div>
+        <span className="sep" />
+        <button className="icon-btn" onClick={() => view('front')} title="Vorderansicht" aria-label="Vorderansicht">
+          V
+        </button>
+        <button className="icon-btn" onClick={() => view('back')} title="Rückansicht" aria-label="Rückansicht">
+          R
+        </button>
+        <button className="icon-btn" onClick={() => view('left')} title="Seitenansicht" aria-label="Seitenansicht">
+          S
+        </button>
+        <button className="icon-btn" onClick={() => view('free')} title="Schräg von vorne" aria-label="Schräg von vorne">
+          ¾
+        </button>
+        <span className="sep" />
+        <button className={`icon-btn ${body ? '' : 'on'}`} onClick={() => setBody((b) => !b)} title={body ? 'Puppe ausblenden' : 'Puppe einblenden'} aria-label="Puppe ein/aus" data-testid="v3-body">
+          {body ? <Eye size={16} /> : <EyeOff size={16} />}
+        </button>
+        <button className="icon-btn" onClick={() => viewer.current?.resimulate()} title="Neu drapieren" aria-label="Neu drapieren" data-testid="v3-resim">
+          <RotateCcw size={16} />
+        </button>
+        <button
+          className="icon-btn"
+          onClick={() => {
+            const url = viewer.current?.snapshot(2);
+            if (url) p.onSnapshot(url);
+          }}
+          title="Bild speichern (PNG)"
+          aria-label="Bild speichern"
+          data-testid="v3-snapshot"
+        >
+          <Camera size={16} />
+        </button>
+        <span className="spacer" />
+        {p.onPopOut && (
+          <button className="icon-btn" onClick={p.onPopOut} title="In Vektordesign 3D öffnen (eigenes Fenster)" aria-label="In eigenem Fenster öffnen" data-testid="v3-popout">
+            <ExternalLink size={16} />
+          </button>
+        )}
+        {p.onClose && (
+          <button className="icon-btn" onClick={p.onClose} title="3D-Vorschau schließen" aria-label="3D-Vorschau schließen" data-testid="v3-close">
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
+      <div className="v3-stage">
+        <div className="v3-canvas" ref={host} />
+        <div className={`v3-status ${status?.state ?? ''}`} data-testid="v3-status" data-state={status?.state ?? 'loading'}>
+          {status?.state === 'simulating' && <Loader2 size={13} className="spin" />} {line}
+        </div>
+        {mode === 'fit' && (
+          <div className="v3-legend" aria-label="Legende Passform">
+            <span>
+              <i style={{ background: '#d7263d' }} /> spannt
+            </span>
+            <span>
+              <i style={{ background: '#f4c430' }} /> leicht gedehnt
+            </span>
+            <span>
+              <i style={{ background: '#3aa76d' }} /> liegt an
+            </span>
+            <span>
+              <i style={{ background: '#3d7bd9' }} /> locker
+            </span>
+          </div>
+        )}
+        {variants.length > 1 && (
+          <select className="v3-variant" value={variant ?? ''} onChange={(e) => setVariant(e.target.value || null)} aria-label="Farbvariante" data-testid="v3-variant">
+            <option value="">Originalfarben</option>
+            {variants.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <label className="v3-quality check small">
+          <input type="checkbox" checked={quality === 'high'} onChange={(e) => setQuality(e.target.checked ? 'high' : 'preview')} /> Fein
+        </label>
+      </div>
+
+      {piece && pattern && (
+        <div className="v3-piece" data-testid="v3-piece">
+          <div className="row">
+            <Palette size={15} />
+            <strong className="spacer">{piece.name}</strong>
+            <button className="icon-btn" onClick={() => p.onSelect(null)} aria-label="Auswahl aufheben" title="Auswahl aufheben">
+              <X size={15} />
+            </button>
+          </div>
+          <div className="form-grid">
+            <span>Farbe</span>
+            <span className="row">
+              <ColorButton value={piece.color ?? pieceMat?.color ?? '#888888'} label={`Farbe ${piece.name}`} onChange={(c) => p.onPieceLook(piece.id, { color: c })} testId="v3-piece-color" />
+              {piece.color ? (
+                <button className="link-btn small" onClick={() => p.onPieceLook(piece.id, { color: null })}>
+                  wie Stoff
+                </button>
+              ) : (
+                <span className="muted small">vom Stoff</span>
+              )}
+            </span>
+            <span>Stoff</span>
+            <select value={piece.material ?? ''} onChange={(e) => p.onPieceLook(piece.id, { material: e.target.value })} aria-label="Stoff des Teils" data-testid="v3-piece-material">
+              {pattern.materials.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            {pieceMat && (
+              <>
+                <span>Stoffart</span>
+                <FabricSelect m={pieceMat} onChange={(patch) => p.onMaterial(pieceMat.id, patch)} />
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {!piece && pattern?.pieces.length ? <p className="v3-hint muted small">Tipp: ein Teil anklicken, um es einzufärben oder einen anderen Stoff zu wählen.</p> : null}
+    </div>
+  );
+}
+
+export function FabricSelect({ m, onChange }: { m: PatternMaterial; onChange: (patch: MaterialPatch) => void }) {
+  return (
+    <select
+      value={m.fabric}
+      aria-label="Stoffart"
+      onChange={(e) => {
+        const f = FABRICS.find((x) => x.id === e.target.value)!;
+        onChange({ fabric: f.id, gsm: f.gsm });
+      }}
+    >
+      {FABRICS.map((f) => (
+        <option key={f.id} value={f.id}>
+          {f.name}
+        </option>
+      ))}
+    </select>
+  );
+}

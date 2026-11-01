@@ -1,0 +1,636 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import type { PatternMaterial, SketchDoc, Variant } from '../model/types';
+import { patternExchange, type ExchangePiece, type PatternExchange } from '../pattern/exchange';
+import { applyVariant, motifDoc, motifSize, productionOf } from '../model/production';
+import { drawDesign } from '../render/drawDesign';
+import type { SimOptions, SimStats } from '../sim3d/garment';
+import { buildMannequin, mannequinMesh, type Mannequin } from '../sim3d/body';
+import type { FromWorker, LayoutPart, ToWorker } from '../sim3d/protocol';
+import { SimRunner } from '../sim3d/runner';
+import { fabricLook, fabricNormalMap, fabricTileMm } from './textures';
+
+/**
+ * 3D-Ansicht: Puppe aus den Körpermaßen, simuliertes Kleidungsstück mit Stoffart, Farbe je Teil und
+ * Motiven an ihrer Druckposition, optional als Passform-Karte. Die Stoffsimulation läuft in einem Worker
+ * (Rückfall: Hauptthread in Zeitscheiben). Wird vom Hauptprogramm (Vorschau rechts) und von
+ * „Vektordesign 3D“ benutzt.
+ */
+
+export type ViewMode = 'look' | 'fit';
+export type CameraView = 'front' | 'back' | 'left' | 'right' | 'free';
+
+export interface ViewerOptions {
+  mode: ViewMode;
+  showBody: boolean;
+  /** Farbvariante aus der Produktion (null = Originalfarben) */
+  variantId: string | null;
+  quality: 'preview' | 'high';
+  dark: boolean;
+}
+
+export interface ViewerEvents {
+  onPick?: (pieceId: string | null) => void;
+  onStatus?: (s: ViewerStatus) => void;
+}
+
+export interface ViewerStatus {
+  state: 'empty' | 'simulating' | 'ready' | 'error';
+  stats: SimStats | null;
+  message?: string;
+  parts: number;
+  vertices: number;
+}
+
+interface ViewPart extends LayoutPart {
+  piece: ExchangePiece;
+  material: PatternMaterial | null;
+  box: { minX: number; minY: number; maxX: number; maxY: number; w: number; h: number; cx: number };
+}
+
+const BODY_COLOR = '#d8d2c8';
+
+/** Treiber der Simulation: Worker, sonst Hauptthread. */
+class Driver {
+  private worker: Worker | null = null;
+  private local: SimRunner | null = null;
+  constructor(private onMessage: (m: FromWorker) => void) {
+    try {
+      this.worker = new Worker(new URL('../sim3d/worker.ts', import.meta.url), { type: 'module' });
+      this.worker.onmessage = (e: MessageEvent<FromWorker>) => this.onMessage(e.data);
+      this.worker.onerror = (e) => {
+        e.preventDefault();
+        this.fallback();
+      };
+    } catch {
+      this.fallback();
+    }
+  }
+  private lastStart: ToWorker | null = null;
+  private fallback(): void {
+    this.worker?.terminate();
+    this.worker = null;
+    if (!this.local) this.local = new SimRunner((m) => this.onMessage(m), 14);
+    if (this.lastStart?.type === 'start') this.local.start(this.lastStart.id, this.lastStart.ex, this.lastStart.opts);
+  }
+  start(id: number, ex: PatternExchange, opts: SimOptions): void {
+    this.lastStart = { type: 'start', id, ex, opts };
+    if (this.worker) this.worker.postMessage(this.lastStart);
+    else this.local?.start(id, ex, opts);
+  }
+  stop(): void {
+    this.worker?.postMessage({ type: 'stop' } satisfies ToWorker);
+    this.local?.stop();
+  }
+  dispose(): void {
+    this.stop();
+    this.worker?.terminate();
+  }
+}
+
+export class GarmentViewer {
+  readonly renderer: THREE.WebGLRenderer;
+  readonly scene = new THREE.Scene();
+  readonly camera: THREE.PerspectiveCamera;
+  readonly controls: OrbitControls;
+  private bodyMesh: THREE.Mesh | null = null;
+  private garment = new THREE.Group();
+  private meshes = new Map<string, THREE.Mesh>();
+  private parts: ViewPart[] = [];
+  private mq: Mannequin | null = null;
+  private driver: Driver;
+  private runId = 0;
+  private simKey = '';
+  private doc: SketchDoc | null = null;
+  private ex: PatternExchange | null = null;
+  private frame = 0;
+  private dirty = true;
+  private selected: string | null = null;
+  private ro: ResizeObserver;
+  private floor: THREE.Mesh;
+  private motifTextures: THREE.Texture[] = [];
+  private pending: Float32Array | null = null;
+  private gap: Float32Array | null = null;
+  private strain: Float32Array | null = null;
+  private n = 0;
+  stats: SimStats | null = null;
+  opts: ViewerOptions = { mode: 'look', showBody: true, variantId: null, quality: 'preview', dark: false };
+
+  constructor(
+    readonly container: HTMLElement,
+    private events: ViewerEvents = {},
+  ) {
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
+    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const el = this.renderer.domElement;
+    el.style.display = 'block';
+    el.style.width = '100%';
+    el.style.height = '100%';
+    el.style.touchAction = 'none';
+    container.appendChild(el);
+
+    this.camera = new THREE.PerspectiveCamera(28, 1, 20, 30000);
+    this.camera.position.set(0, 1250, 3600);
+    this.controls = new OrbitControls(this.camera, el);
+    this.controls.target.set(0, 1150, 0);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.12;
+    this.controls.minDistance = 400;
+    this.controls.maxDistance = 9000;
+    this.controls.maxPolarAngle = Math.PI * 0.53;
+    this.controls.addEventListener('change', () => (this.dirty = true));
+    this.controls.addEventListener('start', () => (this.userMoved = true));
+
+    // Licht wie im Fotostudio: weiches Umgebungslicht, Hauptlicht schräg vorne, Kante von hinten
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f96, 1.4));
+    const key = new THREE.DirectionalLight(0xffffff, 2.3);
+    key.position.set(-1400, 2600, 2200);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, { left: -1100, right: 1100, top: 2200, bottom: -400, near: 500, far: 7000 });
+    key.shadow.bias = -0.0008;
+    key.shadow.normalBias = 7;
+    this.scene.add(key);
+    const rim = new THREE.DirectionalLight(0xffffff, 1.1);
+    rim.position.set(1800, 1800, -2400);
+    this.scene.add(rim);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.55);
+    fill.position.set(2200, 900, 1500);
+    this.scene.add(fill);
+
+    this.floor = new THREE.Mesh(new THREE.CircleGeometry(1100, 64), new THREE.ShadowMaterial({ opacity: 0.16 }));
+    this.floor.rotation.x = -Math.PI / 2;
+    this.floor.receiveShadow = true;
+    this.scene.add(this.floor);
+    this.scene.add(this.garment);
+    this.applyTheme();
+
+    this.driver = new Driver((m) => this.onSim(m));
+    this.ro = new ResizeObserver(() => this.resize());
+    this.ro.observe(container);
+    this.resize();
+    this.bindPicking();
+    const loop = () => {
+      this.frame = requestAnimationFrame(loop);
+      this.tick();
+    };
+    this.frame = requestAnimationFrame(loop);
+  }
+
+  dispose(): void {
+    cancelAnimationFrame(this.frame);
+    this.driver.dispose();
+    this.ro.disconnect();
+    this.controls.dispose();
+    this.clearGarment();
+    this.renderer.dispose();
+    this.renderer.domElement.remove();
+  }
+
+  setOptions(p: Partial<ViewerOptions>): void {
+    const prev = this.opts;
+    this.opts = { ...prev, ...p };
+    if (p.dark !== undefined && p.dark !== prev.dark) this.applyTheme();
+    if (p.showBody !== undefined && this.bodyMesh) this.bodyMesh.visible = this.opts.showBody;
+    const qualityChanged = p.quality !== undefined && p.quality !== prev.quality;
+    if (qualityChanged) this.simKey = '';
+    if (this.doc && (qualityChanged || (p.mode !== undefined && p.mode !== prev.mode) || (p.variantId !== undefined && p.variantId !== prev.variantId))) this.setDoc(this.doc, true);
+    this.dirty = true;
+  }
+
+  select(pieceId: string | null): void {
+    if (pieceId === this.selected) return;
+    this.selected = pieceId;
+    this.updateMaterials();
+  }
+
+  private applyTheme(): void {
+    this.scene.background = new THREE.Color(this.opts.dark ? '#1d2126' : '#eceef0');
+    this.dirty = true;
+  }
+
+  private resize(): void {
+    const w = Math.max(1, this.container.clientWidth);
+    const h = Math.max(1, this.container.clientHeight);
+    this.renderer.setSize(w, h, false);
+    const before = this.camera.aspect;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    if (!this.userMoved && Math.abs(before - this.camera.aspect) > 0.05) this.frameCamera();
+    this.dirty = true;
+  }
+  private userMoved = false;
+
+  /** Neuer Stand der Zeichnung. Simuliert nur neu, wenn sich Schnitt, Nähte, Maße oder Stoffart geändert haben. */
+  setDoc(doc: SketchDoc, force = false): void {
+    if (doc === this.doc && !force) return;
+    this.doc = doc;
+    const ex = patternExchange(doc);
+    this.ex = ex;
+    if (!ex) {
+      this.driver.stop();
+      this.clearGarment();
+      this.parts = [];
+      this.simKey = '';
+      this.stats = null;
+      this.setBody(doc.pattern?.body ?? null);
+      this.status({ state: 'empty', stats: null, parts: 0, vertices: 0, message: 'Noch keine Schnittteile. Im Tab „Schnitt“ einen Grundschnitt erzeugen oder Teile anlegen.' });
+      return;
+    }
+    const key = JSON.stringify([
+      ex.body,
+      ex.pieces.map((p) => [p.id, p.role, p.cut, p.material, p.polygon, p.edges.map((e) => [e.from, e.to])]),
+      ex.seams.map((s) => [s.a, s.b, s.reversed]),
+      ex.materials.map((m) => [m.id, m.fabric, m.gsm]),
+      this.opts.quality,
+    ]);
+    if (key !== this.simKey) {
+      this.simKey = key;
+      const bodyChanged = !this.mq || JSON.stringify(this.mq.measures) !== JSON.stringify(ex.body);
+      if (bodyChanged) this.setBody(ex.body);
+      this.stats = null;
+      this.gap = this.strain = null;
+      this.runId++;
+      this.driver.start(this.runId, ex, this.opts.quality === 'high' ? { resolution: 15, substeps: 12 } : { resolution: 24, substeps: 9 });
+      this.status({ state: 'simulating', stats: null, parts: this.parts.length, vertices: this.n });
+      if (bodyChanged || !this.parts.length) this.frameCamera();
+    } else {
+      // Nur Aussehen geändert: Teile behalten ihre Lage
+      for (const part of this.parts) this.bindPart(part);
+      this.updateMaterials();
+    }
+    this.dirty = true;
+  }
+
+  /** Simulation neu starten (gleiche Teile). */
+  resimulate(): void {
+    this.simKey = '';
+    if (this.doc) this.setDoc(this.doc, true);
+  }
+
+  private bindPart(part: ViewPart): void {
+    const ex = this.ex;
+    if (!ex) return;
+    const fresh = ex.pieces.find((p) => p.id === part.pieceId);
+    if (fresh) part.piece = fresh;
+    part.material = ex.materials.find((m) => m.id === part.piece.material) ?? ex.materials[0] ?? null;
+  }
+
+  private onSim(m: FromWorker): void {
+    if (m.id !== this.runId) return;
+    if (m.type === 'error') {
+      this.status({ state: 'error', stats: null, parts: 0, vertices: 0, message: m.message });
+      return;
+    }
+    if (m.type === 'layout') {
+      this.n = m.n;
+      this.parts = m.parts.map((lp) => {
+        const part = { ...lp, piece: null as unknown as ExchangePiece, material: null, box: uvBox(lp.uv, lp.count) } as ViewPart;
+        this.bindPart(part);
+        return part;
+      });
+      this.buildMeshes();
+      this.updateMaterials();
+      return;
+    }
+    this.pending = m.pos;
+    this.stats = m.stats;
+    if (m.gap) this.gap = m.gap;
+    if (m.strain) this.strain = m.strain;
+    this.status({ state: m.stats.settled ? 'ready' : 'simulating', stats: m.stats, parts: this.parts.length, vertices: this.n });
+    if (m.stats.settled && this.opts.mode === 'fit') this.updateFitColors();
+  }
+
+  private setBody(body: PatternExchange['body'] | null): void {
+    if (this.bodyMesh) {
+      this.scene.remove(this.bodyMesh);
+      this.bodyMesh.geometry.dispose();
+      (this.bodyMesh.material as THREE.Material).dispose();
+      this.bodyMesh = null;
+    }
+    this.mq = body ? buildMannequin(body) : null;
+    if (!this.mq) return;
+    // Etwas kleiner zeichnen als die Kollision: Stoff liegt sichtbar auf, nichts sticht durch
+    const data = mannequinMesh(this.mq, 4);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
+    g.setIndex(data.indices);
+    g.computeVertexNormals();
+    this.bodyMesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: BODY_COLOR, roughness: 0.55, metalness: 0 }));
+    this.bodyMesh.castShadow = true;
+    this.bodyMesh.receiveShadow = true;
+    this.bodyMesh.visible = this.opts.showBody;
+    this.scene.add(this.bodyMesh);
+    this.dirty = true;
+  }
+
+  private clearGarment(): void {
+    for (const m of this.meshes.values()) {
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+      this.garment.remove(m);
+    }
+    this.meshes.clear();
+    for (const t of this.motifTextures) t.dispose();
+    this.motifTextures = [];
+  }
+
+  private buildMeshes(): void {
+    this.clearGarment();
+    for (const part of this.parts) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(part.count * 3), 3));
+      const uv = new Float32Array(part.count * 2);
+      const b = part.box;
+      for (let i = 0; i < part.count; i++) {
+        uv[2 * i] = (part.uv[2 * i] - b.minX) / b.w;
+        uv[2 * i + 1] = (part.uv[2 * i + 1] - b.minY) / b.h;
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      // Passform-Farben erst, wenn der Stoff liegt – bis dahin neutrales Grau
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(part.count * 3).fill(0.62), 3));
+      const idx = new Uint32Array(part.tris.length);
+      for (let t = 0; t < idx.length; t++) idx[t] = part.tris[t] - part.offset;
+      g.setIndex(new THREE.BufferAttribute(idx, 1));
+      const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial());
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.visible = false;
+      mesh.userData = { key: part.key, pieceId: part.pieceId };
+      this.meshes.set(part.key, mesh);
+      this.garment.add(mesh);
+    }
+  }
+
+  private variant(): Variant | null {
+    if (!this.doc || !this.opts.variantId) return null;
+    return productionOf(this.doc).variants.find((v) => v.id === this.opts.variantId) ?? null;
+  }
+
+  /** Farben, Stoffe und Motive (ohne neu zu simulieren). */
+  private updateMaterials(): void {
+    if (!this.doc || !this.parts.length) return;
+    for (const t of this.motifTextures) t.dispose();
+    this.motifTextures = [];
+    const variant = this.variant();
+    const mainId = this.ex?.materials[0]?.id;
+    for (const part of this.parts) {
+      const mesh = this.meshes.get(part.key);
+      if (!mesh) continue;
+      (mesh.material as THREE.Material).dispose();
+      const fabric = part.material?.fabric ?? 'jersey';
+      let color = part.piece.color ?? part.material?.color ?? '#8a8f98';
+      // Variante: Teile ohne eigene Farbe in der Stofffarbe der Variante (Hauptstoff und Bündchen)
+      if (variant && !part.piece.color && (!part.material || part.material.id === mainId || part.material.fabric === 'rib')) color = variant.fabric;
+      const isSel = this.selected === part.pieceId;
+      const emissive = new THREE.Color(isSel ? '#e8590c' : '#000000');
+      if (this.opts.mode === 'fit') {
+        mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide, emissive, emissiveIntensity: isSel ? 0.25 : 0 });
+        continue;
+      }
+      const look = fabricLook(fabric);
+      const b = part.box;
+      const normal = fabricNormalMap(fabric).clone();
+      normal.needsUpdate = true;
+      const tile = fabricTileMm(fabric);
+      normal.repeat.set(b.w / tile, b.h / tile);
+      const motif = this.motifTexture(part, color, variant);
+      mesh.material = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(motif ? '#ffffff' : color),
+        map: motif,
+        roughness: look.roughness,
+        metalness: 0,
+        sheen: look.sheen,
+        sheenRoughness: look.sheenRoughness,
+        sheenColor: new THREE.Color(color).lerp(new THREE.Color('#ffffff'), 0.35),
+        normalMap: normal,
+        normalScale: new THREE.Vector2(look.normalScale, look.normalScale),
+        clearcoat: look.clearcoat ?? 0,
+        side: THREE.DoubleSide,
+        emissive,
+        emissiveIntensity: isSel ? 0.22 : 0,
+      });
+    }
+    if (this.opts.mode === 'fit') this.updateFitColors();
+    this.dirty = true;
+  }
+
+  /** Motive aus dem Tab „Produktion“ als Textur auf Vorder- und Rückenteil. */
+  private motifTexture(part: ViewPart, color: string, variant: Variant | null): THREE.Texture | null {
+    const doc = this.doc;
+    if (!doc || part.copy || (part.piece.role !== 'front' && part.piece.role !== 'back')) return null;
+    const prod = doc.production;
+    if (!prod?.motifs.length) return null;
+    const motifs = prod.motifs.filter((m) => m.placement.view === part.piece.role);
+    if (!motifs.length) return null;
+    const b = part.box;
+    const ref = necklineCenter(part.piece.polygon, b.cx);
+    if (!ref) return null;
+    const k = Math.min(3, 2048 / Math.max(b.w, b.h));
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(b.w * k);
+    cv.height = Math.ceil(b.h * k);
+    const ctx = cv.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    const v = variant ?? prod.variants[0];
+    let drawn = false;
+    for (const m of motifs) {
+      const size = motifSize(doc, m);
+      if (!size) continue;
+      const md = v ? applyVariant(motifDoc(doc, m), v) : motifDoc(doc, m);
+      const left = m.placement.x - size.w / 2;
+      const toScreen = (w: { x: number; y: number }) => {
+        const px = ref.x + left + (w.x - size.box.minX);
+        const py = ref.y - m.placement.y - (size.box.maxY - w.y);
+        return { x: (px - b.minX) * k, y: (b.maxY - py) * k };
+      };
+      drawDesign({ ctx, scale: k, minStrokePx: 0.5, design: true, toScreen }, md);
+      drawn = true;
+    }
+    if (!drawn) return null;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    this.motifTextures.push(tex);
+    return tex;
+  }
+
+  /** Passform-Karte: rot = gedehnt (eng), grün = liegt an, blau = locker. */
+  private updateFitColors(): void {
+    if (!this.strain || !this.gap) return;
+    const c = new THREE.Color();
+    const tight = new THREE.Color('#d7263d');
+    const warn = new THREE.Color('#f4c430');
+    const snug = new THREE.Color('#3aa76d');
+    const loose = new THREE.Color('#3d7bd9');
+    for (const part of this.parts) {
+      const mesh = this.meshes.get(part.key);
+      if (!mesh) continue;
+      const attr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+      for (let i = 0; i < part.count; i++) {
+        const g = part.offset + i;
+        const s = this.strain[g];
+        const gap = this.gap[g];
+        if (s > 0.02) c.copy(warn).lerp(tight, Math.min(1, (s - 0.02) / 0.08));
+        else c.copy(snug).lerp(loose, Math.min(1, Math.max(0, (gap - 6) / 45)));
+        attr.setXYZ(i, c.r, c.g, c.b);
+      }
+      attr.needsUpdate = true;
+    }
+    this.dirty = true;
+  }
+
+  private frameCamera(): void {
+    const mq = this.mq;
+    const ex = this.ex;
+    if (!mq || !ex) return;
+    const hasHood = ex.pieces.some((p) => p.role === 'hood');
+    const top = hasHood ? mq.measures.height + 40 : mq.neckBaseY + 140;
+    const bottom = mq.crotchY - 120;
+    const cy = (top + bottom) / 2;
+    const span = top - bottom + 200;
+    const vHalf = Math.tan((this.camera.fov * Math.PI) / 360);
+    // Breite: Arme in A-Haltung (bis zu den Händen)
+    const half = mq.shoulderJoint[0] + Math.sin(mq.armAngle) * mq.measures.arm * 0.9 + 60;
+    const dist = Math.max((span / 2 / vHalf) * 1.08, (half / (vHalf * Math.max(0.3, this.camera.aspect))) * 1.05);
+    this.controls.target.set(0, cy, 0);
+    this.camera.position.set(dist * 0.36, cy + 140, dist * 0.93);
+    this.controls.update();
+    this.dirty = true;
+  }
+
+  /** Kamera auf eine Ansicht setzen. */
+  view(v: CameraView): void {
+    const t = this.controls.target;
+    const d = this.camera.position.distanceTo(t);
+    const dir = v === 'front' ? [0, 0.06, 1] : v === 'back' ? [0, 0.06, -1] : v === 'left' ? [1, 0.06, 0] : v === 'right' ? [-1, 0.06, 0] : [0.36, 0.14, 0.93];
+    const l = Math.hypot(dir[0], dir[1], dir[2]);
+    this.camera.position.set(t.x + (dir[0] / l) * d, t.y + (dir[1] / l) * d, t.z + (dir[2] / l) * d);
+    this.controls.update();
+    this.dirty = true;
+  }
+
+  private tick(): void {
+    const pos = this.pending;
+    if (pos && pos.length >= this.n * 3) {
+      this.pending = null;
+      for (const part of this.parts) {
+        const mesh = this.meshes.get(part.key);
+        if (!mesh) continue;
+        const attr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+        (attr.array as Float32Array).set(pos.subarray(part.offset * 3, (part.offset + part.count) * 3));
+        attr.needsUpdate = true;
+        mesh.geometry.computeVertexNormals();
+        mesh.geometry.computeBoundingSphere();
+        mesh.visible = true;
+      }
+      this.dirty = true;
+    }
+    this.controls.update();
+    if (this.dirty) {
+      this.dirty = false;
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+
+  private lastStatus = '';
+  private status(s: ViewerStatus): void {
+    const key = `${s.state}:${s.message ?? ''}:${s.stats ? Math.round(s.stats.time * 4) : ''}`;
+    if (key === this.lastStatus) return;
+    this.lastStatus = key;
+    this.events.onStatus?.(s);
+  }
+
+  /** Bild der aktuellen Ansicht als PNG (Data-URL), optional in höherer Auflösung. */
+  snapshot(scale = 2): string {
+    this.tick();
+    const w = this.container.clientWidth;
+    const h = this.container.clientHeight;
+    const pr = this.renderer.getPixelRatio();
+    this.renderer.setPixelRatio(scale);
+    this.renderer.setSize(w, h, false);
+    this.renderer.render(this.scene, this.camera);
+    const url = this.renderer.domElement.toDataURL('image/png');
+    this.renderer.setPixelRatio(pr);
+    this.renderer.setSize(w, h, false);
+    this.dirty = true;
+    return url;
+  }
+
+  /** Bildschirmpunkt (Client-Koordinaten) auf einem Teil – für Tests und Hilfen. */
+  screenPointOf(pieceId: string): { x: number; y: number } | null {
+    const part = this.parts.find((p) => p.pieceId === pieceId && p.copy === 0);
+    const mesh = part && this.meshes.get(part.key);
+    if (!part || !mesh) return null;
+    const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    // Vertex nahe der Mitte des Teils (im 2D-Schnitt)
+    let best = 0;
+    let bd = Infinity;
+    const cx = part.box.cx;
+    const cy = part.box.minY + part.box.h * 0.4;
+    for (let i = 0; i < part.count; i++) {
+      const d = Math.hypot(part.uv[2 * i] - cx, part.uv[2 * i + 1] - cy);
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    const v = new THREE.Vector3(pos.getX(best), pos.getY(best), pos.getZ(best)).project(this.camera);
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+  }
+
+  private bindPicking(): void {
+    const el = this.renderer.domElement;
+    let down: { x: number; y: number } | null = null;
+    el.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
+    el.addEventListener('pointerup', (e) => {
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
+      down = null;
+      const r = el.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      const ray = new THREE.Raycaster();
+      ray.setFromCamera(ndc, this.camera);
+      const hit = ray.intersectObjects(
+        [...this.meshes.values()].filter((m) => m.visible),
+        false,
+      )[0];
+      this.events.onPick?.((hit?.object.userData.pieceId as string | undefined) ?? null);
+    });
+  }
+}
+
+function uvBox(uv: Float64Array, count: number) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < count; i++) {
+    minX = Math.min(minX, uv[2 * i]);
+    maxX = Math.max(maxX, uv[2 * i]);
+    minY = Math.min(minY, uv[2 * i + 1]);
+    maxY = Math.max(maxY, uv[2 * i + 1]);
+  }
+  return { minX, minY, maxX, maxY, w: Math.max(1e-6, maxX - minX), h: Math.max(1e-6, maxY - minY), cx: (minX + maxX) / 2 };
+}
+
+/** Bezugspunkt „Kragennaht Mitte“: höchster Schnittpunkt der senkrechten Mittellinie mit dem Umriss. */
+export function necklineCenter(poly: [number, number][], cx: number): { x: number; y: number } | null {
+  let best: number | null = null;
+  for (let i = 0; i < poly.length; i++) {
+    const [ax, ay] = poly[i];
+    const [bx, by] = poly[(i + 1) % poly.length];
+    if ((ax <= cx && bx > cx) || (bx <= cx && ax > cx)) {
+      const y = ay + ((cx - ax) / (bx - ax)) * (by - ay);
+      if (best === null || y > best) best = y;
+    }
+  }
+  return best === null ? null : { x: cx, y: best };
+}

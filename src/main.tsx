@@ -38,6 +38,7 @@ async function boot() {
     app.editor.toast('Letzte Sitzung wiederhergestellt.', 'info', 3000);
   }
   startAutosave(app.store);
+  app.startBridge();
 }
 
 createRoot(document.getElementById('root')!).render(<App app={app} />);
