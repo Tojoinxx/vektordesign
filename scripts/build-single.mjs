@@ -26,7 +26,7 @@ await build({
     // Alles als data:-URL einbetten (Schriften, Solver)
     assetsInlineLimit: () => true,
     // Ein einziges Skript, auch für dynamisch geladene Teile
-    rolldownOptions: { output: { codeSplitting: false } },
+    rolldownOptions: { input: join(root, 'index.html'), output: { codeSplitting: false } },
   },
 });
 

@@ -65,8 +65,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // z. B. Anthropic-API: nie zwischenspeichern
   if (req.mode === 'navigate') {
-    // Seite: aus dem Speicher (offline), sonst Netz
-    event.respondWith(caches.match('./index.html').then((r) => r || caches.match('./')).then((r) => r || fetch(req)));
+    // Seite: aus dem Speicher (offline), sonst Netz – Vektordesign 3D hat eine eigene Seite
+    const page = url.pathname.endsWith('/3d.html') || url.pathname.endsWith('/3d') ? './3d.html' : './index.html';
+    event.respondWith(caches.match(page).then((r) => r || (page === './index.html' ? caches.match('./') : null)).then((r) => r || fetch(req)));
     return;
   }
   event.respondWith(caches.match(req, { ignoreSearch: true }).then((r) => r || fetch(req)));

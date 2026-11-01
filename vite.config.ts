@@ -14,5 +14,7 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: false,
     chunkSizeWarningLimit: 1400,
+    // Zwei Programme aus einer Codebasis: Vektordesign (2D/Schnitt) und Vektordesign 3D
+    rolldownOptions: { input: { main: 'index.html', '3d': '3d.html' } },
   },
 });
