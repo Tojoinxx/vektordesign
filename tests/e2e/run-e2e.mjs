@@ -54,7 +54,13 @@ async function step(name, fn) {
     try {
       dump = await page.evaluate(() => {
         const s = window.vektordesign.store.getState();
-        return JSON.stringify({ tool: s.tool, dimPrompt: s.dimPrompt, dims: Object.values(s.doc.dims).map((d) => `${d.name}=${d.expr}`), sel: s.selection, active: `${document.activeElement?.tagName}.${document.activeElement?.className}` });
+        return JSON.stringify({
+          tool: s.tool,
+          dimPrompt: s.dimPrompt,
+          dims: Object.values(s.doc.dims).map((d) => `${d.name}=${d.expr}`),
+          sel: s.selection,
+          active: `${document.activeElement?.tagName}.${document.activeElement?.className}`,
+        });
       });
     } catch {
       /* egal */
@@ -478,7 +484,10 @@ await step('Stilvorschläge: mindestens 8 Vorschaubilder, Klick übernimmt', asy
 await step('Markierungsmenü (Rechtsklick) und Befehlssuche (Strg+K)', async () => {
   await page.keyboard.press('f');
   await sleep(80);
-  const cv = await page.$eval('[data-testid="canvas"]', (e) => { const r = e.getBoundingClientRect(); return { x: r.left + 120, y: r.bottom - 120 }; });
+  const cv = await page.$eval('[data-testid="canvas"]', (e) => {
+    const r = e.getBoundingClientRect();
+    return { x: r.left + 120, y: r.bottom - 120 };
+  });
   await page.mouse.click(cv.x, cv.y, { button: 'right' });
   await page.waitForSelector('.marking');
   await shot('10-markierungsmenue');
@@ -636,7 +645,20 @@ await step('Stutzen (X): Mittelstück einer gekreuzten Linie entfernen', async (
   if (lines < 3) {
     // Fallback über die Oberfläche
     await page.keyboard.press('l');
-    for (const [a, c] of [[[-30, 0], [30, 0]], [[-10, -20], [-10, 20]], [[10, -20], [10, 20]]]) {
+    for (const [a, c] of [
+      [
+        [-30, 0],
+        [30, 0],
+      ],
+      [
+        [-10, -20],
+        [-10, 20],
+      ],
+      [
+        [10, -20],
+        [10, 20],
+      ],
+    ]) {
       await clickWorld(...a);
       await clickWorld(...c);
       await page.keyboard.press('Escape');
@@ -679,10 +701,7 @@ await step('Abnahme M2: Logo aus Text und Formen, 100 mm breit, zwei Farben, Tex
   await waitFor(async () => (await entities()).some((e) => e.kind === 'shape') && !(await entities()).some((e) => e.kind === 'text'), 'Text wurde nicht in Pfade umgewandelt');
   const tb = await app(() => window.vektordesign.bbox());
   // Unterstrich als Form, dann vereinigen
-  const barId = await app(
-    (b) => window.vektordesign.editor.createRectangle({ pos: { x: b.minX, y: b.minY - 3 } }, { pos: { x: b.maxX, y: b.minY - 1 } }, 'corner').pathId,
-    tb,
-  );
+  const barId = await app((b) => window.vektordesign.editor.createRectangle({ pos: { x: b.minX, y: b.minY - 3 } }, { pos: { x: b.maxX, y: b.minY - 1 } }, 'corner').pathId, tb);
   const shapeId = (await entities()).find((e) => e.kind === 'shape').id;
   await app(([a, b]) => window.vektordesign.editor.select([a, b]), [shapeId, barId]);
   await page.click('[data-testid="bool-union"]');
@@ -820,8 +839,11 @@ await step('Abnahme M3: Logo auf Hoodie-Brust, Siebdruck, zwei Farbvarianten →
   const { unzipSync, strFromU8 } = await import('fflate');
   const files = unzipSync(readFileSync(zipFile));
   const names = Object.keys(files).sort();
-  const expect = ['Brustlogo_Schwarz.pdf', 'Brustlogo_Schwarz.svg', 'Brustlogo_Schwarz.png', 'Brustlogo_Weiss.pdf', 'Brustlogo_Weiss.svg', 'Brustlogo_Weiss.png'].map((n) => `Vereinshoodie_v2/Motive/Vereinshoodie_v2_${n}`);
-  for (const e of [...expect, 'Vereinshoodie_v2/Vereinshoodie_v2_Artwork-Blatt.pdf', 'Vereinshoodie_v2/Farben.csv', 'Vereinshoodie_v2/LIESMICH.txt']) assert(names.includes(e), `fehlt im ZIP: ${e} (vorhanden: ${names.join(', ')})`);
+  const expect = ['Brustlogo_Schwarz.pdf', 'Brustlogo_Schwarz.svg', 'Brustlogo_Schwarz.png', 'Brustlogo_Weiss.pdf', 'Brustlogo_Weiss.svg', 'Brustlogo_Weiss.png'].map(
+    (n) => `Vereinshoodie_v2/Motive/Vereinshoodie_v2_${n}`,
+  );
+  for (const e of [...expect, 'Vereinshoodie_v2/Vereinshoodie_v2_Artwork-Blatt.pdf', 'Vereinshoodie_v2/Farben.csv', 'Vereinshoodie_v2/LIESMICH.txt'])
+    assert(names.includes(e), `fehlt im ZIP: ${e} (vorhanden: ${names.join(', ')})`);
   const svgW = strFromU8(files['Vereinshoodie_v2/Motive/Vereinshoodie_v2_Brustlogo_Weiss.svg']);
   assert(/width="100mm"/.test(svgW) && svgW.includes('#c8102e') && !svgW.includes('#f5c518'), 'Variante Weiß falsch');
   const png = Buffer.from(files['Vereinshoodie_v2/Motive/Vereinshoodie_v2_Brustlogo_Schwarz.png']);
@@ -1085,7 +1107,10 @@ await step('Neue Zeichenwerkzeuge: Bogen (3 Punkte und Mittelpunkt), Vieleck, St
     return { penClosed: pen?.contours[0].closed, penCurved: pen?.contours[0].nodes.some((n) => n.ox !== undefined), sweeps };
   });
   assert(info.penClosed && info.penCurved, `Pfad: ${JSON.stringify(info)}`);
-  assert(info.sweeps.some((s) => Math.abs(s - 180) < 1), `Mittelpunktbogen: ${info.sweeps}`);
+  assert(
+    info.sweeps.some((s) => Math.abs(s - 180) < 1),
+    `Mittelpunktbogen: ${info.sweeps}`,
+  );
   results.push(`   Bögen ${info.sweeps.map((s) => s.toFixed(0) + '°').join(', ')}, Vieleck, Stern, Ellipse, geschlossener Bézierpfad`);
 });
 
@@ -1093,7 +1118,15 @@ await step('Textil-Effekte: Halbton aus Verlauf, Used-Look über die Leiste', as
   await newDoc();
   const ids = await app(() => {
     const ed = window.vektordesign.editor;
-    const fade = { kind: 'linear', stops: [{ offset: 0, color: '#1f3a93', opacity: 1 }, { offset: 1, color: '#1f3a93', opacity: 0 }], from: { x: 0, y: 0.5 }, to: { x: 1, y: 0.5 } };
+    const fade = {
+      kind: 'linear',
+      stops: [
+        { offset: 0, color: '#1f3a93', opacity: 1 },
+        { offset: 1, color: '#1f3a93', opacity: 0 },
+      ],
+      from: { x: 0, y: 0.5 },
+      to: { x: 1, y: 0.5 },
+    };
     const a = ed.createRectangle({ pos: { x: -40, y: -15 } }, { pos: { x: 40, y: 15 } }, 'corner', { style: { fill: fade, stroke: null, strokeWidth: 0.5, opacity: 1 } });
     const b = ed.createRectangle({ pos: { x: -40, y: -45 } }, { pos: { x: 40, y: -22 } }, 'corner', { style: { fill: '#c8102e', stroke: null, strokeWidth: 0.5, opacity: 1 } });
     return [a.pathId, b.pathId];
@@ -1214,13 +1247,51 @@ await step('Import: SVG (aus Illustrator/Inkscape) und DXF (CAD/Schnittmuster) a
   await newDoc();
   const res = await app(async () => {
     const a = window.vektordesign;
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="60mm" height="30mm" viewBox="0 0 60 30"><rect width="60" height="30" rx="6" fill="#2f9e5b"/><path d="M10 25 C20 0 40 0 50 25" fill="none" stroke="#ffffff" stroke-width="3"/></svg>';
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="60mm" height="30mm" viewBox="0 0 60 30"><rect width="60" height="30" rx="6" fill="#2f9e5b"/><path d="M10 25 C20 0 40 0 50 25" fill="none" stroke="#ffffff" stroke-width="3"/></svg>';
     const ok1 = await a.importVector({ name: 'logo.svg', data: new TextEncoder().encode(svg) });
     const b1 = a.bbox();
-    const dxf = ['0', 'SECTION', '2', 'ENTITIES', '0', 'LINE', '8', '0', '10', '0', '20', '0', '11', '100', '21', '0', '0', 'ARC', '8', '0', '10', '50', '20', '0', '40', '50', '50', '0', '51', '180', '0', 'ENDSEC', '0', 'EOF'].join('\n');
+    const dxf = [
+      '0',
+      'SECTION',
+      '2',
+      'ENTITIES',
+      '0',
+      'LINE',
+      '8',
+      '0',
+      '10',
+      '0',
+      '20',
+      '0',
+      '11',
+      '100',
+      '21',
+      '0',
+      '0',
+      'ARC',
+      '8',
+      '0',
+      '10',
+      '50',
+      '20',
+      '0',
+      '40',
+      '50',
+      '50',
+      '0',
+      '51',
+      '180',
+      '0',
+      'ENDSEC',
+      '0',
+      'EOF',
+    ].join('\n');
     a.editor.newDocument();
     const ok2 = await a.importVector({ name: 'schnitt.dxf', data: new TextEncoder().encode(dxf) });
-    const kinds = Object.values(a.store.getState().doc.entities).map((e) => e.kind).sort();
+    const kinds = Object.values(a.store.getState().doc.entities)
+      .map((e) => e.kind)
+      .sort();
     return { ok1, ok2, w: b1.maxX - b1.minX, h: b1.maxY - b1.minY, kinds };
   });
   assert(res.ok1 && Math.abs(res.w - 60) < 0.01 && Math.abs(res.h - 30) < 0.01, `SVG-Import: ${JSON.stringify(res)}`);
@@ -1313,19 +1384,33 @@ await step('iPad: Touch-Gesten (Zwei-Finger-Zoom, Zwei-/Drei-Finger-Tipp, langes
   const coarse = await ipad(() => matchMedia('(pointer: coarse)').matches);
   // Zwei-Finger-Zoom
   const z0 = await ipad(() => window.vektordesign.store.getState().view.zoom);
-  await touch(ipadCdp, 'touchStart', [[500, 400], [600, 400]]);
-  for (let i = 1; i <= 8; i++) await touch(ipadCdp, 'touchMove', [[500 - i * 12, 400], [600 + i * 12, 400]]);
+  await touch(ipadCdp, 'touchStart', [
+    [500, 400],
+    [600, 400],
+  ]);
+  for (let i = 1; i <= 8; i++)
+    await touch(ipadCdp, 'touchMove', [
+      [500 - i * 12, 400],
+      [600 + i * 12, 400],
+    ]);
   await touch(ipadCdp, 'touchEnd', []);
   const z1 = await ipad(() => window.vektordesign.store.getState().view.zoom);
   assert(z1 > z0 * 1.6, `Zoom ${z0} → ${z1}`);
   // Zwei-Finger-Tipp = Rückgängig, Drei-Finger-Tipp = Wiederholen
   const n0 = await ipad(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
-  await touch(ipadCdp, 'touchStart', [[300, 300], [360, 300]]);
+  await touch(ipadCdp, 'touchStart', [
+    [300, 300],
+    [360, 300],
+  ]);
   await touch(ipadCdp, 'touchEnd', []);
   await sleep(150);
   const n1 = await ipad(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
   assert(n1 < n0, `Zwei-Finger-Tipp hat nicht rückgängig gemacht (${n0} → ${n1})`);
-  await touch(ipadCdp, 'touchStart', [[300, 300], [360, 300], [420, 300]]);
+  await touch(ipadCdp, 'touchStart', [
+    [300, 300],
+    [360, 300],
+    [420, 300],
+  ]);
   await touch(ipadCdp, 'touchEnd', []);
   await sleep(150);
   const n2 = await ipad(() => Object.keys(window.vektordesign.store.getState().doc.entities).length);
@@ -1355,7 +1440,11 @@ await step('iPad: Apple Pencil zeichnet freihand, Formerkennung macht daraus ein
   }
   await pen(ipadCdp, pts);
   await sleep(200);
-  const circles = await ipad(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'circle').map((e) => e.r));
+  const circles = await ipad(() =>
+    Object.values(window.vektordesign.store.getState().doc.entities)
+      .filter((e) => e.kind === 'circle')
+      .map((e) => e.r),
+  );
   assert(circles.length === 1 && Math.abs(circles[0] - 20) < 1.5, `Kreise: ${JSON.stringify(circles)}`);
   await ipadPage.screenshot({ path: join(OUT, '41-ipad-pencil-kreis.png') });
   // Handballen: Finger-Strich verschiebt nur
@@ -1448,7 +1537,12 @@ await step('Abnahme M4: dasselbe Projekt auf dem iPad mit dem Pencil weiterbearb
     window.__cloud = { text: t, mtime: window.__cloud.mtime + 1 };
   }, ipadText);
   await page.waitForFunction(() => Object.values(window.vektordesign.store.getState().doc.entities).some((e) => e.kind === 'circle'), { timeout: 8000 });
-  const toast = await app(() => window.vektordesign.store.getState().toasts.map((t) => t.text).join(' | '));
+  const toast = await app(() =>
+    window.vektordesign.store
+      .getState()
+      .toasts.map((t) => t.text)
+      .join(' | '),
+  );
   assert(toast.includes('iPad'), `Kein Hinweis auf iPad: ${toast}`);
   await page.keyboard.press('f');
   await sleep(200);
@@ -1589,11 +1683,20 @@ await step('Bild vektorisieren: Logo-Bild wird zu Formen je Farbe in Originalgr�
   await page.keyboard.type('3');
   await page.click('[data-testid="param-ok"]');
   await page.waitForFunction(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'shape').length >= 2, { timeout: 15000 });
-  const shapes = await app(() => Object.values(window.vektordesign.store.getState().doc.entities).filter((e) => e.kind === 'shape').map((e) => e.style.fill));
+  const shapes = await app(() =>
+    Object.values(window.vektordesign.store.getState().doc.entities)
+      .filter((e) => e.kind === 'shape')
+      .map((e) => e.style.fill),
+  );
   assert(shapes.length === 2, `Formen: ${shapes}`);
   const dbg = await app(() => {
     const d = window.vektordesign.store.getState().doc;
-    return JSON.stringify({ layers: d.layers, shapes: Object.values(d.entities).filter((e) => e.kind === 'shape').map((e) => ({ l: e.layer, n: e.contours.length, nodes: e.contours[0]?.nodes.length, a: d.points[e.anchor] })) });
+    return JSON.stringify({
+      layers: d.layers,
+      shapes: Object.values(d.entities)
+        .filter((e) => e.kind === 'shape')
+        .map((e) => ({ l: e.layer, n: e.contours.length, nodes: e.contours[0]?.nodes.length, a: d.points[e.anchor] })),
+    });
   });
   const b = await app(() => window.vektordesign.bbox());
   assert(b, `kein Rahmen: ${dbg}`);
@@ -1624,7 +1727,12 @@ await step('Preflight: feine Linie für Stick und Plotter markiert, Logo für DT
   await shot('60-preflight-stick');
   await page.select('[data-testid="preflight-target"]', 'dtg');
   await page.waitForFunction(() => window.vektordesign.ui.getState().preflight?.result?.target === 'dtg' && !window.vektordesign.ui.getState().preflight.busy);
-  const ok = await app(() => window.vektordesign.ui.getState().preflight.result.issues.filter((i) => !/^Kontrast/.test(i.message)).map((i) => i.severity));
+  const ok = await app(() =>
+    window.vektordesign.ui
+      .getState()
+      .preflight.result.issues.filter((i) => !/^Kontrast/.test(i.message))
+      .map((i) => i.severity),
+  );
   assert(!ok.includes('error') && !ok.includes('warn'), `DTG sollte passen: ${ok}`);
   await app(() => window.vektordesign.closePreflight());
   await page.click('[data-testid="ribbon-sketch"]');
@@ -1640,12 +1748,17 @@ await step('Claude ohne API-Schlüssel: Auftrag kopieren, Antwort aus claude.ai 
   await page.waitForSelector('.bridge-prompt');
   const prompt = await page.$eval('.bridge-prompt textarea', (e) => e.value);
   assert(prompt.includes('```vektordesign') && prompt.includes('Rechteck 80 × 40'), 'Auftrag unvollständig');
-  const reply = 'Fertig:\n```vektordesign\n[{"tool":"draw_rectangle","input":{"x":0,"y":0,"width":80,"height":40,"anchor":"center","fill":"#1f3a93"}},{"tool":"draw_circle","input":{"cx":3,"cy":2,"diameter":10,"fill":"#f5c518"}},{"tool":"add_constraint","input":{"type":"concentric","targets":["$2","$1.center"]}}]\n```';
-  await page.$eval('[data-testid="bridge-reply"]', (el, v) => {
-    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-    set.call(el, v);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-  }, reply);
+  const reply =
+    'Fertig:\n```vektordesign\n[{"tool":"draw_rectangle","input":{"x":0,"y":0,"width":80,"height":40,"anchor":"center","fill":"#1f3a93"}},{"tool":"draw_circle","input":{"cx":3,"cy":2,"diameter":10,"fill":"#f5c518"}},{"tool":"add_constraint","input":{"type":"concentric","targets":["$2","$1.center"]}}]\n```';
+  await page.$eval(
+    '[data-testid="bridge-reply"]',
+    (el, v) => {
+      const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+      set.call(el, v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+    reply,
+  );
   await page.click('[data-testid="bridge-run"]');
   await sleep(300);
   const st = await statusText();
@@ -1697,6 +1810,56 @@ await step('Leistung: 150 Rechtecke mit Bemaßungen, Ziehen bleibt flüssig', as
   });
   results.push(`   Zoom-Neuzeichnen mit 600 Linien: ${fps} Bilder/s`);
   await shot('14-leistung');
+});
+
+await step('Schnitt: Neues Projekt „Schnittmuster“, zwei Vierecke zu Schnittteilen, Kanten mit „Verbinden“ vernähen, Grundschnitt Hoodie', async () => {
+  await app(() => window.vektordesign.editor.store.setState({ dirty: false }));
+  await page.keyboard.down('Control');
+  await page.keyboard.press('n');
+  await page.keyboard.up('Control');
+  await page.waitForSelector('[data-testid="new-project"]', { timeout: 3000 });
+  await page.click('[data-testid="new-pattern"]');
+  await page.waitForSelector('[data-testid="pattern-panel"]', { timeout: 3000 });
+  await app(() => {
+    const a = window.vektordesign;
+    const r1 = a.editor.createRectangle({ pos: { x: 0, y: 0 } }, { pos: { x: 200, y: 300 } }, 'corner');
+    const r2 = a.editor.createRectangle({ pos: { x: 300, y: 0 } }, { pos: { x: 500, y: 300 } }, 'corner');
+    a.editor.select([r1.pathId, r2.pathId]);
+    a.editor.zoomToFit();
+  });
+  await page.click('[data-testid="pattern-make-piece"]');
+  await sleep(150);
+  assert((await app(() => window.vektordesign.store.getState().doc.pattern.pieces.length)) === 2, 'Zwei Schnittteile erwartet');
+  // Werkzeug per Taste J, dann rechte Kante des linken und linke Kante des rechten Vierecks
+  await app(() => window.vektordesign.editor.select([]));
+  await page.mouse.click(5, 5);
+  await page.keyboard.press('j');
+  assert((await app(() => window.vektordesign.store.getState().tool)) === 'seam', 'Naht-Werkzeug nicht aktiv');
+  await clickWorld(200, 150);
+  await clickWorld(300, 150);
+  await sleep(150);
+  const seam = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return d.pattern.seams.length;
+  });
+  assert(seam === 1, `Eine Naht erwartet, gefunden: ${seam}`);
+  const summary = await page.$eval('[data-testid="seam-summary"]', (e) => e.textContent);
+  assert(/Alle 1 Nähte passen/.test(summary), `Nahtprüfung: ${summary}`);
+  await shot('15-schnitt-naht');
+  await page.keyboard.press('Escape');
+  // Grundschnitt Hoodie aus Körpermaßen
+  await page.select('[data-testid="block-kind"]', 'hoodie');
+  await page.select('[data-testid="block-size"]', 'H-L');
+  await page.click('[data-testid="block-generate"]');
+  await sleep(300);
+  const info = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return { pieces: d.pattern.pieces.length, seams: d.pattern.seams.length };
+  });
+  assert(info.pieces === 2 + 7 && info.seams === 1 + 25, `Hoodie: ${JSON.stringify(info)}`);
+  const summary2 = await page.$eval('[data-testid="seam-summary"]', (e) => e.textContent);
+  assert(/Alle 26 Nähte passen/.test(summary2), `Nahtprüfung Hoodie: ${summary2}`);
+  await shot('16-schnitt-hoodie');
 });
 
 await browser.close();

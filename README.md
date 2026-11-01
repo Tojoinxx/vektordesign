@@ -152,6 +152,16 @@ Produktion-Bereich:
 
 Export-Dialog: **Je Farbe eine Datei** (für mehrfarbiges Plotten und Siebe, alle mit gleichem Rahmen) und **Entgitterungsrahmen** mit Linien zwischen Motivteilen.
 
+### Schnittmuster (Tab „Schnitt“)
+
+Grundlage für die 3D-Passform in **Vektordesign 3D** (nächster Meilenstein). Über **Datei → Neues Projekt** (`Strg+N`) wählst du die Projektart: *2D-Motiv* oder *Schnittmuster* (*3D-Modell* folgt).
+
+- **Grundschnitt aus Maßen:** T-Shirt, Longsleeve, Sweatshirt oder Hoodie aus der Maßtabelle (Herren/Unisex XS–3XL, Damen XS–XL) oder eigenen Körpermaßen, Passform schmal/normal/weit, Länge und Ärmel einstellbar. Erzeugt alle Teile mit fertig verbundenen Nähten; die Ärmelkugel passt exakt ins Armloch. „Aktualisieren“ ersetzt nur die erzeugten Teile.
+- **Eigene Teile:** jede geschlossene Kontur (Linienzug, Bögen, Zeichenstift) wie gewohnt zeichnen und bemaßen, auswählen, **Aus Auswahl** – fertig. Teile folgen allen späteren Bemaßungen.
+- **Nähte verbinden** (`J`): erste Kante anklicken, zweite Kante anklicken. Bei gegengleichen Teilen (2×) wird automatisch die freie Seite genommen. Nähte erscheinen farbig mit Nummer: grün = gleich lang, violett = Bündchen wird gedehnt, rot = Längen passen nicht (mit Differenz in mm).
+- Je Teil: Rolle in 3D, Zuschnitt 1× / 2× gegengleich, Nahtzugabe (gestrichelt angezeigt), Fadenlauf, Stoff. Stoffe mit Art, Farbe und Flächengewicht; Stoffbedarf in m².
+- **DXF-Export** der Schnittteile mit Schnittlinie, Nahtlinie, Fadenlauf, Passzeichen und Beschriftung. Schnittteile liegen auf einer eigenen Ebene „Schnitt“ und gehören nie zum Motiv-Export.
+
 ### Bibliothek
 
 Im Bereich **Bibliothek** der Seitenleiste: Auswahl als Element oder Logo speichern und in jedem Projekt per Klick einfügen; Farbpaletten aus der Zeichnung, aus einem Bild oder als Farbharmonie anlegen; ein Farbfeld färbt die Auswahl (Alt oder Rechtsklick: Kontur). **Format übertragen** (Gestalten-Gruppe) überträgt Füllung, Kontur und Linienart per Klick. Die Bibliothek lässt sich als `.vdlib`-Datei sichern und auf anderen Geräten laden.
@@ -228,7 +238,7 @@ Optional beim Export: Rand inklusive Konturstärke und horizontal spiegeln (Flex
 | `X` | Stutzen | | `Strg+Umschalt+]` / `[` | Ganz nach vorne / hinten |
 | `E` | Dehnen | | `Strg+G` | Gruppieren |
 | `O` | Versatz | | `Strg+Umschalt+G` | Gruppierung aufheben |
-| `M` | Messen | | | |
+| `M` | Messen | | `J` | Naht verbinden (Schnitt) |
 | `S` | Freihandskizze mit Formerkennung | | | |
 | `A` | Bogen (3 Punkte; Mittelpunktbogen im Werkzeugmenü) | | | |
 | `N` | Vieleck (erneuter Klick: Umkreis/Inkreis) | | | |
@@ -263,7 +273,8 @@ src/
   store/      Zustand und Editor-Befehle mit Rückgängig/Wiederholen
   render/     Canvas-Darstellung: Raster, Maßband-Lineale, Bemaßungen, Glyphen
   tools/      Werkzeuge: Auswahl, Zeichnen, Bemaßung, Abhängigkeiten, Verlauf, Stutzen/Dehnen, Messen, Fang
-  export/     SVG, PDF, EPS, DXF, PNG, Artwork-Blatt und ZIP-Paket
+  pattern/    Schnitt: Körpermaße, Grundschnitt-Generator, Kanten/Nähte/Nahtzugabe, Austauschformat für 3D
+  export/     SVG, PDF, EPS, DXF, PNG, Artwork-Blatt, ZIP-Paket, Schnitt-DXF
   assistant/  Claude-Anbindung (Messages-API mit Werkzeugen und Bildern)
   design/     Stilvorschläge
   platform/   Dateien, Schriftarten und -umrisse, PDF-Vorlagen-Import, Zwischenspeicher
@@ -297,6 +308,9 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 3. ✅ LabwearOS-Export: Vorlagen-Import, Platzierung auf dem Kleidungsstück, Artwork-Blatt, Export-Profile, ZIP-Paket
 4. ✅ iPad: installierbare Web-App, Touch- und Apple-Pencil-Bedienung, Formerkennung, Sync über iCloud Drive/OneDrive
 5. ✅ Textil- und Komfortfunktionen: Preflight, Mockups, Vektorisieren, DTF-Sammelbogen, Siebdruck-Filme, Größenstaffel, Halbton, Used-Look, Rapport, Kostenschätzung, Generatoren, Symmetrie, Bibliothek, SVG-/DXF-Import
+6. ✅ Schnitt: Projektart wählen, Grundschnitt aus Körpermaßen, eigene Schnittteile, Nähte verbinden und prüfen, Stoffe, Schnitt-DXF
+7. Vektordesign 3D: Körper aus Maßen, Teile drapieren, Passform-Karte, Teile einfärben, Materialien, Motive auf dem 3D-Modell
+8. Tech-Pack automatisch aus dem fertigen Modell, Referenzen per Drag & Drop
 
 ## Lizenz
 
