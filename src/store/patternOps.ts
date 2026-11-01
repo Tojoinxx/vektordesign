@@ -1,4 +1,4 @@
-import type { BodyMeasures, EdgeRef, Id, Pattern, PatternBlock, PatternMaterial, PatternPiece, PieceRole, SketchDoc, Style, Vec2 } from '../model/types';
+import type { BodyMeasures, EdgeRef, Id, Pattern, PatternAvatar, PatternBlock, PatternMaterial, PatternPiece, PieceRole, SketchDoc, Style, Vec2 } from '../model/types';
 import { deleteIds, newId } from '../model/doc';
 import { DEFAULT_LAYER, layersOf } from '../model/layers';
 import { addShapeFromWorld } from '../model/shape';
@@ -279,3 +279,11 @@ export function setBody(ed: Editor, body: BodyMeasures, bodySize: string): Commi
 }
 
 export const sizeName = (id: string) => (id === 'custom' ? 'Eigene Maße' : (SIZE_TABLE.find((r) => r.id === id)?.name ?? id));
+
+/** Puppe für die 3D-Ansicht (null = Körpermaße des Schnitts). */
+export function setAvatar(ed: Editor, avatar: PatternAvatar | null): CommitOutcome {
+  return updatePattern(ed, avatar ? 'Puppe ändern' : 'Puppe wie Schnitt', (p) => {
+    if (avatar) p.avatar = { ...avatar };
+    else delete p.avatar;
+  });
+}

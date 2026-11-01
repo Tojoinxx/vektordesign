@@ -8,6 +8,8 @@ import type { SimOptions, SimStats } from '../sim3d/garment';
 import { buildMannequin, mannequinMesh, type Mannequin } from '../sim3d/body';
 import type { FromWorker, LayoutPart, ToWorker } from '../sim3d/protocol';
 import { SimRunner } from '../sim3d/runner';
+import { avatarBody, genderOfSize } from '../sim3d/avatar';
+import { bodyForSize } from '../pattern/body';
 import { fabricLook, fabricNormalMap, fabricTileMm } from './textures';
 
 /**
@@ -238,12 +240,14 @@ export class GarmentViewer {
       this.parts = [];
       this.simKey = '';
       this.stats = null;
-      this.setBody(doc.pattern?.body ?? null);
+      const av = doc.pattern?.avatar;
+      this.setBody(av ? avatarBody(av) : (doc.pattern?.body ?? bodyForSize('H-M')), av?.gender ?? genderOfSize(doc.pattern?.bodySize ?? 'H-M'));
       this.status({ state: 'empty', stats: null, parts: 0, vertices: 0, message: 'Noch keine Schnittteile. Im Tab „Schnitt“ einen Grundschnitt erzeugen oder Teile anlegen.' });
       return;
     }
     const key = JSON.stringify([
       ex.body,
+      ex.gender,
       ex.pieces.map((p) => [p.id, p.role, p.cut, p.material, p.polygon, p.edges.map((e) => [e.from, e.to])]),
       ex.seams.map((s) => [s.a, s.b, s.reversed]),
       ex.materials.map((m) => [m.id, m.fabric, m.gsm]),
@@ -251,8 +255,8 @@ export class GarmentViewer {
     ]);
     if (key !== this.simKey) {
       this.simKey = key;
-      const bodyChanged = !this.mq || JSON.stringify(this.mq.measures) !== JSON.stringify(ex.body);
-      if (bodyChanged) this.setBody(ex.body);
+      const bodyChanged = !this.mq || this.mq.gender !== ex.gender || JSON.stringify(this.mq.measures) !== JSON.stringify(ex.body);
+      if (bodyChanged) this.setBody(ex.body, ex.gender);
       this.stats = null;
       this.gap = this.strain = null;
       this.runId++;
@@ -306,14 +310,14 @@ export class GarmentViewer {
     if (m.stats.settled && this.opts.mode === 'fit') this.updateFitColors();
   }
 
-  private setBody(body: PatternExchange['body'] | null): void {
+  private setBody(body: PatternExchange['body'] | null, gender: 'male' | 'female' = 'male'): void {
     if (this.bodyMesh) {
       this.scene.remove(this.bodyMesh);
       this.bodyMesh.geometry.dispose();
       (this.bodyMesh.material as THREE.Material).dispose();
       this.bodyMesh = null;
     }
-    this.mq = body ? buildMannequin(body) : null;
+    this.mq = body ? buildMannequin(body, gender) : null;
     if (!this.mq) return;
     // Etwas kleiner zeichnen als die Kollision: Stoff liegt sichtbar auf, nichts sticht durch
     const data = mannequinMesh(this.mq, 4);

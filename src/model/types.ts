@@ -472,7 +472,20 @@ export interface PatternBlock {
   sleeve: number;
 }
 
+/** Puppe zum Anprobieren (unabhängig von der Größe des Schnitts). */
+export interface PatternAvatar {
+  gender: 'male' | 'female';
+  /** Ausgangsgröße aus der Maßtabelle */
+  base: string;
+  /** Körpergröße in mm */
+  height: number;
+  /** Körperbau −1 (schlank) … +1 (kräftig) */
+  build: number;
+}
+
 export interface Pattern {
+  /** Puppe für die 3D-Ansicht (fehlt = Körpermaße des Schnitts) */
+  avatar?: PatternAvatar;
   pieces: PatternPiece[];
   seams: Seam[];
   materials: PatternMaterial[];

@@ -1,5 +1,6 @@
 import { produce } from 'immer';
-import type { Id, PatternMaterial, PatternPiece, SketchDoc } from '../model/types';
+import type { Id, PatternAvatar, PatternMaterial, PatternPiece, SketchDoc } from '../model/types';
+import { emptyPattern } from './geometry';
 
 /**
  * Reine Änderungsfunktionen für Aussehen-Angaben aus der 3D-Ansicht (Farbe und Stoff je Teil, Stoffe).
@@ -47,4 +48,13 @@ export function materialInto(d: SketchDoc, id: Id, patch: MaterialPatch): void {
       if (e) e.style.fill = patch.color;
     }
   }
+}
+
+/** Puppe setzen (null = wieder Körpermaße des Schnitts). */
+export function applyAvatar(doc: SketchDoc, avatar: PatternAvatar | null): SketchDoc {
+  return produce(doc, (d) => {
+    if (!d.pattern) d.pattern = emptyPattern();
+    if (avatar) d.pattern.avatar = { ...avatar };
+    else delete d.pattern.avatar;
+  });
 }

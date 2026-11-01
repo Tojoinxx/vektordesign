@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useRef } from 'react';
 import { useApp, useAppState, useUi } from './hooks';
 import { resolveTheme } from './appearance';
-import { setPieceLook, updateMaterial } from '../store/patternOps';
+import { setAvatar, setPieceLook, updateMaterial } from '../store/patternOps';
 
 const ViewerPanel = lazy(() => import('../viewer3d/ViewerPanel'));
 
@@ -64,6 +64,7 @@ export function Preview3D() {
             if (!out.ok && out.message) ed.toast(out.message, 'error');
           }}
           onMaterial={(id, patch) => void updateMaterial(ed, id, patch)}
+          onAvatar={(a) => void setAvatar(ed, a)}
           onSnapshot={(url) => void app.saveSnapshot3D(url)}
           onClose={() => app.ui.setState({ preview3d: false })}
           onPopOut={() => app.openWindow3D()}

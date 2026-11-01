@@ -10,7 +10,7 @@ import { FormatTool } from '../tools/formatTool';
 import { SeamTool } from '../tools/seamTool';
 import { exportPatternDxf } from '../export/patternDxf';
 import { openChannel, type BridgeMessage } from '../viewer3d/bridge';
-import { setPieceLook, updateMaterial } from '../store/patternOps';
+import { setAvatar, setPieceLook, updateMaterial } from '../store/patternOps';
 import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
 import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
 import { createAppStore, type AppStore, type ToolId } from '../store/state';
@@ -1083,6 +1083,7 @@ export class AppController {
       } else if (m.type === 'bye') this.peer3d = false;
       else if (m.type === 'piece') setPieceLook(ed, m.pieceId, m.patch);
       else if (m.type === 'material') updateMaterial(ed, m.materialId, m.patch);
+      else if (m.type === 'avatar') setAvatar(ed, m.avatar);
       else if (m.type === 'select') {
         const pc = m.pieceId ? ed.s.doc.pattern?.pieces.find((p) => p.id === m.pieceId) : null;
         ed.select(pc ? [pc.outline] : []);

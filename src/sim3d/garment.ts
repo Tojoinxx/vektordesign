@@ -114,7 +114,7 @@ export class GarmentSim {
     this.substeps = opts.substeps ?? 12;
     this.sewTime = opts.sewTime ?? 1.4;
     this.thickness = opts.thickness ?? 3;
-    this.mq = buildMannequin(ex.body);
+    this.mq = buildMannequin(ex.body, ex.gender ?? 'male');
     // Teile vernetzen
     let total = 0;
     for (const piece of ex.pieces) {

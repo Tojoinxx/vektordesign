@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, ExternalLink, Eye, EyeOff, Gauge, Loader2, Palette, RotateCcw, Shirt, X } from 'lucide-react';
-import type { Id, PatternMaterial, SketchDoc } from '../model/types';
+import { Camera, ExternalLink, Eye, EyeOff, Gauge, Loader2, Palette, PersonStanding, RotateCcw, Shirt, X } from 'lucide-react';
+import type { Id, PatternAvatar, PatternMaterial, SketchDoc } from '../model/types';
+import { HEIGHT_RANGE, avatarBody, buildLabel, defaultAvatar, genderOfSize, sizesFor } from '../sim3d/avatar';
+import { bodyForSize } from '../pattern/body';
 import { productionOf } from '../model/production';
 import { FABRICS } from '../store/patternOps';
 import { ColorButton } from '../ui/ColorPicker';
@@ -20,6 +22,8 @@ export interface ViewerPanelProps {
   onSelect: (pieceId: Id | null) => void;
   onPieceLook: (pieceId: Id, patch: PieceLookPatch) => void;
   onMaterial: (materialId: Id, patch: MaterialPatch) => void;
+  /** Puppe ändern (null = Körpermaße des Schnitts) */
+  onAvatar: (avatar: PatternAvatar | null) => void;
   onSnapshot: (dataUrl: string) => void;
   onClose?: () => void;
   onPopOut?: () => void;
@@ -38,6 +42,7 @@ export default function ViewerPanel(p: ViewerPanelProps) {
   const [variant, setVariant] = useState<string | null>(null);
   const [quality, setQuality] = useState<'preview' | 'high'>('preview');
   const [glError, setGlError] = useState<string | null>(null);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const onSelect = useRef(p.onSelect);
   onSelect.current = p.onSelect;
 
@@ -101,6 +106,15 @@ export default function ViewerPanel(p: ViewerPanelProps) {
           ¾
         </button>
         <span className="sep" />
+        <button
+          className={`icon-btn ${avatarOpen ? 'on' : ''}`}
+          onClick={() => setAvatarOpen((o) => !o)}
+          title="Puppe: männlich/weiblich, Körpergröße, Körperbau"
+          aria-label="Puppe einstellen"
+          data-testid="v3-avatar"
+        >
+          <PersonStanding size={16} />
+        </button>
         <button className={`icon-btn ${body ? '' : 'on'}`} onClick={() => setBody((b) => !b)} title={body ? 'Puppe ausblenden' : 'Puppe einblenden'} aria-label="Puppe ein/aus" data-testid="v3-body">
           {body ? <Eye size={16} /> : <EyeOff size={16} />}
         </button>
@@ -163,6 +177,7 @@ export default function ViewerPanel(p: ViewerPanelProps) {
             ))}
           </select>
         )}
+        {avatarOpen && <AvatarControls doc={p.doc} onAvatar={p.onAvatar} onClose={() => setAvatarOpen(false)} />}
         <label className="v3-quality check small">
           <input type="checkbox" checked={quality === 'high'} onChange={(e) => setQuality(e.target.checked ? 'high' : 'preview')} /> Fein
         </label>
@@ -227,5 +242,110 @@ export function FabricSelect({ m, onChange }: { m: PatternMaterial; onChange: (p
         </option>
       ))}
     </select>
+  );
+}
+
+/** Puppe einstellen: Geschlecht, Ausgangsgröße, Körpergröße und Körperbau (Regler). */
+function AvatarControls({ doc, onAvatar, onClose }: { doc: SketchDoc; onAvatar: (a: PatternAvatar | null) => void; onClose: () => void }) {
+  const pat = doc.pattern;
+  const current: PatternAvatar =
+    pat?.avatar ??
+    (() => {
+      const g = genderOfSize(pat?.bodySize ?? 'H-M');
+      const base = pat?.bodySize && pat.bodySize !== 'custom' ? pat.bodySize : defaultAvatar(g).base;
+      return { gender: g, base, height: pat?.body.height ?? bodyForSize(base).height, build: 0 };
+    })();
+  const [draft, setDraft] = useState<PatternAvatar>(current);
+  const key = JSON.stringify(current);
+  useEffect(() => setDraft(JSON.parse(key) as PatternAvatar), [key]);
+  const commit = (a: PatternAvatar) => {
+    if (JSON.stringify(a) !== key || !pat?.avatar) onAvatar(a);
+  };
+  const b = avatarBody(draft);
+  const cm = (v: number) => Math.round(v / 10);
+  return (
+    <div className="v3-avatar" data-testid="v3-avatar-panel" onKeyDown={(e) => e.stopPropagation()}>
+      <div className="row">
+        <strong className="spacer">Puppe</strong>
+        <button className="icon-btn" onClick={onClose} aria-label="Schließen">
+          <X size={15} />
+        </button>
+      </div>
+      <div className="seg wide" role="radiogroup" aria-label="Geschlecht">
+        {(['female', 'male'] as const).map((g) => (
+          <button
+            key={g}
+            className={draft.gender === g ? 'on' : ''}
+            data-testid={`v3-gender-${g}`}
+            onClick={() => {
+              const d = defaultAvatar(g);
+              const next = { ...d, build: draft.build };
+              setDraft(next);
+              commit(next);
+            }}
+          >
+            {g === 'female' ? 'Weiblich' : 'Männlich'}
+          </button>
+        ))}
+      </div>
+      <label className="v3-field">
+        <span>Ausgangsgröße</span>
+        <select
+          value={draft.base}
+          aria-label="Ausgangsgröße"
+          onChange={(e) => {
+            const next = { ...draft, base: e.target.value, height: bodyForSize(e.target.value).height };
+            setDraft(next);
+            commit(next);
+          }}
+        >
+          {sizesFor(draft.gender).map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="v3-field">
+        <span>
+          Körpergröße <b>{cm(draft.height)} cm</b>
+        </span>
+        <input
+          type="range"
+          min={HEIGHT_RANGE.min}
+          max={HEIGHT_RANGE.max}
+          step={10}
+          value={draft.height}
+          data-testid="v3-height"
+          onChange={(e) => setDraft({ ...draft, height: Number(e.target.value) })}
+          onPointerUp={() => commit(draft)}
+          onKeyUp={() => commit(draft)}
+        />
+      </label>
+      <label className="v3-field">
+        <span>
+          Körperbau <b>{buildLabel(draft.build)}</b>
+        </span>
+        <input
+          type="range"
+          min={-1}
+          max={1}
+          step={0.05}
+          value={draft.build}
+          data-testid="v3-build"
+          onChange={(e) => setDraft({ ...draft, build: Number(e.target.value) })}
+          onPointerUp={() => commit(draft)}
+          onKeyUp={() => commit(draft)}
+        />
+      </label>
+      <p className="muted small">
+        Brust {cm(b.chest)} · Taille {cm(b.waist)} · Hüfte {cm(b.hip)} cm
+      </p>
+      {pat?.avatar && (
+        <button className="link-btn small" onClick={() => onAvatar(null)} title="Puppe wieder mit den Körpermaßen des Schnitts">
+          Maße wie Schnitt
+        </button>
+      )}
+    </div>
   );
 }

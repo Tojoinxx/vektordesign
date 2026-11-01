@@ -3214,3 +3214,39 @@ body {
     border-top: 1px solid var(--line);
   }
 }
+.v3-avatar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: min(260px, calc(100% - 16px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--chrome);
+  box-shadow: var(--shadow);
+  z-index: 2;
+}
+.v3-avatar .seg.wide {
+  display: flex;
+}
+.v3-avatar .seg.wide button {
+  flex: 1;
+  justify-content: center;
+}
+.v3-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.v3-field input[type='range'] {
+  width: 100%;
+  accent-color: var(--tape-dark);
+}
+.v3-avatar p {
+  margin: 0;
+}

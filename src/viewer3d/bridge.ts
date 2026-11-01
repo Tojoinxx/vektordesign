@@ -1,4 +1,4 @@
-import type { Id, SketchDoc } from '../model/types';
+import type { Id, PatternAvatar, SketchDoc } from '../model/types';
 import type { MaterialPatch, PieceLookPatch } from '../pattern/edit';
 
 /**
@@ -15,6 +15,7 @@ export type BridgeMessage =
   | { type: 'select'; pieceId: Id | null }
   | { type: 'piece'; pieceId: Id; patch: PieceLookPatch }
   | { type: 'material'; materialId: Id; patch: MaterialPatch }
+  | { type: 'avatar'; avatar: PatternAvatar | null }
   | { type: 'bye'; from: 'main' | '3d' };
 
 export function openChannel(onMessage: (m: BridgeMessage) => void): { post: (m: BridgeMessage) => void; close: () => void } | null {

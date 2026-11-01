@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, FolderOpen, Link2, Link2Off, Save, Scissors } from 'lucide-react';
-import type { Id, SketchDoc } from '../model/types';
+import type { Id, PatternAvatar, SketchDoc } from '../model/types';
 import { parseDoc, serializeDoc } from '../model/serialize';
 import { openFile, PNG_TYPE, PROJECT_TYPE, safeName, saveFile } from '../platform/files';
 import { readAutosave } from '../platform/autosave';
-import { applyMaterial, applyPieceLook, type MaterialPatch, type PieceLookPatch } from '../pattern/edit';
+import { applyAvatar, applyMaterial, applyPieceLook, type MaterialPatch, type PieceLookPatch } from '../pattern/edit';
 import { openChannel, type BridgeMessage } from '../viewer3d/bridge';
 import ViewerPanel, { FabricSelect } from '../viewer3d/ViewerPanel';
 import { ColorButton } from '../ui/ColorPicker';
@@ -84,6 +84,11 @@ export function App3D() {
   const material = useCallback((id: Id, patch: MaterialPatch) => {
     setDoc((d) => (d ? applyMaterial(d, id, patch) : d));
     if (live.current) chan.current?.post({ type: 'material', materialId: id, patch });
+    else setDirty(true);
+  }, []);
+  const avatar = useCallback((a: PatternAvatar | null) => {
+    setDoc((d) => (d ? applyAvatar(d, a) : d));
+    if (live.current) chan.current?.post({ type: 'avatar', avatar: a });
     else setDirty(true);
   }, []);
   const select = useCallback((id: Id | null) => {
@@ -220,6 +225,7 @@ export function App3D() {
             onSelect={select}
             onPieceLook={pieceLook}
             onMaterial={material}
+            onAvatar={avatar}
             onSnapshot={(url) => {
               const b64 = url.slice(url.indexOf(',') + 1);
               void saveFile(

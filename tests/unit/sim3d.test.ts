@@ -6,7 +6,7 @@ import { addSeam, generatePattern, makePieces } from '../../src/store/patternOps
 import { patternExchange } from '../../src/pattern/exchange';
 import { applyMaterial, applyPieceLook } from '../../src/pattern/edit';
 import { GarmentSim } from '../../src/sim3d/garment';
-import { bodyContact, buildMannequin, ellipsePerimeter, sectionAt } from '../../src/sim3d/body';
+import { bodyContact, buildMannequin, sectionAt, sectionPerimeter, sectionRadius as radiusAt } from '../../src/sim3d/body';
 import { meshPiece } from '../../src/sim3d/mesh';
 import { SimRunner } from '../../src/sim3d/runner';
 import type { FromWorker } from '../../src/sim3d/protocol';
@@ -20,17 +20,28 @@ async function garment(kind: 'tshirt' | 'hoodie' | 'sweatshirt', size = 'H-M') {
 }
 
 describe('Puppe aus Körpermaßen', () => {
-  it('Brust-, Taillen- und Hüftumfang stimmen mit den Maßen überein', () => {
-    const b = bodyForSize('H-L');
-    const mq = buildMannequin(b);
-    for (const [y, circ] of [
-      [mq.chestY, b.chest],
-      [mq.waistY, b.waist],
-      [mq.hipY, b.hip],
-    ] as const) {
-      const s = sectionAt(mq, y)!;
-      expect(ellipsePerimeter(s.a, s.b)).toBeCloseTo(circ, -1);
-    }
+  for (const [size, gender] of [
+    ['H-L', 'male'],
+    ['D-M', 'female'],
+  ] as const) {
+    it(`${gender}: Brust-, Taillen- und Hüftumfang stimmen mit den Maßen überein`, () => {
+      const b = bodyForSize(size);
+      const mq = buildMannequin(b, gender);
+      for (const [y, circ] of [
+        [mq.chestY, b.chest],
+        [mq.waistY, b.waist],
+        [mq.hipY, b.hip],
+      ] as const) {
+        const s = sectionAt(mq, y)!;
+        expect(Math.abs(sectionPerimeter(s) - circ)).toBeLessThan(circ * 0.01);
+      }
+    });
+  }
+
+  it('Weibliche Puppe hat eine Büste: vorne auf Brusthöhe tiefer als in der Mitte', () => {
+    const mq = buildMannequin(bodyForSize('D-M'), 'female');
+    const s = sectionAt(mq, mq.chestY)!;
+    expect(radiusAt(s, 0.6)).toBeGreaterThan(radiusAt(s, 0) + 5);
   });
 
   it('Kollision: Punkt im Rumpf liegt innen, Normale zeigt nach außen', () => {
@@ -112,6 +123,29 @@ describe('Stoffsimulation', () => {
     expect(layout && layout.type === 'layout' && layout.parts.length).toBe(5);
     const last = msgs[msgs.length - 1];
     expect(last.type === 'frame' && last.stats.settled && !!last.strain && !!last.gap).toBe(true);
+  }, 60000);
+});
+
+describe('Puppe zum Anprobieren', () => {
+  it('Regler: größer und kräftiger ergibt längere Maße und größere Umfänge', async () => {
+    const { avatarBody, defaultAvatar } = await import('../../src/sim3d/avatar');
+    const base = avatarBody(defaultAvatar('male'));
+    const big = avatarBody({ ...defaultAvatar('male'), height: 1950, build: 1 });
+    expect(big.backLength).toBeGreaterThan(base.backLength);
+    expect(big.waist).toBeGreaterThan(base.waist * 1.2);
+    expect(big.height).toBe(1950);
+  });
+
+  it('Weibliche, schlanke Puppe trägt einen Hoodie Herren M: Nähte zu, nichts im Körper', async () => {
+    const { ed } = await garment('hoodie');
+    const { applyAvatar } = await import('../../src/pattern/edit');
+    const d = applyAvatar(ed.s.doc, { gender: 'female', base: 'D-S', height: 1620, build: -0.6 });
+    const ex = patternExchange(d)!;
+    expect(ex.gender).toBe('female');
+    const sim = new GarmentSim(ex, { resolution: 26, substeps: 8 });
+    const st = sim.run(8);
+    expect(st.seamGap).toBeLessThan(8);
+    expect(st.inside).toBe(0);
   }, 60000);
 });
 

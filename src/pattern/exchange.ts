@@ -1,6 +1,7 @@
 import type { BodyMeasures, Id, PatternBlock, PatternMaterial, PieceRole, Seam, SketchDoc } from '../model/types';
 import { APP_NAME, APP_VERSION } from '../model/serialize';
 import { pieceGeom } from './geometry';
+import { avatarBody, genderOfSize } from '../sim3d/avatar';
 
 /**
  * Austauschformat Schnitt → „Vektordesign 3D“. Reine Zahlen, unabhängig vom Skizzenmodell:
@@ -42,7 +43,9 @@ export interface PatternExchange {
   generator: string;
   name: string;
   unit: 'mm';
+  /** Körpermaße der Puppe (eigene Puppe oder Maße des Schnitts) */
   body: BodyMeasures;
+  gender: 'male' | 'female';
   bodySize: string;
   block: PatternBlock | null;
   materials: PatternMaterial[];
@@ -95,7 +98,8 @@ export function patternExchange(doc: SketchDoc): PatternExchange | null {
     generator: `${APP_NAME} ${APP_VERSION}`,
     name: doc.name,
     unit: 'mm',
-    body: { ...pat.body },
+    body: pat.avatar ? avatarBody(pat.avatar) : { ...pat.body },
+    gender: pat.avatar?.gender ?? genderOfSize(pat.bodySize),
     bodySize: pat.bodySize,
     block: pat.block ? { ...pat.block } : null,
     materials: pat.materials.map((m) => ({ ...m })),

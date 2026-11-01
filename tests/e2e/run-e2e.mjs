@@ -1894,6 +1894,20 @@ await step('3D: Hoodie auf der Puppe drapieren, Teil anklicken und Stoff wechsel
   const mat = await app(() => window.vektordesign.store.getState().doc.pattern.pieces.find((p) => p.role === 'front').material);
   assert(mat === 'm-rib', `Stoff: ${mat}`);
   await app(() => window.vektordesign.editor.undo());
+  // Puppe: weiblich, kleiner und schlanker – drapiert neu
+  await page.click('[data-testid="v3-avatar"]');
+  await page.click('[data-testid="v3-gender-female"]');
+  await page.$eval('[data-testid="v3-height"]', (el) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '1620');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.$eval('[data-testid="v3-height"]', (el) => el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+  await sleep(300);
+  const av = await app(() => window.vektordesign.store.getState().doc.pattern.avatar);
+  assert(av?.gender === 'female' && av.height === 1620, `Puppe: ${JSON.stringify(av)}`);
+  await page.waitForFunction(() => document.querySelector('[data-testid="v3-status"]')?.dataset.state === 'ready', { timeout: 180000 });
+  await shot('17b-3d-puppe-weiblich');
+  await page.click('[data-testid="v3-avatar"]');
   // Passform-Karte und Bild
   await page.click('[data-testid="v3-fit"]');
   await sleep(300);
