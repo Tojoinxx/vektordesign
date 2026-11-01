@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Shirt, LayoutGrid, Layers3, Calculator, Copy, FileArchive, FileText, MapPin, Plus, Settings2, Trash2, TriangleAlert } from 'lucide-react';
+import { BookOpenText, Shirt, LayoutGrid, Layers3, Calculator, Copy, FileArchive, FileText, MapPin, Plus, Settings2, Trash2, TriangleAlert } from 'lucide-react';
 import type { Motif, Production, SizeGrade, Technique, Variant } from '../model/types';
 import { GARMENTS, TECHNIQUES, areaOf, garmentOf } from '../model/garments';
 import { allColors, cmykOf, cmykText, motifColors, motifSize, motifWarnings, nextListId, productionOf, variantColor } from '../model/production';
@@ -180,6 +180,14 @@ export function ProductionPanel() {
         <div className="stack">
           <button className="btn accent wide" onClick={() => void app.exportPackage()} disabled={!!busy} data-testid="package-export">
             <FileArchive size={16} /> {busy ?? 'ZIP-Paket exportieren'}
+          </button>
+          <button
+            className="btn wide"
+            onClick={() => app.ui.setState({ techPack: true })}
+            data-testid="techpack-open"
+            title="Tech-Pack als Ergänzung zu LabwearOS: Maße, Schnitt, Material, Verarbeitung, Referenzen"
+          >
+            <BookOpenText size={16} /> Tech-Pack
           </button>
           <button className="btn wide" onClick={() => app.ui.setState({ mockup: true })} data-testid="mockup-open">
             <Shirt size={16} /> Mockup-Vorschau

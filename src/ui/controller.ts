@@ -9,6 +9,9 @@ import { normalizeHex } from '../model/color';
 import { FormatTool } from '../tools/formatTool';
 import { SeamTool } from '../tools/seamTool';
 import { exportPatternDxf } from '../export/patternDxf';
+import { buildTechPack, techPackFileName } from '../export/techPack';
+import { measureCsv, measureTable } from '../techpack/measure';
+import { updateTechPack } from '../store/techpackOps';
 import { openChannel, type BridgeMessage } from '../viewer3d/bridge';
 import { setAvatar, setPieceLook, updateMaterial } from '../store/patternOps';
 import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
@@ -70,6 +73,7 @@ import {
   IMAGE_WEBP_TYPE,
   AI_TYPE,
   DXF_TYPE,
+  CSV_TYPE,
   EPS_TYPE,
   openFile,
   PDF_TYPE,
@@ -132,6 +136,8 @@ export interface UiState {
   about: boolean;
   /** Dialog „Neues Projekt“ (Projektart wählen) */
   newProject: boolean;
+  /** Tech-Pack-Dialog */
+  techPack: boolean;
   /** 3D-Vorschau rechts */
   preview3d: boolean;
   preview3dWidth: number;
@@ -265,6 +271,7 @@ export class AppController {
       statusDetail: false,
       about: false,
       newProject: false,
+      techPack: false,
       preview3d: false,
       preview3dWidth: storedWidth(),
       fileMenu: false,
@@ -1127,6 +1134,64 @@ export class AppController {
       this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
       return false;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Tech-Pack (Ergänzung zu LabwearOS)
+  // -------------------------------------------------------------------------
+
+  /** 3D-Ansichten (vorne, hinten, Seite) fürs Tech-Pack aufnehmen und im Projekt speichern. */
+  async captureTechPackRenders(): Promise<boolean> {
+    if (!this.editor.s.doc.pattern?.pieces.length) {
+      this.editor.toast('Für 3D-Ansichten braucht es Schnittteile (Tab „Schnitt“).', 'info');
+      return false;
+    }
+    this.ui.setState({ busy: '3D-Ansichten werden aufgenommen …' });
+    try {
+      const { render3DViews } = await import('../viewer3d/renderViews');
+      const r = await render3DViews(this.editor.s.doc, { onProgress: (t) => this.ui.setState({ busy: t }) });
+      if (!r) {
+        this.editor.toast('3D-Ansichten konnten nicht aufgenommen werden (WebGL nicht verfügbar oder Zeitüberschreitung).', 'error', 6000);
+        return false;
+      }
+      updateTechPack(this.editor, '3D-Ansichten aufnehmen', (tp) => void (tp.renders = { ...r, at: new Date().toISOString() }));
+      return true;
+    } finally {
+      this.ui.setState({ busy: null });
+    }
+  }
+
+  /** Tech-Pack als PDF. Nimmt fehlende 3D-Ansichten vorher automatisch auf. */
+  async exportTechPack(path?: string | null): Promise<boolean> {
+    const doc0 = this.editor.s.doc;
+    if (doc0.pattern?.pieces.length && !doc0.techPack?.renders) await this.captureTechPackRenders();
+    const doc = this.editor.s.doc;
+    const p = productionOf(doc);
+    this.ui.setState({ busy: 'Tech-Pack wird erstellt …' });
+    try {
+      const bytes = await buildTechPack(doc, { decode: (u) => decodeImage(u, 1600) });
+      const saved = await saveFile(bytes, techPackFileName(p.article, p.version), PDF_TYPE, path);
+      if (saved) this.editor.toast(`Tech-Pack als ${saved.name} gespeichert – als Anhang in LabwearOS verwenden`, 'success', 5000);
+      return !!saved;
+    } catch (e) {
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
+      return false;
+    } finally {
+      this.ui.setState({ busy: null });
+    }
+  }
+
+  async exportMeasureCsv(): Promise<boolean> {
+    const doc = this.editor.s.doc;
+    const t = measureTable(doc);
+    if (!t) {
+      this.editor.toast('Noch keine Schnittteile – die Maßtabelle entsteht aus dem Schnitt.', 'info');
+      return false;
+    }
+    const p = productionOf(doc);
+    const res = await saveFile(measureCsv(t, doc.techPack?.tolerances), `${articleBase(p)}_Masstabelle.csv`, CSV_TYPE, null);
+    if (res) this.editor.toast(`Maßtabelle als ${res.name} gespeichert`, 'success');
+    return !!res;
   }
 
   async exportArtworkSheet(path?: string | null): Promise<boolean> {

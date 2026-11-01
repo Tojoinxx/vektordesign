@@ -568,6 +568,18 @@ export class GarmentViewer {
     return url;
   }
 
+  /** Abstand der Kamera zum Mittelpunkt (mm). */
+  get distance(): number {
+    return this.camera.position.distanceTo(this.controls.target);
+  }
+
+  set distance(d: number) {
+    const t = this.controls.target;
+    this.camera.position.sub(t).setLength(d).add(t);
+    this.controls.update();
+    this.dirty = true;
+  }
+
   /** Bildschirmpunkt (Client-Koordinaten) auf einem Teil – für Tests und Hilfen. */
   screenPointOf(pieceId: string): { x: number; y: number } | null {
     const part = this.parts.find((p) => p.pieceId === pieceId && p.copy === 0);

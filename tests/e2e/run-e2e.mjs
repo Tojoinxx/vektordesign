@@ -8,7 +8,7 @@
  * Optional: CHROME_ARGS="--no-sandbox --headless=new", E2E_URL=http://localhost:4173/
  */
 import { spawn } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
@@ -1930,6 +1930,67 @@ await step('3D: Hoodie auf der Puppe drapieren, Teil anklicken und Stoff wechsel
   await p3.close();
   await page.bringToFront();
   await page.click('[data-testid="v3-close"]');
+});
+
+await step('Tech-Pack: Angaben, Zutat, Referenzbild, 3D-Ansichten, PDF und Maßtabelle', async () => {
+  // Hoodie aus dem 3D-Test liegt noch vor
+  await page.click('[data-testid="tab-production"]');
+  await page.click('[data-testid="techpack-open"]');
+  await page.waitForSelector('[data-testid="techpack"]');
+  await page.click('[data-testid="tp-styleNo"]', { clickCount: 3 });
+  await page.keyboard.type('TH-2027-01');
+  await page.keyboard.press('Enter');
+  await page.click('[data-testid="tp-tab-measures"]');
+  const sizes = await page.$$eval('[data-testid="tp-measures"] thead th', (t) => t.length);
+  assert(sizes >= 9, `Maßtabelle hat ${sizes} Spalten`);
+  await page.click('[data-testid="tp-tab-materials"]');
+  const chip = await page.$('.tp-chips .chip');
+  await chip.click();
+  await page.waitForSelector('[data-testid="tp-trims"]');
+  // Referenzbild wie per Drag & Drop (Datei-Eingabe derselben Ablagefläche)
+  await page.click('[data-testid="tp-tab-refs"]');
+  const png = join(OUT, 'referenz.png');
+  const b64 = await app(() => {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 48;
+    const x = c.getContext('2d');
+    x.fillStyle = '#c8102e';
+    x.fillRect(0, 0, 64, 48);
+    return c.toDataURL('image/png').split(',')[1];
+  });
+  writeFileSync(png, Buffer.from(b64, 'base64'));
+  const input = await page.$('[data-testid="tp-file"]');
+  await input.uploadFile(png);
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="tp-refs"] .tp-ref').length === 1, { timeout: 5000 });
+  const tp = await app(() => window.vektordesign.store.getState().doc.techPack);
+  assert(tp.styleNo === 'TH-2027-01' && tp.trims.length === 1 && tp.references.length === 1, `Tech-Pack: ${JSON.stringify({ s: tp.styleNo, t: tp.trims.length, r: tp.references.length })}`);
+  await shot('19-techpack-referenzen');
+  // PDF: nimmt die 3D-Ansichten automatisch auf
+  const before = readdirSync(DL);
+  await page.click('[data-testid="tp-pdf"]');
+  let pdf = null;
+  for (let i = 0; i < 600 && !pdf; i++) {
+    await sleep(250);
+    pdf = readdirSync(DL).find((n) => n.endsWith('_TechPack.pdf') && !before.includes(n));
+  }
+  assert(pdf, 'Tech-Pack-PDF nicht gespeichert');
+  await sleep(500);
+  const bytes = readFileSync(join(DL, pdf));
+  assert(bytes.subarray(0, 5).toString() === '%PDF-', 'kein PDF');
+  const renders = await app(() => Object.keys(window.vektordesign.store.getState().doc.techPack.renders ?? {}));
+  assert(renders.includes('front') && renders.includes('back'), `3D-Ansichten: ${renders}`);
+  results.push(`   Tech-Pack: ${(bytes.length / 1024).toFixed(0)} KB`);
+  const csvBefore = readdirSync(DL);
+  await page.click('[data-testid="tp-csv"]');
+  let csv = null;
+  for (let i = 0; i < 40 && !csv; i++) {
+    await sleep(150);
+    csv = readdirSync(DL).find((n) => n.endsWith('.csv') && !csvBefore.includes(n));
+  }
+  assert(csv, 'CSV nicht gespeichert');
+  copyFileSync(join(DL, pdf), join(OUT, 'TechPack.pdf'));
+  await page.keyboard.press('Escape');
 });
 
 await browser.close();

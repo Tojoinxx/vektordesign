@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeftRight, Box, CheckCircle2, ChevronDown, ChevronRight, Download, Plus, Ruler, Scissors, Spline, Trash2, TriangleAlert, Wand2 } from 'lucide-react';
+import { ArrowLeftRight, BookOpenText, Box, CheckCircle2, ChevronDown, ChevronRight, Download, Plus, Ruler, Scissors, Spline, Trash2, TriangleAlert, Wand2 } from 'lucide-react';
 import type { BodyMeasures, PatternBlock, PatternMaterial, PieceRole } from '../model/types';
 import { BLOCK_KINDS, FIT_NAMES, defaultBlock } from '../pattern/blocks';
 import { BODY_FIELDS, DEFAULT_SIZE, SIZE_TABLE, bodyForSize, checkBody } from '../pattern/body';
@@ -96,6 +96,9 @@ export function PatternPanel() {
           </p>
         ) : null}
         <div className="stack">
+          <button className="btn wide" onClick={() => app.ui.setState({ techPack: true })} data-testid="pattern-techpack">
+            <BookOpenText size={16} /> Tech-Pack (Maße, Verarbeitung, PDF)
+          </button>
           <button className="btn wide" onClick={() => void app.exportPatternDxf()} disabled={!pat?.pieces.length} data-testid="pattern-dxf">
             <Download size={16} /> Schnittteile als DXF
           </button>

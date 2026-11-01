@@ -42,6 +42,7 @@ export function parseDoc(text: string): SketchDoc {
     ...(Array.isArray(d.layers) && d.layers.length ? { layers: d.layers } : {}),
     ...(d.production && typeof d.production === 'object' ? { production: d.production } : {}),
     ...(d.pattern && typeof d.pattern === 'object' && Array.isArray(d.pattern.pieces) ? { pattern: d.pattern } : {}),
+    ...(d.techPack && typeof d.techPack === 'object' ? { techPack: d.techPack } : {}),
     nextId: typeof d.nextId === 'number' ? d.nextId : 1,
     nextDim: typeof d.nextDim === 'number' ? d.nextDim : 0,
   };

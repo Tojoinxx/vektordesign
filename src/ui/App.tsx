@@ -3,6 +3,7 @@ import { LibraryPanel } from './LibraryPanel';
 import { BookMarked, Layers, Scissors, Settings2, Shirt, Sparkles } from 'lucide-react';
 import { PatternPanel } from './PatternPanel';
 import { Preview3D } from './Preview3D';
+import { TechPackView } from './TechPackView';
 import type { AppController } from './controller';
 import { AppCtx, useUi } from './hooks';
 import { CanvasView } from './CanvasView';
@@ -135,7 +136,8 @@ function Shell({ app }: { app: AppController }) {
         app.ui.getState().profileEditor ||
         app.ui.getState().syncConflict ||
         app.ui.getState().shareReady ||
-        app.ui.getState().newProject
+        app.ui.getState().newProject ||
+        app.ui.getState().techPack
       )
         return;
       if (e.key === 'Escape') {
@@ -173,7 +175,7 @@ function Shell({ app }: { app: AppController }) {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       const s = app.store.getState();
-      if (s.paletteOpen || s.exportOpen || s.confirm) return;
+      if (s.paletteOpen || s.exportOpen || s.confirm || app.ui.getState().techPack) return;
       const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
       e.preventDefault();
       if (file) {
@@ -225,6 +227,7 @@ function Shell({ app }: { app: AppController }) {
       <PlacementView />
       <MockupView />
       <GangSheetView />
+      <TechPackView />
       <ScreenPrintView />
       <CostView />
       <GeneratorView />

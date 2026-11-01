@@ -162,10 +162,22 @@ Grundlage für die 3D-Passform in **Vektordesign 3D** (nächster Meilenstein). �
 - Je Teil: Rolle in 3D, Zuschnitt 1× / 2× gegengleich, Nahtzugabe (gestrichelt angezeigt), Fadenlauf, Stoff. Stoffe mit Art, Farbe und Flächengewicht; Stoffbedarf in m².
 - **DXF-Export** der Schnittteile mit Schnittlinie, Nahtlinie, Fadenlauf, Passzeichen und Beschriftung. Schnittteile liegen auf einer eigenen Ebene „Schnitt“ und gehören nie zum Motiv-Export.
 
+### Tech-Pack (Ergänzung zu LabwearOS)
+
+Tab „Produktion“ → **Tech-Pack** (oder im Tab „Schnitt“, Befehlssuche „Tech-Pack“). Das Tech-Pack ergänzt LabwearOS – bei Abweichungen gelten die Angaben dort.
+
+- **Angaben:** Style-Nr., Saison, Marke, Design, Status, Beschreibung. **3D-Ansichten** (vorne, hinten, Seite) werden im Hintergrund drapiert und fotografiert – beim PDF-Export automatisch, wenn noch keine da sind.
+- **Maßtabelle mit Größenstaffel:** Messpunkte A–P (Länge, ½ Brust, ½ Saum, Schulter, Ärmel, Oberarm, Ärmelöffnung, Hals, Bündchen, Kapuze …) für alle Größen der Maßtabelle, aus dem Grundschnitt neu berechnet; Toleranzen je Messpunkt einstellbar; Messanleitung; Export auch als CSV für Excel.
+- **Material & Zutaten:** Stoffe aus dem Schnitt (Art, g/m², HEX, CMYK, Pantone aus den Farbangaben, verwendet für) und eigene Zutaten mit Schnellauswahl (Haupt-, Größen-, Pflegeetikett, Nackenband, Kordel, Ösen, Garn).
+- **Verarbeitung:** Nähte als Gruppen mit Länge und Vorschlag (Overlock, Nahtband, Bündchen gedehnt, Coverstitch-Saum …), frei überschreibbar, dazu Hinweise.
+- **Referenzen:** Bilder per **Ziehen und Ablegen**, Einfügen (`Strg+V`) oder Auswahl, mit Kategorie und Notiz, sortierbar.
+- **PDF (A4 quer):** Deckblatt mit 3D-Ansichten und Eckdaten, Maßtabelle, Schnittteile mit Stoffverbrauch, Stückliste, Verarbeitung, Artwork, Referenzen.
+
 ### 3D-Vorschau und Vektordesign 3D
 
 Der Knopf **3D** oben (`Strg+3`) oder „In 3D ansehen“ im Tab „Schnitt“ öffnet rechts neben der Zeichenfläche die 3D-Vorschau. Projektart **3D-Modell** im Dialog „Neues Projekt“ startet direkt mit Schnitt-Tab und 3D-Vorschau.
 
+- **Puppe männlich oder weiblich** (Symbol „Puppe“ in der Vorschau): Ausgangsgröße, Körpergröße (150–205 cm) und Körperbau (schlank bis kräftig) per Regler – unabhängig von der Größe des Schnitts, zum Anprobieren an verschiedenen Figuren. Ohne eigene Puppe gelten die Körpermaße des Schnitts.
 - **Puppe aus deinen Körpermaßen** (Größe, Brust, Taille, Hüfte, Schultern, Arme, Rücken, Hals, Kopf). Die Schnittteile werden um die Puppe gelegt, an den Nähten zusammengezogen und fallen dann mit Schwerkraft auf den Körper. Stoffart und Flächengewicht bestimmen Dehnung, Steifigkeit und Fall; Bündchen werden beim Annähen gedehnt.
 - **Live:** jede Änderung am Schnitt – Maß, Kante, Naht – drapiert neu. Die Simulation läuft im Hintergrund, die Oberfläche bleibt flüssig.
 - **Aussehen:** Teil in 3D anklicken → eigene Farbe oder anderer Stoff. Stoffarten mit eigener Oberfläche (Jersey-Maschen, Sweat, Fleece, Rippe, Webware, Denim-Köper, Nylon mit leichtem Glanz, Mesh). Motive aus dem Tab „Produktion“ erscheinen an ihrer Druckposition (Abstand zur Kragennaht), Farbvarianten lassen sich umschalten.
@@ -290,6 +302,7 @@ src/
   sim3d/      Stoffsimulation (XPBD) und Puppe aus Körpermaßen, läuft im Web Worker
   viewer3d/   3D-Ansicht (three.js): Stoffe, Farben, Motive, Passform-Karte, Verbindung zu Vektordesign 3D
   app3d/      Vektordesign 3D (eigenes Fenster, 3d.html)
+  techpack/   Tech-Pack: Maßtabelle mit Größenstaffel, Verarbeitung
   export/     SVG, PDF, EPS, DXF, PNG, Artwork-Blatt, ZIP-Paket, Schnitt-DXF
   assistant/  Claude-Anbindung (Messages-API mit Werkzeugen und Bildern)
   design/     Stilvorschläge
@@ -326,7 +339,7 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 5. ✅ Textil- und Komfortfunktionen: Preflight, Mockups, Vektorisieren, DTF-Sammelbogen, Siebdruck-Filme, Größenstaffel, Halbton, Used-Look, Rapport, Kostenschätzung, Generatoren, Symmetrie, Bibliothek, SVG-/DXF-Import
 6. ✅ Schnitt: Projektart wählen, Grundschnitt aus Körpermaßen, eigene Schnittteile, Nähte verbinden und prüfen, Stoffe, Schnitt-DXF
 7. ✅ Vektordesign 3D: Puppe aus Maßen, Stoffsimulation, Passform-Karte, Teile einfärben, Stoffarten, Motive auf dem 3D-Modell, Live-Vorschau und eigenes Fenster
-8. Tech-Pack automatisch aus dem fertigen Modell, Referenzen per Drag & Drop
+8. ✅ Tech-Pack als Ergänzung zu LabwearOS: Maßtabelle mit Größenstaffel, Stückliste, Verarbeitung, Artwork, Referenzen per Drag & Drop, 3D-Ansichten, PDF und CSV
 
 ## Lizenz
 

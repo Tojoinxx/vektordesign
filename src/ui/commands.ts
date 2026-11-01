@@ -381,6 +381,15 @@ export function buildCommands(): Command[] {
       run: (a) => a.toggle3D(),
     },
     { id: 'pattern.3dwindow', label: 'Vektordesign 3D in eigenem Fenster öffnen', group: 'Schnitt', keywords: '3d fenster vollbild modell visualisierung', run: (a) => a.openWindow3D() },
+    {
+      id: 'techpack.open',
+      label: 'Tech-Pack (Ergänzung zu LabwearOS)',
+      group: 'Produktion',
+      keywords: 'techpack tech pack maßtabelle größenstaffel stückliste verarbeitung referenzen pdf',
+      run: (a) => a.ui.setState({ techPack: true }),
+    },
+    { id: 'techpack.pdf', label: 'Tech-Pack als PDF exportieren', group: 'Produktion', keywords: 'techpack pdf export', run: (a) => void a.exportTechPack() },
+    { id: 'techpack.csv', label: 'Maßtabelle als CSV (Excel)', group: 'Produktion', keywords: 'maßtabelle csv excel größen pom', run: (a) => void a.exportMeasureCsv() },
     { id: 'pattern.dxf', label: 'Schnittteile als DXF exportieren', group: 'Schnitt', keywords: 'dxf schnittmuster plotter zuschnitt nahtzugabe export', run: (a) => void a.exportPatternDxf() },
 
     // Ansicht

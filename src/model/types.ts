@@ -272,6 +272,8 @@ export interface SketchDoc {
   production?: Production;
   /** Schnittteile und Nähte (für die 3D-Passform) */
   pattern?: Pattern;
+  /** Tech-Pack-Angaben (Ergänzung zum Tech-Pack in LabwearOS) */
+  techPack?: TechPack;
   /** Zähler für eindeutige Ids */
   nextId: number;
   /** Zähler für Bemaßungsnamen d0, d1 … */
@@ -493,4 +495,45 @@ export interface Pattern {
   /** Name der Maßtabelle/Größe, aus der `body` stammt, oder 'custom' */
   bodySize: string;
   block?: PatternBlock;
+}
+
+// ---------------------------------------------------------------------------
+// Tech-Pack (Ergänzung zu LabwearOS)
+// ---------------------------------------------------------------------------
+
+export interface TechReference {
+  id: Id;
+  name: string;
+  /** Bild als Data-URL (verkleinert, JPEG/PNG) */
+  image: string;
+  w: number;
+  h: number;
+  category: 'Inspiration' | 'Detail' | 'Etikett' | 'Zutat' | 'Stoff/Farbe' | 'Passform' | 'Sonstiges';
+  note: string;
+}
+
+export interface TrimRow {
+  id: Id;
+  name: string;
+  spec: string;
+  qty: string;
+  placement: string;
+}
+
+export interface TechPack {
+  styleNo: string;
+  season: string;
+  brand: string;
+  designer: string;
+  status: 'Entwurf' | 'Muster' | 'Freigegeben';
+  description: string;
+  notes: string;
+  references: TechReference[];
+  trims: TrimRow[];
+  /** Toleranz je Messpunkt in mm (fehlt = Standard) */
+  tolerances: Record<string, number>;
+  /** Verarbeitung je Nahtgruppe (fehlt = Vorschlag) */
+  construction: Record<string, string>;
+  /** Zuletzt aufgenommene 3D-Ansichten (JPEG Data-URLs) */
+  renders?: { front?: string; back?: string; side?: string; at: string };
 }
