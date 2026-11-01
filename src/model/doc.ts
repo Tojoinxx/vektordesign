@@ -1,21 +1,4 @@
-import type {
-  ArcEntity,
-  CircleEntity,
-  Constraint,
-  ConstraintKind,
-  Dimension,
-  Entity,
-  Id,
-  LineEntity,
-  PathEdge,
-  PathEntity,
-  SketchDoc,
-  SketchPoint,
-  Style,
-  TextAlign,
-  TextEntity,
-  Vec2,
-} from './types';
+import type { ArcEntity, CircleEntity, Constraint, ConstraintKind, Dimension, Entity, Id, LineEntity, PathEdge, PathEntity, SketchDoc, SketchPoint, Style, TextAlign, TextEntity, Vec2 } from './types';
 import { ORIGIN_ID } from './types';
 
 export const DEFAULT_STYLE: Style = { fill: null, stroke: '#1e2328', strokeWidth: 0.5, opacity: 1 };
@@ -306,6 +289,12 @@ export function deleteIds(d: SketchDoc, ids: Iterable<Id>): void {
   for (const c of Object.values(d.constraints)) if (!c.refs.every(exists)) delete d.constraints[c.id];
   for (const m of Object.values(d.dims)) if (!m.refs.every(exists)) delete d.dims[m.id];
   d.order = d.order.filter((oid) => d.entities[oid]);
+  // Schnittteile ohne Kontur und Nähte zu entfernten Teilen aufräumen
+  if (d.pattern) {
+    d.pattern.pieces = d.pattern.pieces.filter((pc) => d.entities[pc.outline]);
+    const ok = new Set(d.pattern.pieces.map((pc) => pc.id));
+    d.pattern.seams = d.pattern.seams.filter((sm) => ok.has(sm.a.piece) && ok.has(sm.b.piece));
+  }
 }
 
 /** Löst einen Pfad auf; seine (nicht gelöschten) Linien werden wieder einzeln gezeichnet. */

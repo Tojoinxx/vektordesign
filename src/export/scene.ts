@@ -1,7 +1,7 @@
 import type { Contour, Entity, Gradient, Id, SketchDoc, Style, TextEntity, Vec2 } from '../model/types';
 import { lineOf, pathVertices, pt } from '../model/doc';
 import { docBBox, entityBBox } from '../model/bounds';
-import { layerOf, layersOf, visibleOrder } from '../model/layers';
+import { artworkOnly, layerOf, layersOf, visibleOrder } from '../model/layers';
 import { circleContour, polygonContour, shapeWorldContours } from '../model/shape';
 import { arcContour, arcGeom, pathContour } from '../model/arc';
 import { gradientToWorld, isGradient } from '../model/paint';
@@ -84,7 +84,9 @@ export interface SceneOptions {
   frame?: BBox;
 }
 
-export function buildScene(doc: SketchDoc, opts: SceneOptions = {}): ExportScene {
+export function buildScene(docIn: SketchDoc, opts: SceneOptions = {}): ExportScene {
+  // Schnittteile sind kein Artwork: Schnitt-Ebenen nie mit exportieren (eigener Schnitt-Export)
+  const doc = artworkOnly(docIn);
   const box = opts.frame ?? docBBox(doc, { includeStroke: opts.bounds === 'stroke' });
   if (!box) throw new ExportError('Nichts zu exportieren: Die Zeichnung enthält keine sichtbaren Objekte (Konstruktionsgeometrie und ausgeblendete Ebenen werden nicht exportiert).');
   const layers = layersOf(doc).map((l) => ({ id: l.id, name: l.name, items: [] as SceneItem[] }));

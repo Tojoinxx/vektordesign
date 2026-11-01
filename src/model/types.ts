@@ -194,22 +194,12 @@ export interface Layer {
   name: string;
   visible: boolean;
   locked: boolean;
+  /** Schnitt-Ebene: enthält Schnittteile, gehört nicht zum Motiv und wird nicht als Artwork exportiert */
+  pattern?: boolean;
 }
 export type EntityKind = Entity['kind'];
 
-export type ConstraintKind =
-  | 'coincident'
-  | 'horizontal'
-  | 'vertical'
-  | 'parallel'
-  | 'perpendicular'
-  | 'collinear'
-  | 'tangent'
-  | 'concentric'
-  | 'equal'
-  | 'symmetric'
-  | 'midpoint'
-  | 'fix';
+export type ConstraintKind = 'coincident' | 'horizontal' | 'vertical' | 'parallel' | 'perpendicular' | 'collinear' | 'tangent' | 'concentric' | 'equal' | 'symmetric' | 'midpoint' | 'fix';
 
 /**
  * Geometrische Abhängigkeit. refs je Art:
@@ -244,18 +234,7 @@ export interface Constraint {
  * - angleX:    [Punkt A, Punkt B]           Winkel von A→B zur X-Achse
  * - width / height: [Form]                  Breite/Höhe einer Form (steuert deren Maßstab, nicht der Solver)
  */
-export type DimensionKind =
-  | 'distance'
-  | 'distanceX'
-  | 'distanceY'
-  | 'pointLine'
-  | 'lineLine'
-  | 'radius'
-  | 'diameter'
-  | 'angle'
-  | 'angleX'
-  | 'width'
-  | 'height';
+export type DimensionKind = 'distance' | 'distanceX' | 'distanceY' | 'pointLine' | 'lineLine' | 'radius' | 'diameter' | 'angle' | 'angleX' | 'width' | 'height';
 
 export interface Dimension {
   id: Id;
@@ -291,6 +270,8 @@ export interface SketchDoc {
   layers?: Layer[];
   /** Produktionsangaben (Artikel, Motive, Platzierung, Varianten) – Meilenstein 3 */
   production?: Production;
+  /** Schnittteile und Nähte (für die 3D-Passform) */
+  pattern?: Pattern;
   /** Zähler für eindeutige Ids */
   nextId: number;
   /** Zähler für Bemaßungsnamen d0, d1 … */
@@ -387,4 +368,114 @@ export interface Production {
   sizes?: SizeGrade[];
   /** Einstellungen fürs Siebdruck-Paket */
   screenPrint?: { underbase?: 'auto' | 'on' | 'off'; choke?: number; trap?: number; dropFabricColor?: boolean; marks?: boolean; mirror?: boolean };
+}
+
+// ---------------------------------------------------------------------------
+// Schnitt (Schnittteile und Nähte für die 3D-Passform in „Vektordesign 3D“)
+// ---------------------------------------------------------------------------
+
+/** Rolle eines Schnittteils – bestimmt, wo es in 3D um den Körper gelegt wird. */
+export type PieceRole = 'front' | 'back' | 'sleeve' | 'hood' | 'cuff' | 'hem' | 'neckband' | 'pocket' | 'other';
+
+/** Körpermaße in mm (Umfänge als ganzer Umfang). */
+export interface BodyMeasures {
+  /** Körpergröße */
+  height: number;
+  /** Brustumfang */
+  chest: number;
+  /** Taillenumfang */
+  waist: number;
+  /** Hüftumfang */
+  hip: number;
+  /** Halsumfang */
+  neck: number;
+  /** Schulterbreite (Schulterpunkt zu Schulterpunkt) */
+  shoulder: number;
+  /** Armlänge (Schulterpunkt bis Handgelenk) */
+  arm: number;
+  /** Oberarmumfang */
+  upperArm: number;
+  /** Handgelenkumfang */
+  wrist: number;
+  /** Rückenlänge (7. Halswirbel bis Taille) */
+  backLength: number;
+  /** Kopfumfang (für Kapuzen) */
+  head: number;
+}
+
+/**
+ * Schnittteil: eine geschlossene Kontur (Pfad oder Form) mit Zuschnitt-Angaben.
+ * Kanten werden über ihren Index adressiert: bei Pfaden die Pfadkante, bei Formen das Segment
+ * zwischen Knoten i und i+1 der ersten Kontur.
+ */
+export interface PatternPiece {
+  id: Id;
+  name: string;
+  /** Geschlossener Pfad oder Form */
+  outline: Id;
+  role: PieceRole;
+  /** Anzahl im Zuschnitt: 2 = gegengleiches Paar (z. B. Ärmel) */
+  cut: 1 | 2;
+  /** Nahtzugabe in mm (0 = ohne) */
+  seamAllowance: number;
+  /** Fadenlauf: Winkel in Grad zur Senkrechten (0 = längs) */
+  grain: number;
+  /** Material-Id (aus `Pattern.materials`) */
+  material?: Id;
+  /** Teil gehört zu einem Grundschnitt (wird beim Aktualisieren ersetzt) */
+  block?: boolean;
+}
+
+export interface EdgeRef {
+  piece: Id;
+  edge: number;
+  /** Bei gegengleichen Teilen (cut 2): 0 = wie gezeichnet, 1 = gespiegelte Kopie */
+  copy?: 0 | 1;
+}
+
+/**
+ * Naht: verbindet Kante `a` mit Kante `b`. `reversed` = b läuft gegen a (bei zwei gegen den
+ * Uhrzeigersinn umlaufenden Teilen, die rechts auf rechts genäht werden, der Normalfall).
+ * Bei gegengleichen Teilen (cut 2) gilt die Naht für beide Seiten.
+ */
+export interface Seam {
+  id: Id;
+  a: EdgeRef;
+  b: EdgeRef;
+  reversed: boolean;
+  name?: string;
+}
+
+/** Stoff/Material für Zuschnitt und 3D-Darstellung. */
+export interface PatternMaterial {
+  id: Id;
+  name: string;
+  /** Stoffart: bestimmt Dehnung und Fall in der Simulation */
+  fabric: 'jersey' | 'sweat' | 'fleece' | 'rib' | 'woven' | 'denim' | 'nylon' | 'mesh';
+  color: string;
+  /** Flächengewicht g/m² */
+  gsm: number;
+}
+
+/** Grundschnitt-Einstellungen, aus denen die Teile mit `block: true` erzeugt wurden. */
+export interface PatternBlock {
+  kind: 'tshirt' | 'longsleeve' | 'sweatshirt' | 'hoodie';
+  /** Größe aus der Maßtabelle oder 'custom' */
+  size: string;
+  /** Passform: Bewegungszugabe */
+  fit: 'slim' | 'regular' | 'oversize';
+  /** Körperlänge des Kleidungsstücks (hintere Mitte, ab Halsansatz) */
+  length: number;
+  /** Ärmellänge ab Schulterpunkt (T-Shirt kurz) */
+  sleeve: number;
+}
+
+export interface Pattern {
+  pieces: PatternPiece[];
+  seams: Seam[];
+  materials: PatternMaterial[];
+  body: BodyMeasures;
+  /** Name der Maßtabelle/Größe, aus der `body` stammt, oder 'custom' */
+  bodySize: string;
+  block?: PatternBlock;
 }

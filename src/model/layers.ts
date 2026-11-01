@@ -74,6 +74,18 @@ function info(doc: SketchDoc): LayerInfo {
   return i;
 }
 
+/** Liegt das Objekt auf einer Schnitt-Ebene (Schnittteile, kein Artwork)? */
+export function onPatternLayer(doc: SketchDoc, e: Entity): boolean {
+  return !!layerOf(doc, e).pattern;
+}
+
+/** Zeichnung ohne Schnitt-Ebenen (für Artwork-Exporte und Motive). */
+export function artworkOnly(doc: SketchDoc): SketchDoc {
+  const ls = layersOf(doc);
+  if (!ls.some((l) => l.pattern)) return doc;
+  return { ...doc, layers: ls.map((l) => (l.pattern ? { ...l, visible: false } : l)) };
+}
+
 /** Zeichenreihenfolge über alle Ebenen (unten → oben), inklusive ausgeblendeter Ebenen. */
 export function layeredOrder(doc: SketchDoc): Id[] {
   return info(doc).order;

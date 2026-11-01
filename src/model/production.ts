@@ -2,7 +2,7 @@ import { produce } from 'immer';
 import type { ColorSpec, Entity, Id, Motif, Production, SketchDoc, Style, Variant } from './types';
 import { contrastRatio, hexToRgb, normalizeHex, rgbToCmyk } from './color';
 import { isGradient } from './paint';
-import { layersOf, visibleOrder } from './layers';
+import { artworkOnly, layersOf, visibleOrder } from './layers';
 import { areaOf, garmentOf } from './garments';
 import { docBBox } from './bounds';
 
@@ -66,7 +66,8 @@ function styleColors(s: Style, out: Set<string>) {
 }
 
 /** Entitäten eines Motivs (sichtbar, keine Konstruktion), in Zeichenreihenfolge. */
-export function motifEntities(doc: SketchDoc, m: Motif): Entity[] {
+export function motifEntities(docIn: SketchDoc, m: Motif): Entity[] {
+  const doc = artworkOnly(docIn);
   const layers = new Set(m.layers);
   const out: Entity[] = [];
   for (const id of visibleOrder(doc)) {
@@ -123,7 +124,8 @@ export function applyVariant(doc: SketchDoc, v: Variant): SketchDoc {
 }
 
 /** Zeichnung, in der nur die Ebenen des Motivs sichtbar sind. */
-export function motifDoc(doc: SketchDoc, m: Motif): SketchDoc {
+export function motifDoc(docIn: SketchDoc, m: Motif): SketchDoc {
+  const doc = artworkOnly(docIn);
   if (!m.layers.length) return doc;
   const keep = new Set(m.layers);
   return produce(doc, (d) => {
