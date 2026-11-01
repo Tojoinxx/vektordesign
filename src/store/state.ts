@@ -23,6 +23,7 @@ export type ToolId =
   | 'measure'
   | 'sketch'
   | 'imgcalib'
+  | 'seam'
   | `constraint:${string}`;
 
 export type ExportFormat = 'svg' | 'pdf' | 'eps' | 'dxf' | 'png';

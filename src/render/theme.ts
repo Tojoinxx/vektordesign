@@ -58,6 +58,10 @@ export interface CanvasPalette {
   selectBoxCross: string;
   /** Umriss für Motive, die sich kaum vom Hintergrund abheben (nur Bildschirm) */
   contrastHint: string;
+  /** Schnitt: Nahtzugabe, passende/unpassende Naht, Bündchen */
+  pattern: string;
+  seamOk: string;
+  seamRib: string;
 }
 
 export const LIGHT_CANVAS: CanvasPalette = {
@@ -100,6 +104,9 @@ export const LIGHT_CANVAS: CanvasPalette = {
   selectBoxWindow: 'rgba(47,111,214,0.08)',
   selectBoxCross: 'rgba(47,158,91,0.08)',
   contrastHint: 'rgba(30,35,40,0.45)',
+  pattern: '#5b6573',
+  seamOk: '#23915a',
+  seamRib: '#7a5bd6',
 };
 
 export const DARK_CANVAS: CanvasPalette = {
@@ -142,6 +149,9 @@ export const DARK_CANVAS: CanvasPalette = {
   selectBoxWindow: 'rgba(106,161,255,0.10)',
   selectBoxCross: 'rgba(76,196,126,0.10)',
   contrastHint: 'rgba(230,233,237,0.5)',
+  pattern: '#9aa4b1',
+  seamOk: '#4cc47e',
+  seamRib: '#a58bff',
 };
 
 export type CanvasMode = 'light' | 'dark';

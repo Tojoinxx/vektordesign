@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Cloud,
   CloudOff,
@@ -6,6 +6,9 @@ import {
   CircleHelp,
   Command as CommandIcon,
   FilePlus2,
+  PenTool,
+  Scissors,
+  Box,
   FolderOpen,
   FileInput,
   Menu,
@@ -204,7 +207,7 @@ function FileMenu() {
   );
   return (
     <div className="dropdown" role="menu" ref={ref}>
-      {item('Neue Zeichnung', 'Strg+N', <FilePlus2 size={15} />, () => app.newDocument())}
+      {item('Neues Projekt …', 'Strg+N', <FilePlus2 size={15} />, () => app.newDocument())}
       {item('Öffnen …', 'Strg+O', <FolderOpen size={15} />, () => void app.openDocument())}
       {item('Speichern', 'Strg+S', <Save size={15} />, () => void app.saveDocument())}
       {item('Speichern unter …', 'Strg+Umschalt+S', <Save size={15} />, () => void app.saveDocument(true))}
@@ -760,6 +763,31 @@ export function TutorialList() {
           ))}
         </tbody>
       </table>
+    </Modal>
+  );
+}
+
+/** „Neues Projekt“: Projektart wählen. */
+export function NewProjectDialog() {
+  const app = useApp();
+  const open = useUi((s) => s.newProject);
+  if (!open) return null;
+  const card = (kind: 'motif' | 'pattern' | '3d', icon: ReactNode, title: string, text: string, disabled = false) => (
+    <button className="kind-card" disabled={disabled} onClick={() => kind !== '3d' && app.startProject(kind)} data-testid={`new-${kind}`}>
+      <span className="kind-icon">{icon}</span>
+      <strong>{title}</strong>
+      <span className="muted small">{text}</span>
+      {disabled && <span className="kind-soon">bald</span>}
+    </button>
+  );
+  return (
+    <Modal title="Neues Projekt" onClose={() => app.ui.setState({ newProject: false })} wide testId="new-project">
+      <p className="muted small">Was möchtest du erstellen? Alles landet in derselben Projektdatei – du kannst später jederzeit Motive, Schnittteile oder beides ergänzen.</p>
+      <div className="kind-grid">
+        {card('motif', <PenTool size={26} />, '2D-Motiv', 'Logo, Print oder Stick maßgenau zeichnen und für LabwearOS, Plotter, DTF oder Siebdruck exportieren.')}
+        {card('pattern', <Scissors size={26} />, 'Schnittmuster', 'Grundschnitt aus Körpermaßen erzeugen oder Teile selbst zeichnen und Kanten zu Nähten verbinden.')}
+        {card('3d', <Box size={26} />, '3D-Modell', 'Schnittteile am Körper drapieren, Teile einfärben und Stoffe wählen – kommt mit Vektordesign 3D.', true)}
+      </div>
     </Modal>
   );
 }

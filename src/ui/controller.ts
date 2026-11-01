@@ -7,6 +7,8 @@ import { polysToContours } from '../model/boolean';
 import { docColors } from '../model/library';
 import { normalizeHex } from '../model/color';
 import { FormatTool } from '../tools/formatTool';
+import { SeamTool } from '../tools/seamTool';
+import { exportPatternDxf } from '../export/patternDxf';
 import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
 import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
 import { createAppStore, type AppStore, type ToolId } from '../store/state';
@@ -92,7 +94,9 @@ import { loadApiKey, loadModel } from '../assistant/api';
 import { TUTORIALS, isTutorialSeen, markTutorialSeen, tutorialsEnabled, type TutorialId } from './tutorials';
 import { applyAppearance, loadAppearance, onSystemThemeChange, saveAppearance, type Appearance } from './appearance';
 
-export type SidePanel = 'props' | 'layers' | 'production' | 'library' | 'claude';
+export type ProjectKind = 'motif' | 'pattern';
+
+export type SidePanel = 'props' | 'layers' | 'production' | 'pattern' | 'library' | 'claude';
 
 export interface TextEditState {
   id: Id | null;
@@ -115,6 +119,8 @@ export interface UiState {
   cursorWorld: Vec2 | null;
   statusDetail: boolean;
   about: boolean;
+  /** Dialog „Neues Projekt“ (Projektart wählen) */
+  newProject: boolean;
   fileMenu: boolean;
   /** Design der Oberfläche und der Zeichenfläche */
   appearance: Appearance;
@@ -244,6 +250,7 @@ export class AppController {
       cursorWorld: null,
       statusDetail: false,
       about: false,
+      newProject: false,
       fileMenu: false,
       appearance: loadAppearance(),
       appearanceMenu: false,
@@ -347,6 +354,9 @@ export class AppController {
       case 'format':
         t = new FormatTool(this.ctx);
         break;
+      case 'seam':
+        t = new SeamTool(this.ctx);
+        break;
       case 'text':
         t = new TextTool(this.ctx);
         break;
@@ -444,20 +454,29 @@ export class AppController {
     return s.fileName?.replace(/\.[^.]+$/, '') ?? s.doc.name ?? 'Unbenannt';
   }
 
+  /** „Neu“: zuerst die Projektart wählen (2D-Motiv, Schnittmuster, später 3D-Modell). */
   newDocument(): void {
+    this.ui.setState({ newProject: true });
+  }
+
+  /** Neues Projekt der gewählten Art beginnen (fragt bei ungespeicherten Änderungen nach). */
+  startProject(kind: ProjectKind): void {
+    this.ui.setState({ newProject: false });
     const run = () => {
-      this.editor.newDocument();
+      this.editor.newDocument(kind === 'pattern' ? 'Schnittmuster' : 'Unbenannt');
       this.sync.detach();
       this.ui.setState({ syncLinked: null });
       this.ui.setState({ chat: [] });
       this.agent.reset();
       this.editor.zoomToFit();
+      if (kind === 'pattern') this.ui.setState({ side: 'pattern', sideOpen: true });
+      else this.ui.setState({ side: 'props' });
     };
     if (this.editor.s.dirty && Object.keys(this.editor.s.doc.entities).length) {
       this.editor.confirm({
-        title: 'Neue Zeichnung',
-        text: 'Ungespeicherte Änderungen gehen verloren. Trotzdem eine neue Zeichnung beginnen?',
-        confirm: 'Neue Zeichnung',
+        title: 'Neues Projekt',
+        text: 'Ungespeicherte Änderungen gehen verloren. Trotzdem ein neues Projekt beginnen?',
+        confirm: 'Neues Projekt',
         cancel: 'Abbrechen',
         onConfirm: run,
       });
@@ -1010,6 +1029,20 @@ export class AppController {
       return true;
     } catch (e) {
       this.ui.setState({ busy: null });
+      this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
+      return false;
+    }
+  }
+
+  /** Schnittteile als DXF (Schnittlinie, Nahtlinie, Fadenlauf, Passzeichen, Beschriftung). */
+  async exportPatternDxf(path?: string | null): Promise<boolean> {
+    try {
+      const data = exportPatternDxf(this.editor.s.doc);
+      const res = await saveFile(data, `${safeName(this.projectName())}_Schnitt.dxf`, DXF_TYPE, path);
+      if (!res) return false;
+      this.editor.toast(`Schnittteile als ${res.name} exportiert`, 'success');
+      return true;
+    } catch (e) {
       this.editor.toast(e instanceof Error ? e.message : String(e), 'error', 7000);
       return false;
     }

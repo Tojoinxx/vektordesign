@@ -14,6 +14,7 @@ import { drawGlyphs, layoutGlyphs, type GlyphItem } from './glyphs';
 import { RULER, THEME } from './theme';
 import { gridStep, toScreen, toWorld, visibleWorld, type Viewport } from './viewport';
 import { formatNumber } from '../params/expr';
+import { drawPatternOverlay } from './patternOverlay';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -59,6 +60,8 @@ export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp
 
   const T = (p: Vec2) => toScreen(vp, p);
   drawDesign({ ctx, toScreen: T, scale: vp.zoom, minStrokePx: 0.6, contrast: { background: THEME.paper, hint: THEME.contrastHint } }, doc, { skip: s.skip });
+
+  drawPatternOverlay(ctx, vp, doc);
 
   const problems = problemSet(doc, s.analysis);
   if (settings.showOverlay) drawSketchOverlay(ctx, s, problems.entities);
@@ -356,7 +359,8 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     if (problems.has(p.id)) color = THEME.conflict;
     if (hov) color = THEME.hover;
     if (sel) color = THEME.selected;
-    const isCenter = owner?.kind === 'circle' || (owner?.kind === 'arc' && owner.center === p.id) || (p.construction && !owner) || owner?.kind === 'path' || owner?.kind === 'shape' || owner?.kind === 'image';
+    const isCenter =
+      owner?.kind === 'circle' || (owner?.kind === 'arc' && owner.center === p.id) || (p.construction && !owner) || owner?.kind === 'path' || owner?.kind === 'shape' || owner?.kind === 'image';
     const r = sel || hov ? 4 : 2.6;
     if (isCenter || p.construction) {
       const c = get(crosses, color);

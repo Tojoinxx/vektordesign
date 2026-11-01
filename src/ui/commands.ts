@@ -3,6 +3,7 @@ import type { Settings } from '../store/state';
 import { CONSTRAINT_LABELS } from '../solver/analysis';
 import type { AppController } from './controller';
 import { CONSTRAINT_ORDER } from './icons';
+import { makePieces } from '../store/patternOps';
 
 export interface KeyBinding {
   key: string;
@@ -36,7 +37,15 @@ const report = (app: AppController, out: { ok: boolean; message?: string }) => {
 export function buildCommands(): Command[] {
   const cmds: Command[] = [
     // Datei
-    { id: 'file.new', label: 'Neue Zeichnung', group: 'Datei', shortcut: 'Strg+N', keys: [{ key: 'n', ctrl: true }], run: (a) => a.newDocument() },
+    {
+      id: 'file.new',
+      label: 'Neues Projekt (2D-Motiv oder Schnittmuster)',
+      group: 'Datei',
+      keywords: 'neu zeichnung schnittmuster motiv projektart',
+      shortcut: 'Strg+N',
+      keys: [{ key: 'n', ctrl: true }],
+      run: (a) => a.newDocument(),
+    },
     { id: 'file.open', label: 'Öffnen …', group: 'Datei', shortcut: 'Strg+O', keys: [{ key: 'o', ctrl: true }], run: (a) => void a.openDocument() },
     { id: 'file.import', label: 'Importieren (SVG, DXF) …', group: 'Datei', keywords: 'import svg dxf illustrator inkscape cad schnittmuster öffnen einfügen', run: (a) => void a.importVector() },
     { id: 'file.save', label: 'Speichern', group: 'Datei', shortcut: 'Strg+S', keys: [{ key: 's', ctrl: true }], run: (a) => void a.saveDocument() },
@@ -155,9 +164,23 @@ export function buildCommands(): Command[] {
     },
     { id: 'tool.text', label: 'Text', group: 'Zeichnen', shortcut: 'T', keys: [{ key: 't' }], run: (a) => a.setTool('text') },
     { id: 'tool.point', label: 'Punkt', group: 'Zeichnen', shortcut: 'P', keys: [{ key: 'p' }], run: (a) => a.setTool('point') },
-    { id: 'check.preflight', label: 'Prüfen für Veredelung (Preflight)', group: 'Prüfen', keywords: 'preflight check fehler linien zu fein plotter stick siebdruck dtf', run: (a) => void a.preflight() },
+    {
+      id: 'check.preflight',
+      label: 'Prüfen für Veredelung (Preflight)',
+      group: 'Prüfen',
+      keywords: 'preflight check fehler linien zu fein plotter stick siebdruck dtf',
+      run: (a) => void a.preflight(),
+    },
     { id: 'insert.image', label: 'Bild einfügen (Vorlage zum Nachzeichnen) …', group: 'Zeichnen', keywords: 'foto png jpg hintergrund nachzeichnen vorlage', run: (a) => void a.insertImage() },
-    { id: 'tool.sketch', label: 'Freihandskizze mit Formerkennung', group: 'Zeichnen', shortcut: 'S', keys: [{ key: 's' }], keywords: 'freihand stift pencil skizze erkennung', run: (a) => a.setTool('sketch') },
+    {
+      id: 'tool.sketch',
+      label: 'Freihandskizze mit Formerkennung',
+      group: 'Zeichnen',
+      shortcut: 'S',
+      keys: [{ key: 's' }],
+      keywords: 'freihand stift pencil skizze erkennung',
+      run: (a) => a.setTool('sketch'),
+    },
     {
       id: 'draw.constructionMode',
       label: 'Neue Geometrie als Konstruktion',
@@ -194,14 +217,44 @@ export function buildCommands(): Command[] {
     },
 
     // Anordnen
-    { id: 'arrange.front', label: 'Ganz nach vorne', group: 'Anordnen', shortcut: 'Strg+Umschalt+]', keys: [{ key: ']', ctrl: true, shift: true }, { key: '}', ctrl: true, shift: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'front')) },
+    {
+      id: 'arrange.front',
+      label: 'Ganz nach vorne',
+      group: 'Anordnen',
+      shortcut: 'Strg+Umschalt+]',
+      keys: [
+        { key: ']', ctrl: true, shift: true },
+        { key: '}', ctrl: true, shift: true },
+      ],
+      run: (a) => report(a, a.editor.arrange(sel(a), 'front')),
+    },
     { id: 'arrange.forward', label: 'Nach vorne', group: 'Anordnen', shortcut: 'Strg+]', keys: [{ key: ']', ctrl: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'forward')) },
     { id: 'arrange.backward', label: 'Nach hinten', group: 'Anordnen', shortcut: 'Strg+[', keys: [{ key: '[', ctrl: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'backward')) },
-    { id: 'arrange.back', label: 'Ganz nach hinten', group: 'Anordnen', shortcut: 'Strg+Umschalt+[', keys: [{ key: '[', ctrl: true, shift: true }, { key: '{', ctrl: true, shift: true }], run: (a) => report(a, a.editor.arrange(sel(a), 'back')) },
+    {
+      id: 'arrange.back',
+      label: 'Ganz nach hinten',
+      group: 'Anordnen',
+      shortcut: 'Strg+Umschalt+[',
+      keys: [
+        { key: '[', ctrl: true, shift: true },
+        { key: '{', ctrl: true, shift: true },
+      ],
+      run: (a) => report(a, a.editor.arrange(sel(a), 'back')),
+    },
 
     // Gruppieren
     { id: 'arrange.group', label: 'Gruppieren', group: 'Anordnen', shortcut: 'Strg+G', keys: [{ key: 'g', ctrl: true }], run: (a) => report(a, a.editor.group()) },
-    { id: 'arrange.ungroup', label: 'Gruppierung aufheben', group: 'Anordnen', shortcut: 'Strg+Umschalt+G', keys: [{ key: 'g', ctrl: true, shift: true }, { key: 'G', ctrl: true, shift: true }], run: (a) => report(a, a.editor.ungroup()) },
+    {
+      id: 'arrange.ungroup',
+      label: 'Gruppierung aufheben',
+      group: 'Anordnen',
+      shortcut: 'Strg+Umschalt+G',
+      keys: [
+        { key: 'g', ctrl: true, shift: true },
+        { key: 'G', ctrl: true, shift: true },
+      ],
+      run: (a) => report(a, a.editor.ungroup()),
+    },
 
     // Ändern (Meilenstein 2)
     { id: 'tool.trim', label: 'Stutzen', group: 'Ändern', shortcut: 'X', keys: [{ key: 'x' }], keywords: 'trim abschneiden', run: (a) => a.setTool('trim') },
@@ -222,7 +275,13 @@ export function buildCommands(): Command[] {
     { id: 'draw.symmetry.vh', label: 'Symmetrie: beide Achsen (4-fach)', group: 'Zeichnen', keywords: 'spiegeln symmetrisch live vierfach', run: (a) => a.store.setState({ symmetry: 'vh' }) },
     { id: 'draw.symmetry.off', label: 'Symmetrie aus', group: 'Zeichnen', keywords: 'spiegeln symmetrisch', run: (a) => a.store.setState({ symmetry: 'off' }) },
     { id: 'design.format', label: 'Format übertragen', group: 'Gestalten', keywords: 'pinsel stil kopieren farbe kontur übernehmen format painter', run: (a) => a.setTool('format') },
-    { id: 'insert.generator', label: 'Vorlagen-Generator (Badge, Wappen, Banner, Rahmen, QR-Code, Nackendruck) …', group: 'Zeichnen', keywords: 'vorlage generator badge emblem wappen schild banner band rahmen qr code nacken etikett label', run: (a) => a.ui.setState({ generator: true }) },
+    {
+      id: 'insert.generator',
+      label: 'Vorlagen-Generator (Badge, Wappen, Banner, Rahmen, QR-Code, Nackendruck) …',
+      group: 'Zeichnen',
+      keywords: 'vorlage generator badge emblem wappen schild banner band rahmen qr code nacken etikett label',
+      run: (a) => a.ui.setState({ generator: true }),
+    },
     { id: 'edit.textcircle', label: 'Text auf Kreis …', group: 'Textil', keywords: 'text kreis bogen biegen rund badge', run: (a) => a.editCommand('text-circle') },
     { id: 'edit.shadow', label: 'Schatten …', group: 'Textil', keywords: 'schlagschatten drop shadow versatz kopie', run: (a) => a.editCommand('shadow') },
     { id: 'edit.reduce', label: 'Farben reduzieren …', group: 'Textil', keywords: 'farbreduktion weniger farben siebe sparen zusammenfassen', run: (a) => a.editCommand('reduce-colors') },
@@ -243,7 +302,13 @@ export function buildCommands(): Command[] {
     { id: 'export.dxf', label: 'Als DXF exportieren …', group: 'Datei', keywords: 'plotter cad', run: (a) => a.openExport('dxf') },
 
     // Produktion (LabwearOS)
-    { id: 'prod.open', label: 'Produktion: Artikel, Motive, Varianten', group: 'Produktion', keywords: 'labwearos hoodie shirt veredelung siebdruck', run: (a) => a.ui.setState({ side: 'production', sideOpen: true }) },
+    {
+      id: 'prod.open',
+      label: 'Produktion: Artikel, Motive, Varianten',
+      group: 'Produktion',
+      keywords: 'labwearos hoodie shirt veredelung siebdruck',
+      run: (a) => a.ui.setState({ side: 'production', sideOpen: true }),
+    },
     {
       id: 'prod.place',
       label: 'Motiv platzieren …',
@@ -254,13 +319,59 @@ export function buildCommands(): Command[] {
         a.ui.setState({ placement: d.production?.motifs[0]?.id ?? 'm1' });
       },
     },
-    { id: 'prod.screen', label: 'Siebdruck-Paket (Farbseparation, Filme)', group: 'Produktion', keywords: 'siebdruck sieb film separation unterlage unterdruck überfüllung trapping passer passermarken farbauszug', run: (a) => a.ui.setState({ screenPrint: true }) },
-    { id: 'prod.costs', label: 'Kostenschätzung (Siebdruck, DTF, Flex, Stick)', group: 'Produktion', keywords: 'kosten preis kalkulation angebot stückzahl folie siebe stiche', run: (a) => a.ui.setState({ costs: true }) },
-    { id: 'prod.gangsheet', label: 'DTF-Sammelbogen (Namen und Nummern)', group: 'Produktion', keywords: 'dtf transfer gang sheet bogen rolle trikot namen nummern flock', run: (a) => a.ui.setState({ gangSheet: true }) },
+    {
+      id: 'prod.screen',
+      label: 'Siebdruck-Paket (Farbseparation, Filme)',
+      group: 'Produktion',
+      keywords: 'siebdruck sieb film separation unterlage unterdruck überfüllung trapping passer passermarken farbauszug',
+      run: (a) => a.ui.setState({ screenPrint: true }),
+    },
+    {
+      id: 'prod.costs',
+      label: 'Kostenschätzung (Siebdruck, DTF, Flex, Stick)',
+      group: 'Produktion',
+      keywords: 'kosten preis kalkulation angebot stückzahl folie siebe stiche',
+      run: (a) => a.ui.setState({ costs: true }),
+    },
+    {
+      id: 'prod.gangsheet',
+      label: 'DTF-Sammelbogen (Namen und Nummern)',
+      group: 'Produktion',
+      keywords: 'dtf transfer gang sheet bogen rolle trikot namen nummern flock',
+      run: (a) => a.ui.setState({ gangSheet: true }),
+    },
     { id: 'prod.mockup', label: 'Mockup-Vorschau', group: 'Produktion', keywords: 'shirt hoodie tasche vorschau stofffarbe kontrast', run: (a) => a.ui.setState({ mockup: true }) },
-    { id: 'prod.package', label: 'ZIP-Paket / Stapel-Export (alle Motive, Varianten, Größen, Formate)', group: 'Produktion', keywords: 'export zip paket labwearos stapel stapelexport alle varianten größen formate batch', run: (a) => void a.exportPackage() },
+    {
+      id: 'prod.package',
+      label: 'ZIP-Paket / Stapel-Export (alle Motive, Varianten, Größen, Formate)',
+      group: 'Produktion',
+      keywords: 'export zip paket labwearos stapel stapelexport alle varianten größen formate batch',
+      run: (a) => void a.exportPackage(),
+    },
     { id: 'prod.sheet', label: 'Artwork-Blatt exportieren (PDF)', group: 'Produktion', keywords: 'pdf blatt platzierung', run: (a) => void a.exportArtworkSheet() },
     { id: 'prod.template', label: 'LabwearOS-Vorlage importieren (PDF/AI) …', group: 'Produktion', keywords: 'vorlage import pdf ai illustrator', run: (a) => void a.importTemplate('front') },
+
+    // Schnitt
+    {
+      id: 'pattern.panel',
+      label: 'Schnitt: Grundschnitt aus Körpermaßen',
+      group: 'Schnitt',
+      keywords: 'schnittmuster schnitt grundschnitt hoodie tshirt sweatshirt körpermaße größe passform 3d',
+      run: (a) => a.ui.setState({ side: 'pattern', sideOpen: true }),
+    },
+    { id: 'pattern.seam', label: 'Naht verbinden', group: 'Schnitt', shortcut: 'J', keys: [{ key: 'j' }], keywords: 'naht nähen kante verbinden schnittteil', run: (a) => a.setTool('seam') },
+    {
+      id: 'pattern.piece',
+      label: 'Auswahl als Schnittteil',
+      group: 'Schnitt',
+      keywords: 'schnittteil kontur zuschnitt',
+      run: (a) => {
+        const out = makePieces(a.editor, a.editor.s.selection);
+        if (!out.ok) a.editor.toast(out.message ?? '', 'error');
+        else a.ui.setState({ side: 'pattern', sideOpen: true });
+      },
+    },
+    { id: 'pattern.dxf', label: 'Schnittteile als DXF exportieren', group: 'Schnitt', keywords: 'dxf schnittmuster plotter zuschnitt nahtzugabe export', run: (a) => void a.exportPatternDxf() },
 
     // Ansicht
     { id: 'view.fit', label: 'Alles anzeigen', group: 'Ansicht', shortcut: 'F', keys: [{ key: 'f' }], keywords: 'zoom', run: (a) => a.editor.zoomToFit() },

@@ -210,7 +210,7 @@ function MotifCard({ m, index, p, upd }: { m: Motif; index: number; p: Productio
   const doc = useAppState((s) => s.doc);
   const g = garmentOf(p.garment);
   const size = motifSize(doc, m);
-  const layers = layersOf(doc);
+  const layers = layersOf(doc).filter((l) => !l.pattern);
   const setM = (label: string, fn: (mm: Motif) => void) =>
     upd(label, (q) => {
       const t = q.motifs.find((x) => x.id === m.id);

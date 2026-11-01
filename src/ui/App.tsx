@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { LibraryPanel } from './LibraryPanel';
-import { BookMarked, Layers, Settings2, Shirt, Sparkles } from 'lucide-react';
+import { BookMarked, Layers, Scissors, Settings2, Shirt, Sparkles } from 'lucide-react';
+import { PatternPanel } from './PatternPanel';
 import type { AppController } from './controller';
 import { AppCtx, useUi } from './hooks';
 import { CanvasView } from './CanvasView';
@@ -17,6 +18,7 @@ import { CostView } from './CostView';
 import { GeneratorView } from './GeneratorView';
 import {
   AboutDialog,
+  NewProjectDialog,
   CommandPalette,
   ConfirmDialog,
   ExportDialog,
@@ -56,6 +58,16 @@ function SidePanel({ app }: { app: AppController }) {
         </button>
         <button
           role="tab"
+          aria-selected={side === 'pattern'}
+          className={side === 'pattern' ? 'on' : ''}
+          onClick={() => app.ui.setState({ side: 'pattern' })}
+          data-testid="tab-pattern"
+          title="Schnitt: Grundschnitt aus Körpermaßen, Schnittteile und Nähte für die 3D-Passform"
+        >
+          <Scissors size={15} /> <span className="tab-label">Schnitt</span>
+        </button>
+        <button
+          role="tab"
           aria-selected={side === 'library'}
           className={side === 'library' ? 'on' : ''}
           onClick={() => app.ui.setState({ side: 'library' })}
@@ -79,7 +91,19 @@ function SidePanel({ app }: { app: AppController }) {
         </button>
       </div>
       <div className="side-body">
-        {side === 'props' ? <PropertiesPanel /> : side === 'layers' ? <LayersPanel /> : side === 'production' ? <ProductionPanel /> : side === 'library' ? <LibraryPanel /> : <AssistantPanel />}
+        {side === 'props' ? (
+          <PropertiesPanel />
+        ) : side === 'layers' ? (
+          <LayersPanel />
+        ) : side === 'production' ? (
+          <ProductionPanel />
+        ) : side === 'pattern' ? (
+          <PatternPanel />
+        ) : side === 'library' ? (
+          <LibraryPanel />
+        ) : (
+          <AssistantPanel />
+        )}
       </div>
     </aside>
   );
@@ -109,7 +133,8 @@ function Shell({ app }: { app: AppController }) {
         app.ui.getState().generator ||
         app.ui.getState().profileEditor ||
         app.ui.getState().syncConflict ||
-        app.ui.getState().shareReady
+        app.ui.getState().shareReady ||
+        app.ui.getState().newProject
       )
         return;
       if (e.key === 'Escape') {
@@ -208,6 +233,7 @@ function Shell({ app }: { app: AppController }) {
       <ConfirmDialog />
       <TutorialList />
       <AboutDialog />
+      <NewProjectDialog />
     </div>
   );
 }
