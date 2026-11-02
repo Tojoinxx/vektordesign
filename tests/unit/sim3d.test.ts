@@ -12,10 +12,7 @@ import { SimRunner } from '../../src/sim3d/runner';
 import type { FromWorker } from '../../src/sim3d/protocol';
 import { necklineCenter } from '../../src/viewer3d/viewer';
 
-/**
- * Nähte geschlossen: fast alle Nahtstellen liegen aufeinander. Einzelne Ecken dürfen etwas klaffen – bei
- * abgelegter Kapuze zieht sie vorne an der Halsecke (wie beim echten Hoodie).
- */
+/** Nähte geschlossen: fast alle Nahtstellen liegen aufeinander, keine klafft mehr als `max` mm. */
 function expectSeamsClosed(sim: GarmentSim, max = 8): void {
   const g = Array.from(sim.seamGaps()).sort((a, b) => a - b);
   expect(g[Math.floor(g.length * 0.97)]).toBeLessThan(4);
@@ -92,7 +89,7 @@ describe('Stoffsimulation', () => {
       const sim = new GarmentSim(ex, { resolution: 26, substeps: 8 });
       const st = sim.run(8);
       expect(st.settled).toBe(true);
-      expectSeamsClosed(sim, kind === 'hoodie' ? 18 : 8);
+      expectSeamsClosed(sim);
       expect(st.inside).toBe(0);
       // Kleidungsstück hängt auf den Schultern, nicht am Boden
       let minY = Infinity;
@@ -181,7 +178,7 @@ describe('Realistische Puppe (MakeHuman)', () => {
     const sim = new GarmentSim(ex, { resolution: 26, substeps: 8, human });
     expect(sim.mq.sdf).toBeTruthy();
     const st = sim.run(8);
-    expectSeamsClosed(sim, 18);
+    expectSeamsClosed(sim);
     expect(st.inside).toBe(0);
   }, 60000);
 });
@@ -276,7 +273,7 @@ describe('Puppe zum Anprobieren', () => {
     expect(ex.gender).toBe('female');
     const sim = new GarmentSim(ex, { resolution: 26, substeps: 8 });
     const st = sim.run(8);
-    expectSeamsClosed(sim, 18);
+    expectSeamsClosed(sim);
     expect(st.inside).toBe(0);
   }, 60000);
 });

@@ -114,7 +114,36 @@ export function gradedBlock(blk: PatternBlock, baseBody: BodyMeasures, size: str
   const body = size === 'custom' ? baseBody : bodyForSize(size);
   const d0 = defaultBlock(blk.kind, baseBody, blk.fit, blk.size);
   const d1 = defaultBlock(blk.kind, body, blk.fit, size);
-  return { body, blk: { ...blk, size, length: d1.length + (blk.length - d0.length), sleeve: d1.sleeve + (blk.sleeve - d0.sleeve) } };
+  const out: PatternBlock = { ...blk, size, length: d1.length + (blk.length - d0.length), sleeve: d1.sleeve + (blk.sleeve - d0.sleeve) };
+  if (blk.spec && size !== blk.size) {
+    // Fertigmaße mitstufen: gleicher Sprung je Messpunkt wie beim Standardschnitt zwischen den Größen
+    const p0 = blockPoms(generateBlock(baseBody, { ...blk, spec: undefined }));
+    const p1 = blockPoms(generateBlock(body, { ...out, spec: undefined }));
+    const spec: Partial<Record<string, number>> = {};
+    for (const [k, v] of Object.entries(blk.spec)) if (v != null) spec[k] = v + ((p1[k] ?? 0) - (p0[k] ?? 0));
+    out.spec = spec;
+  }
+  return { body, blk: out };
+}
+
+/** Messpunkte, deren Fertigmaß der erzeugte Schnitt nicht trifft (z. B. Ärmelweite größer als das Armloch zulässt). */
+export function specDeviations(body: BodyMeasures, blk: PatternBlock, tol = 1): { pom: Pom; want: number; got: number }[] {
+  if (!blk.spec) return [];
+  const got = blockPoms(generateBlock(body, blk));
+  const out: { pom: Pom; want: number; got: number }[] = [];
+  for (const pom of POMS) {
+    const want = blk.spec[pom.id];
+    const g = got[pom.id];
+    if (want == null || g == null) continue;
+    if (Math.abs(want - g) > tol) out.push({ pom, want, got: g });
+  }
+  return out;
+}
+
+/** Messpunkte, die es beim Kleidungsstück gibt (für die Eingabe von Fertigmaßen). */
+export function pomsFor(kind: PatternBlock['kind']): Pom[] {
+  const r = blockPoms(generateBlock(bodyForSize('H-M'), defaultBlock(kind, bodyForSize('H-M'))));
+  return POMS.filter((p) => r[p.id] != null && r[p.id]! > 0);
 }
 
 export function measureTable(doc: SketchDoc): MeasureTable | null {

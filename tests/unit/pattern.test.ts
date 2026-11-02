@@ -182,3 +182,41 @@ describe('Export und Austausch', () => {
     expect(() => exportPatternDxf(empty.s.doc)).toThrow(/Keine Schnittteile/);
   });
 });
+
+describe('Schnitt aus Fertigmaßen eines vorhandenen Produkts', () => {
+  it('Oversize-Hoodie aus der Größentabelle: alle Messpunkte werden genau getroffen', async () => {
+    const { generateBlock } = await import('../../src/pattern/blocks');
+    const { blockPoms, specDeviations, measureTable } = await import('../../src/techpack/measure');
+    const { bodyForSize } = await import('../../src/pattern/body');
+    const body = bodyForSize('H-L');
+    // ½ Brust 62, Länge 72, ½ Saum 52, Schulter 60, Ärmel 58, ½ Oberarm 26, ½ Öffnung 10, Bündchen 8,
+    // Schulternaht 20, Armloch 30, Halsweite 20, Kapuze 38 × 28 (cm)
+    const spec = { chest: 620, len: 720, hem: 520, shoulder: 600, sleeve: 580, bicep: 260, opening: 100, rib: 80, shoulderSeam: 200, armhole: 300, neckW: 200, hoodH: 380, hoodW: 280 };
+    const blk = { ...defaultBlock('hoodie', body, 'oversize', 'H-L'), spec };
+    const got = blockPoms(generateBlock(body, blk));
+    for (const [k, v] of Object.entries(spec)) expect(Math.abs(got[k]! - v), k).toBeLessThan(1);
+    expect(specDeviations(body, blk)).toEqual([]);
+    // als Projekt: Maßtabelle mit Staffel – Basis trifft die Fertigmaße, Nachbargrößen sind gestuft
+    const ed = await makeEditor();
+    generatePattern(ed, body, 'H-L', blk);
+    const t = measureTable(ed.s.doc)!;
+    const base = t.sizes.findIndex((s) => s.base);
+    const chest = t.rows.find((r) => r.pom.id === 'chest')!.values;
+    expect(chest[base]).toBeCloseTo(620, 0);
+    expect(chest[base + 1]!).toBeGreaterThan(620);
+    expect(chest[base - 1]!).toBeLessThan(620);
+  });
+
+  it('T-Shirt: nur einige Maße angegeben, der Rest kommt aus Körpermaßen', async () => {
+    const { generateBlock } = await import('../../src/pattern/blocks');
+    const { blockPoms } = await import('../../src/techpack/measure');
+    const { bodyForSize } = await import('../../src/pattern/body');
+    const body = bodyForSize('H-M');
+    const plain = blockPoms(generateBlock(body, defaultBlock('tshirt', body)));
+    const got = blockPoms(generateBlock(body, { ...defaultBlock('tshirt', body), spec: { chest: 540, sleeve: 220, opening: 170 } }));
+    expect(got.chest).toBeCloseTo(540, 0);
+    expect(got.sleeve).toBeCloseTo(220, 0);
+    expect(got.opening).toBeCloseTo(170, 0);
+    expect(got.len).toBeCloseTo(plain.len!, 0);
+  });
+});

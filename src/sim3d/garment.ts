@@ -832,6 +832,8 @@ export class GarmentSim {
     }
     // Kollision mit der Puppe und dem Boden
     this.collide();
+    // Nähte zum Schluss noch einmal nachziehen (sonst gewinnen Kollision und Stoffspannung an Nahtecken)
+    if (sew >= 1) this.solveSeams(sew);
   }
 
   private solveDistance(idx: Uint32Array, rest: Float32Array, comp: Float32Array, compressK: number): void {

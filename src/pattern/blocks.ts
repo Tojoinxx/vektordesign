@@ -74,6 +74,7 @@ export function defaultBlock(kind: BlockKind, body: BodyMeasures, fit: PatternBl
 // ---------------------------------------------------------------------------
 
 const n = (x: number, y: number, h: Partial<ShapeNode> = {}): ShapeNode => ({ x, y, ...h });
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** Länge einer Bézierkurve zwischen zwei Knoten. */
 function curveLength(a: ShapeNode, b: ShapeNode): number {
@@ -99,14 +100,18 @@ interface BodyPieceInfo {
  * Kanten: 0 Saum, 1 Seite rechts, 2 Armloch rechts, 3 Schulter rechts, 4 Hals rechts, 5 Hals links,
  * 6 Schulter links, 7 Armloch links, 8 Seite links.
  */
-function bodyPiece(b: BodyMeasures, blk: PatternBlock, front: boolean, len: number): BodyPieceInfo {
-  const hw = (b.chest + CHEST_EASE[blk.fit]) / 4;
-  const sp = b.shoulder / 2 + SHOULDER_DROP[blk.fit];
-  const nw = b.neck / 6 + 8;
-  const nd = front ? b.neck / 6 + 30 : 22;
-  const slope = blk.fit === 'oversize' ? 30 : 45;
-  const ad = b.chest / 8 + 120 + (blk.fit === 'slim' ? 0 : blk.fit === 'regular' ? 15 : 55);
-  const hem = Math.max(hw, (b.hip + CHEST_EASE[blk.fit] * 0.6) / 4);
+function bodyPiece(b: BodyMeasures, blk: PatternBlock, front: boolean, len: number, rib: boolean): BodyPieceInfo {
+  const s = blk.spec ?? {};
+  const hw = s.chest ? s.chest / 2 : (b.chest + CHEST_EASE[blk.fit]) / 4;
+  const sp = s.shoulder ? s.shoulder / 2 : b.shoulder / 2 + SHOULDER_DROP[blk.fit];
+  const nw = s.neckW ? s.neckW / 2 : b.neck / 6 + 8;
+  const nd = front ? (s.neckFront ?? b.neck / 6 + 30) : (s.neckBack ?? 22);
+  // Schulternaht (gerade vom Halspunkt zum Schulterpunkt) bestimmt die Schulterneigung
+  const slope = s.shoulderSeam ? clamp(Math.sqrt(Math.max(0, s.shoulderSeam ** 2 - (sp - nw) ** 2)), 5, 110) : blk.fit === 'oversize' ? 30 : 45;
+  // Armloch gerade (Schulterpunkt → Achsel) bestimmt die Armlochtiefe
+  const ad = s.armhole ? slope + Math.max(60, Math.sqrt(Math.max(0, s.armhole ** 2 - (hw - sp) ** 2))) : b.chest / 8 + 120 + (blk.fit === 'slim' ? 0 : blk.fit === 'regular' ? 15 : 55);
+  // ½ Saumweite: mit Bündchen misst man das Bündchen (88 % des Teils), sonst die Saumkante
+  const hem = s.hem ? (rib ? s.hem / 1.76 : s.hem / 2) : Math.max(hw, (b.hip + CHEST_EASE[blk.fit] * 0.6) / 4);
   const scoop = front ? 0.5 : 0.4;
   const underR = n(hw, -ad, { ox: hw - (hw - sp) * 0.9 - 4, oy: -ad + 2 });
   const shR = n(sp, -slope, { ix: sp - (front ? 10 : 4), iy: -slope - (ad - slope) * scoop });
@@ -130,7 +135,7 @@ function bodyPiece(b: BodyMeasures, blk: PatternBlock, front: boolean, len: numb
  * Kanten: 0 Saum, 1 Unterarm rechts, 2 Kugel rechts (→ Vorderteil), 3 Kugel links (→ Rückenteil), 4 Unterarm links.
  */
 function sleevePiece(b: BodyMeasures, blk: PatternBlock, frontArm: number, backArm: number, len: number, hemHalf: number): { contour: Contour; hemWidth: number } {
-  let bw = (b.upperArm + ARM_EASE[blk.fit]) / 2;
+  let bw = blk.spec?.bicep ?? (b.upperArm + ARM_EASE[blk.fit]) / 2;
   const target = (frontArm + backArm) / 2;
   const capNodes = (ch: number, fr = 0.42, fl = 0.42) => {
     const right = n(bw, -ch, { ox: bw * 0.55, oy: -ch * 0.72 });
@@ -180,10 +185,26 @@ function sleevePiece(b: BodyMeasures, blk: PatternBlock, frontArm: number, backA
  * am Hals, 3 Hinterkopf, 4 Scheitel, 5 Gesichtskante oben. Kanten: 0 Hals vorne, 1 Hals hinten,
  * 2 hintere Mitte unten, 3 Hinterkopf, 4 Scheitel, 5 Gesichtskante (offen).
  */
-function hoodPiece(b: BodyMeasures, frontNeck: number, backNeck: number): Contour {
-  const hh = b.head * 0.62 + 20;
-  const depth = b.head * 0.43 + 15;
-  const t = (3 * Math.PI) / 180;
+function hoodPiece(b: BodyMeasures, frontNeck: number, backNeck: number, spec: Partial<Record<string, number>> = {}): Contour {
+  // Fertigmaße Kapuzenhöhe/-breite: Kontur messen und zwei-, dreimal nachstellen (Bézier-Bögen ragen etwas über)
+  let hh = spec.hoodH ?? b.head * 0.62 + 20;
+  let depth = spec.hoodW ? spec.hoodW - 30 : b.head * 0.43 + 15;
+  for (let it = 0; it < 6; it++) {
+    const c = hoodContour(hh, depth, frontNeck, backNeck);
+    if (!spec.hoodH && !spec.hoodW) return c;
+    const pts = flattenContour(c, 0.2);
+    const w = Math.max(...pts.map((q) => q.x)) - Math.min(...pts.map((q) => q.x));
+    const h = Math.max(...pts.map((q) => q.y)) - Math.min(...pts.map((q) => q.y));
+    if (spec.hoodH) hh += spec.hoodH - h;
+    if (spec.hoodW) depth += spec.hoodW - w;
+  }
+  return hoodContour(hh, depth, frontNeck, backNeck);
+}
+
+function hoodContour(hh: number, depth: number, frontNeck: number, backNeck: number): Contour {
+  // Halskante leicht geneigt; bei schmaler Kapuze (Fertigmaß) steiler, damit sie trotzdem den ganzen Halsausschnitt fasst
+  const need = frontNeck + backNeck;
+  const t = Math.max((3 * Math.PI) / 180, Math.min((55 * Math.PI) / 180, Math.acos(Math.min(1, Math.max(0, (depth - 20) / need)))));
   const p1 = { x: frontNeck * Math.cos(t), y: -frontNeck * Math.sin(t) };
   const p2 = { x: p1.x + backNeck * Math.cos(t), y: p1.y + backNeck * Math.sin(t) };
   const back = Math.max(depth, p2.x + 20);
@@ -204,10 +225,10 @@ function hoodPiece(b: BodyMeasures, frontNeck: number, backNeck: number): Contou
  * Halsbündchen: Unterkante in vier Abschnitte (Rücken rechts, vorne rechts, vorne links, Rücken links)
  * geteilt, Länge um `k` gegenüber dem Halsausschnitt verkürzt. Kanten 0–3 unten, 4 rechts, 5 oben, 6 links.
  */
-function neckband(frontHalf: number, backHalf: number, k: number): Contour {
+function neckband(frontHalf: number, backHalf: number, k: number, height?: number): Contour {
   const segs = [backHalf, frontHalf, frontHalf, backHalf].map((v) => v * k);
   const W = segs.reduce((s, v) => s + v, 0);
-  const H = NECKBAND_H;
+  const H = height ? clamp(height, 8, 80) : NECKBAND_H;
   const nodes: ShapeNode[] = [];
   let x = -W / 2;
   nodes.push(n(x, 0));
@@ -222,20 +243,26 @@ function neckband(frontHalf: number, backHalf: number, k: number): Contour {
 export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResult {
   const hasRib = blk.kind === 'sweatshirt' || blk.kind === 'hoodie';
   const longArm = blk.kind !== 'tshirt';
-  const bodyLen = Math.max(250, blk.length - (hasRib ? RIB_H : 0));
-  const front = bodyPiece(body, blk, true, bodyLen);
-  const back = bodyPiece(body, blk, false, bodyLen);
-  const drop = SHOULDER_DROP[blk.fit];
-  const cuffW = body.wrist + 45;
-  const sleeveLen = Math.max(80, blk.sleeve - drop - (hasRib && longArm ? RIB_H : 0));
-  const hemHalf = longArm ? (hasRib ? (cuffW * 1.3) / 2 : (body.wrist + 90) / 2) : Infinity;
+  const spec = blk.spec ?? {};
+  const RIB = spec.rib ? clamp(spec.rib, 15, 200) : RIB_H;
+  const length = spec.len ?? blk.length;
+  const bodyLen = Math.max(250, length - (hasRib ? RIB : 0));
+  const front = bodyPiece(body, blk, true, bodyLen, hasRib);
+  const back = bodyPiece(body, blk, false, bodyLen, hasRib);
+  const drop = spec.shoulder ? 0 : SHOULDER_DROP[blk.fit];
+  const cuffW = spec.opening && hasRib && longArm ? 2 * spec.opening : body.wrist + 45;
+  const cuffH = hasRib && longArm ? RIB : 0;
+  // Ärmellänge als Fertigmaß: ab Schulterpunkt des Schnitts bis Ärmelkante (inkl. Bündchen)
+  const sleeveLen = Math.max(80, spec.sleeve ? spec.sleeve - cuffH : blk.sleeve - drop - cuffH);
+  const hemHalf = longArm ? (hasRib ? (cuffW * 1.3) / 2 : (spec.opening ?? (body.wrist + 90) / 2)) : Infinity;
   const sleeve = sleevePiece(body, blk, front.armhole, back.armhole, sleeveLen, hemHalf === Infinity ? 1e9 : hemHalf);
   if (!longArm) {
     // Kurzarm: Saum etwas schmaler als Oberarmweite
     const nodes = sleeve.contour.nodes;
     const bw = nodes[2].x;
-    nodes[0].x = -bw * 0.88;
-    nodes[1].x = bw * 0.88;
+    const half = spec.opening ?? bw * 0.88;
+    nodes[0].x = -half;
+    nodes[1].x = half;
   }
 
   const pieces: BlockPiece[] = [
@@ -259,7 +286,7 @@ export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResul
 
   if (hasRib) {
     if (longArm) {
-      pieces.push({ key: 'cuff', name: 'Ärmelbündchen', role: 'cuff', cut: 2, contour: rect(cuffW, RIB_H), rib: true });
+      pieces.push({ key: 'cuff', name: 'Ärmelbündchen', role: 'cuff', cut: 2, contour: rect(cuffW, RIB), rib: true });
       seams.push(
         { a: ['cuff', 2, 0], b: ['sleeve', 0, 0], reversed: true, name: 'Bündchen links' },
         { a: ['cuff', 2, 1], b: ['sleeve', 0, 1], reversed: true, name: 'Bündchen rechts' },
@@ -270,8 +297,8 @@ export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResul
     const fw = front.hemWidth * 0.88;
     const bw = back.hemWidth * 0.88;
     pieces.push(
-      { key: 'hemFront', name: 'Saumbund vorne', role: 'hem', cut: 1, contour: rect(fw, RIB_H), rib: true },
-      { key: 'hemBack', name: 'Saumbund hinten', role: 'hem', cut: 1, contour: rect(bw, RIB_H), rib: true },
+      { key: 'hemFront', name: 'Saumbund vorne', role: 'hem', cut: 1, contour: rect(fw, RIB), rib: true },
+      { key: 'hemBack', name: 'Saumbund hinten', role: 'hem', cut: 1, contour: rect(bw, RIB), rib: true },
     );
     seams.push(
       { a: ['hemFront', 2, 0], b: ['front', 0, 0], reversed: true, name: 'Saumbund vorne' },
@@ -282,7 +309,7 @@ export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResul
   }
 
   if (blk.kind === 'hoodie') {
-    pieces.push({ key: 'hood', name: 'Kapuze', role: 'hood', cut: 2, contour: hoodPiece(body, front.neckHalf, back.neckHalf) });
+    pieces.push({ key: 'hood', name: 'Kapuze', role: 'hood', cut: 2, contour: hoodPiece(body, front.neckHalf, back.neckHalf, spec) });
     seams.push(
       { a: ['hood', 0, 0], b: ['front', 4, 0], reversed: true, name: 'Kapuze vorne links' },
       { a: ['hood', 1, 0], b: ['back', 5, 0], reversed: true, name: 'Kapuze hinten links' },
@@ -294,7 +321,7 @@ export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResul
     );
   } else {
     const k = hasRib ? 0.85 : 0.88;
-    pieces.push({ key: 'neckband', name: 'Halsbündchen', role: 'neckband', cut: 1, contour: neckband(front.neckHalf, back.neckHalf, k), rib: true });
+    pieces.push({ key: 'neckband', name: 'Halsbündchen', role: 'neckband', cut: 1, contour: neckband(front.neckHalf, back.neckHalf, k, spec.neckband), rib: true });
     seams.push(
       { a: ['neckband', 0, 0], b: ['back', 4, 0], reversed: true, name: 'Halsbündchen hinten rechts' },
       { a: ['neckband', 1, 0], b: ['front', 5, 0], reversed: true, name: 'Halsbündchen vorne rechts' },

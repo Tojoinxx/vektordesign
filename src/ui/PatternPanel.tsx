@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeftRight, BookOpenText, Box, CheckCircle2, ChevronDown, ChevronRight, Download, Plus, Ruler, Scissors, Spline, Trash2, TriangleAlert, Wand2 } from 'lucide-react';
 import type { BodyMeasures, PatternBlock, PatternMaterial, PieceRole } from '../model/types';
-import { BLOCK_KINDS, FIT_NAMES, defaultBlock } from '../pattern/blocks';
+import { BLOCK_KINDS, FIT_NAMES, defaultBlock, generateBlock } from '../pattern/blocks';
+import { blockPoms, pomsFor, specDeviations } from '../techpack/measure';
 import { BODY_FIELDS, DEFAULT_SIZE, SIZE_TABLE, bodyForSize, checkBody } from '../pattern/body';
 import { canBePiece, checkSeams, fabricArea, freeEdges, pieceById, pieceGeom } from '../pattern/geometry';
 import { FABRICS, ROLE_NAMES, addMaterial, generatePattern, makePieces, removePiece, removeSeam, setBody, setPieceLook, updateMaterial, updatePiece, updateSeam } from '../store/patternOps';
@@ -128,8 +129,15 @@ function BlockSection() {
   const [length, setLength] = useState<number | null>(pat?.block?.length ?? null);
   const [sleeve, setSleeve] = useState<number | null>(pat?.block?.sleeve ?? null);
   const [showBody, setShowBody] = useState(false);
+  const [spec, setSpec] = useState<Partial<Record<string, number>>>(pat?.block?.spec ?? {});
+  const [showSpec, setShowSpec] = useState(!!pat?.block?.spec && Object.keys(pat.block.spec).length > 0);
   const problems = checkBody(body);
-  const blk: PatternBlock = { kind, fit, size, length: length ?? auto.length, sleeve: sleeve ?? auto.sleeve };
+  const hasSpec = Object.values(spec).some((v) => v != null);
+  const blk: PatternBlock = { kind, fit, size, length: length ?? auto.length, sleeve: sleeve ?? auto.sleeve, ...(hasSpec ? { spec } : {}) };
+  // Werte, die der Schnitt ohne bzw. mit den eingetragenen Fertigmaßen ergibt (als Vorgabe im Feld)
+  const current = useMemo(() => blockPoms(generateBlock(body, blk)), [body, JSON.stringify(blk)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const deviations = useMemo(() => specDeviations(body, blk), [body, JSON.stringify(blk)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const poms = useMemo(() => pomsFor(kind), [kind]);
 
   const pickSize = (id: string) => {
     setSize(id);
@@ -222,6 +230,45 @@ function BlockSection() {
           ))}
         </div>
       )}
+      <button className="disclosure" onClick={() => setShowSpec((s) => !s)} aria-expanded={showSpec} data-testid="block-spec-toggle">
+        {showSpec ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Maße eines vorhandenen Teils {hasSpec ? `(${Object.values(spec).filter((v) => v != null).length} gesetzt)` : ''}
+      </button>
+      {showSpec && (
+        <div data-testid="block-spec">
+          <p className="muted small">
+            Fertigmaße aus der Größentabelle oder flach liegend nachgemessen (cm). Eingetragene Werte bestimmen den Schnitt genau, leere Felder kommen aus Körpermaßen und Passform – der Vorschlag
+            steht grau im Feld.
+          </p>
+          <div className="form-grid">
+            {poms.map((pom) => (
+              <SpecRow
+                key={pom.id}
+                code={pom.code}
+                label={pom.label}
+                hint={pom.how}
+                value={spec[pom.id]}
+                suggestion={current[pom.id] ?? null}
+                testId={`spec-${pom.id}`}
+                onChange={(v) => setSpec((old) => ({ ...old, [pom.id]: v ?? undefined }))}
+              />
+            ))}
+          </div>
+          {hasSpec && (
+            <button className="link-btn small" onClick={() => setSpec({})} data-testid="spec-clear">
+              Alle Fertigmaße löschen
+            </button>
+          )}
+          {deviations.length > 0 && (
+            <ul className="warn-list" data-testid="spec-deviations">
+              {deviations.map((d) => (
+                <li key={d.pom.id}>
+                  <TriangleAlert size={14} /> {d.pom.code} {d.pom.label}: {mm(d.want / 10)} cm gewünscht, Schnitt ergibt {mm(d.got / 10)} cm (passt geometrisch nicht zu den übrigen Maßen)
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {problems.length > 0 && (
         <ul className="warn-list">
           {problems.map((p) => (
@@ -252,6 +299,33 @@ function BlockSection() {
         {kind === 'hoodie' ? ' und Kapuze' : ''} mit fertig verbundenen Nähten. Beim Aktualisieren werden nur diese Teile ersetzt – eigene Teile bleiben.
       </p>
     </section>
+  );
+}
+
+/** Fertigmaß in cm; leer = automatisch (Vorschlag als Platzhalter). */
+function SpecRow(p: { code: string; label: string; hint: string; value: number | undefined; suggestion: number | null; onChange: (v: number | null) => void; testId: string }) {
+  return (
+    <>
+      <span title={p.hint}>
+        <span className="muted">{p.code}</span> {p.label}
+      </span>
+      <span className="row">
+        <Field
+          value={p.value != null ? mm(p.value / 10) : ''}
+          placeholder={p.suggestion != null ? mm(p.suggestion / 10) : ''}
+          numeric
+          width={64}
+          label={`${p.label} in cm (leer = automatisch)`}
+          testId={p.testId}
+          onCommit={(v) => {
+            if (!v.trim()) return p.onChange(null);
+            const n = num(v);
+            if (n !== null && n > 0) p.onChange(Math.round(n * 10));
+          }}
+        />
+        <span className="muted">cm</span>
+      </span>
+    </>
   );
 }
 

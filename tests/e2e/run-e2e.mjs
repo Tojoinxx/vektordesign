@@ -1993,6 +1993,36 @@ await step('Tech-Pack: Angaben, Zutat, Referenzbild, 3D-Ansichten, PDF und Maßt
   await page.keyboard.press('Escape');
 });
 
+await step('Schnitt aus Fertigmaßen eines vorhandenen Hoodies: ½ Brust 62 cm, Ärmel 60 cm', async () => {
+  await page.click('[data-testid="tab-pattern"]');
+  await page.click('[data-testid="block-spec-toggle"]');
+  await page.waitForSelector('[data-testid="spec-chest"]');
+  const ph = await page.$eval('[data-testid="spec-chest"]', (e) => e.placeholder);
+  assert(/^\d/.test(ph), `Vorschlag fehlt: ${ph}`);
+  for (const [id, v] of [
+    ['spec-chest', '62'],
+    ['spec-sleeve', '60'],
+  ]) {
+    await page.click(`[data-testid="${id}"]`, { clickCount: 3 });
+    await page.keyboard.type(v);
+    await page.keyboard.press('Tab');
+  }
+  await page.click('[data-testid="block-generate"]');
+  await sleep(300);
+  const r = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return { spec: d.pattern.block.spec };
+  });
+  assert(r.spec?.chest === 620 && r.spec?.sleeve === 600, `Fertigmaße: ${JSON.stringify(r)}`);
+  await page.click('[data-testid="pattern-techpack"]');
+  await page.waitForSelector('[data-testid="techpack"]');
+  await page.click('[data-testid="tp-tab-measures"]');
+  const row = await page.$$eval('[data-testid="tp-measures"] tbody tr', (rows) => rows.map((r) => r.textContent).find((t) => t.includes('Brustweite')));
+  assert(row && row.includes('62'), `Maßtabelle Brust: ${row}`);
+  await shot('20-fertigmasse');
+  await page.keyboard.press('Escape');
+});
+
 await browser.close();
 // Ganze Prozessgruppe beenden (npx startet vite als Kindprozess)
 if (server) {

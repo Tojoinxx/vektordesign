@@ -472,6 +472,11 @@ export interface PatternBlock {
   length: number;
   /** Ärmellänge ab Schulterpunkt (T-Shirt kurz) */
   sleeve: number;
+  /**
+   * Fertigmaße eines vorhandenen Produkts (Messpunkte der Maßtabelle, z. B. chest = ½ Brustweite, mm).
+   * Gesetzte Werte legen die Geometrie direkt fest; fehlende kommen aus Körpermaßen und Passform.
+   */
+  spec?: Partial<Record<string, number>>;
 }
 
 /** Puppe zum Anprobieren (unabhängig von der Größe des Schnitts). */
