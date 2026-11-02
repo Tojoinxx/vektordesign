@@ -113,3 +113,29 @@ describe('Tech-Pack', () => {
     for (const t of ['TECH-PACK', 'TH-2027-01', 'Gesamtl', 'Schnittteile', 'Pflegeetikett', 'Overlock', 'Kordel nicht im Muster', 'Farbmuster']) expect(text, t).toContain(t);
   });
 });
+
+describe('Tech-Pack im ZIP-Paket', () => {
+  it('LabwearOS-Profil legt Tech-Pack, Maßtabelle und Schnitt bei, wenn Schnittteile vorhanden sind', async () => {
+    const { buildPackage } = await import('../../src/export/package');
+    const { BUILTIN_PROFILES } = await import('../../src/model/profiles');
+    const { productionOf } = await import('../../src/model/production');
+    const { unzipSync } = await import('fflate');
+    const ed = await hoodie();
+    const profile = BUILTIN_PROFILES.find((p) => p.id === 'labwearos')!;
+    const doc = ed.s.doc;
+    const res = await buildPackage(doc, productionOf(doc), profile, { date: new Date('2026-11-02T10:00:00Z') });
+    const names = Object.keys(unzipSync(res.zip));
+    const tp = names.filter((n) => n.includes('/Tech-Pack/'));
+    expect(tp.some((n) => n.endsWith('_Tech-Pack.pdf'))).toBe(true);
+    expect(tp.some((n) => n.endsWith('_Masstabelle.csv'))).toBe(true);
+    expect(tp.some((n) => n.endsWith('_Schnitt.dxf'))).toBe(true);
+    const readme = strFromU8(unzipSync(res.zip)[names.find((n) => n.endsWith('LIESMICH.txt'))!]);
+    expect(readme).toContain('Tech-Pack/');
+    // ohne Häkchen bzw. ohne Schnitt: kein Tech-Pack
+    const off = await buildPackage(doc, productionOf(doc), { ...profile, techPack: false });
+    expect(off.files.some((n) => n.includes('/Tech-Pack/'))).toBe(false);
+    const plain = await makeEditor();
+    const none = await buildPackage(plain.s.doc, productionOf(plain.s.doc), profile);
+    expect(none.files.some((n) => n.includes('/Tech-Pack/'))).toBe(false);
+  }, 60000);
+});

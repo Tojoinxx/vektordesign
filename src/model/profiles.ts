@@ -22,6 +22,8 @@ export interface ExportProfile {
   sheet: boolean;
   /** Projektdatei beilegen */
   project: boolean;
+  /** Tech-Pack (PDF), Maßtabelle (CSV) und Schnitt (DXF) beilegen, wenn das Projekt Schnittteile hat */
+  techPack?: boolean;
   /** Eigene Notizen (z. B. Vorgaben aus dem LabwearOS-Konto) */
   note: string;
 }
@@ -39,6 +41,7 @@ export const BUILTIN_PROFILES: ExportProfile[] = [
     bounds: 'geometry',
     sheet: true,
     project: true,
+    techPack: true,
     note: 'Startwerte – bitte mit den Datei-Anforderungen aus dem LabwearOS-Konto abgleichen.',
   },
   {

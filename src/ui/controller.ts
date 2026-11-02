@@ -1035,9 +1035,12 @@ export class AppController {
         return false;
       }
     }
+    // Tech-Pack im Paket: fehlende 3D-Ansichten vorher aufnehmen
+    if (profile.techPack && doc.pattern?.pieces.length && !doc.techPack?.renders) await this.captureTechPackRenders();
+    const docNow = this.editor.s.doc;
     this.ui.setState({ busy: 'Paket wird erstellt …' });
     try {
-      const res = await buildPackage(doc, p, profile, {
+      const res = await buildPackage(docNow, productionOf(docNow), profile, {
         renderPng: (d, dpi, mirror, bounds) => this.pngBytes(d, dpi, mirror, bounds),
         decodeTemplate: (t) => decodeImage(t.image),
         decodeImage: (src) => decodeImage(src, 2400),
@@ -1047,7 +1050,8 @@ export class AppController {
       const saved = await saveFile(res.zip, res.fileName, ZIP_TYPE, path);
       if (!saved) return false;
       const n = res.files.filter((f) => f.includes('/Motive/')).length;
-      this.editor.toast(`Paket ${res.fileName} exportiert: ${n} Motivdateien${profile.sheet ? ' und Artwork-Blatt' : ''}`, 'success', 5000);
+      const extras = [profile.sheet ? 'Artwork-Blatt' : '', res.files.some((f) => f.includes('/Tech-Pack/')) ? 'Tech-Pack' : ''].filter(Boolean);
+      this.editor.toast(`Paket ${res.fileName} exportiert: ${n} Motivdateien${extras.length ? ` und ${extras.join(', ')}` : ''}`, 'success', 5000);
       for (const w of res.warnings) this.editor.toast(w, 'info', 8000);
       return true;
     } catch (e) {

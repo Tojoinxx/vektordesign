@@ -12,6 +12,9 @@ import { exportDxf } from './dxf';
 import { buildArtworkSheet, type SheetOptions } from './artworkSheet';
 import type { SizeGrade } from '../model/types';
 import { gradedMotifDoc, gradedSize, sizeSuffix } from '../model/sizes';
+import { buildTechPack } from './techPack';
+import { exportPatternDxf } from './patternDxf';
+import { measureCsv, measureTable } from '../techpack/measure';
 
 /**
  * Ein-Klick-Paket (ZIP) für den Produzenten: alle Motive in allen Varianten und Formaten
@@ -103,6 +106,15 @@ export async function buildPackage(doc: SketchDoc, p: Production, profile: Expor
     put(`${base}_Artwork-Blatt.pdf`, await buildArtworkSheet(doc, p, { colorMode: profile.colorMode === 'cmyk' ? 'cmyk' : 'rgb', decodeTemplate: opts.decodeTemplate, date: opts.date }));
   }
   put('Farben.csv', colorsCsv(doc, p));
+  if (profile.techPack && doc.pattern?.pieces.length) {
+    // Ergänzung zu LabwearOS: Tech-Pack mit 3D-Ansichten, Maßtabelle (Größenstaffel) und Schnittteile
+    opts.onProgress?.('Tech-Pack …');
+    put(`Tech-Pack/${base}_Tech-Pack.pdf`, await buildTechPack(doc, { decode: opts.decodeImage, date: opts.date, colorMode: profile.colorMode === 'cmyk' ? 'cmyk' : 'rgb' }));
+    const t = measureTable(doc);
+    if (t) put(`Tech-Pack/${base}_Masstabelle.csv`, measureCsv(t, doc.techPack?.tolerances));
+    put(`Tech-Pack/${base}_Schnitt.dxf`, exportPatternDxf(doc));
+    if (!doc.techPack?.renders) warnings.push('Tech-Pack ohne 3D-Ansichten – im Tech-Pack-Dialog „3D-Ansichten aufnehmen“ wählen.');
+  }
   if (profile.project) put(`${base}.vdp`, serializeDoc(doc));
   put(
     'LIESMICH.txt',

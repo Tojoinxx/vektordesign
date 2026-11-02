@@ -175,6 +175,7 @@ export function ProductionPanel() {
           {profile.purpose}. Enthält: {profile.formats.map((f) => FORMAT_LABELS[f].split(' ')[0]).join(', ')}
           {profile.formats.includes('png') ? ` (${profile.pngDpi} dpi)` : ''}, {profile.colorMode.toUpperCase()}
           {profile.sheet ? ', Artwork-Blatt' : ''}
+          {profile.techPack && app.editor.s.doc.pattern?.pieces.length ? ', Tech-Pack' : ''}
           {profile.mirror ? ', gespiegelt' : ''}.
         </p>
         <div className="stack">
@@ -662,6 +663,10 @@ export function ProfileEditor() {
         <label className="check">
           <input type="checkbox" checked={draft.project} onChange={(e) => set({ project: e.target.checked })} />
           Projektdatei (.vdp) beilegen
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={!!draft.techPack} onChange={(e) => set({ techPack: e.target.checked })} data-testid="profile-techpack" />
+          Tech-Pack, Maßtabelle und Schnitt (DXF) beilegen (wenn Schnittteile vorhanden)
         </label>
         <label className="field wide column">
           <span>Notizen (z. B. Vorgaben des Produzenten)</span>
