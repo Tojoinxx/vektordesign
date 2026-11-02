@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { seamPairs, smoothAttr, smoothFill, smoothTopology, vertexNormals, type SmoothTopology } from './smooth';
 import type { PatternMaterial, SketchDoc, Variant } from '../model/types';
 import { patternExchange, type ExchangePiece, type PatternExchange } from '../pattern/exchange';
 import { applyVariant, motifDoc, motifSize, productionOf } from '../model/production';
@@ -31,6 +37,8 @@ export interface ViewerOptions {
   variantId: string | null;
   quality: 'preview' | 'high';
   dark: boolean;
+  /** Kapuze aufgesetzt (sonst auf dem Rücken abgelegt) */
+  hoodUp?: boolean;
 }
 
 export interface ViewerEvents {
@@ -50,6 +58,10 @@ interface ViewPart extends LayoutPart {
   piece: ExchangePiece;
   material: PatternMaterial | null;
   box: { minX: number; minY: number; maxX: number; maxY: number; w: number; h: number; cx: number };
+  /** Glatte Darstellung (vierfach unterteilt) */
+  topo: SmoothTopology;
+  /** Farbe je grobem Partikel (Passform-Karte bzw. Nahtschatten) */
+  colors: Float32Array;
 }
 
 const BODY_COLOR = '#d8d2c8';
@@ -119,6 +131,14 @@ export class GarmentViewer {
   private gap: Float32Array | null = null;
   private strain: Float32Array | null = null;
   private n = 0;
+  /** Normalen aller Partikel (grob), über Nähte gemittelt */
+  private normals = new Float32Array(0);
+  /** Nahtpaare (global), erst wenn der Stoff liegt */
+  private seams: Uint32Array | null = null;
+  private composer: EffectComposer | null = null;
+  private aoPass: GTAOPass | null = null;
+  /** Umgebungsverdeckung in Falten – nur im Ruhezustand (spart Rechenzeit während der Stoff fällt) */
+  private aoOn = false;
   stats: SimStats | null = null;
   /** Menschen-Modell: undefined = lädt noch, null = nicht verfügbar (einfache Puppe) */
   private humanData: HumanData | null | undefined = undefined;
@@ -144,6 +164,7 @@ export class GarmentViewer {
     el.style.height = '100%';
     el.style.touchAction = 'none';
     container.appendChild(el);
+    this.renderer.toneMappingExposure = 1.0;
 
     this.camera = new THREE.PerspectiveCamera(28, 1, 20, 30000);
     this.camera.position.set(0, 1250, 3600);
@@ -157,9 +178,18 @@ export class GarmentViewer {
     this.controls.addEventListener('change', () => (this.dirty = true));
     this.controls.addEventListener('start', () => (this.userMoved = true));
 
-    // Licht wie im Fotostudio: weiches Umgebungslicht, Hauptlicht schräg vorne, Kante von hinten
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f96, 1.4));
-    const key = new THREE.DirectionalLight(0xffffff, 2.3);
+    // Licht wie im Fotostudio: Studio-Umgebung (weiche Reflexe von allen Seiten), Hauptlicht schräg vorne,
+    // Kante von hinten
+    try {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      this.scene.environmentIntensity = 0.55;
+      pmrem.dispose();
+    } catch {
+      /* ohne Umgebung: nur Lichter */
+    }
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f96, 0.85));
+    const key = new THREE.DirectionalLight(0xffffff, 2.1);
     key.position.set(-1400, 2600, 2200);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -180,6 +210,20 @@ export class GarmentViewer {
     this.scene.add(this.floor);
     this.scene.add(this.garment);
     this.applyTheme();
+    try {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.aoPass = new GTAOPass(this.scene, this.camera, 1, 1);
+      // Radius in Weltmaß (mm): Falten und Achseln, nicht der ganze Körper
+      this.aoPass.updateGtaoMaterial({ radius: 60, distanceExponent: 1.5, thickness: 8, scale: 1.1, samples: 16 });
+      this.aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+      this.aoPass.blendIntensity = 0.85;
+      this.composer.addPass(this.aoPass);
+      this.composer.addPass(new OutputPass());
+    } catch {
+      this.composer = null;
+      this.aoPass = null;
+    }
 
     this.driver = new Driver((m) => this.onSim(m));
     void loadHumanData().then((d) => {
@@ -207,6 +251,8 @@ export class GarmentViewer {
     this.ro.disconnect();
     this.controls.dispose();
     this.clearGarment();
+    this.composer?.dispose();
+    this.aoPass?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -216,7 +262,7 @@ export class GarmentViewer {
     this.opts = { ...prev, ...p };
     if (p.dark !== undefined && p.dark !== prev.dark) this.applyTheme();
     if (p.showBody !== undefined) for (const m of [this.bodyMesh, this.eyesMesh]) if (m) m.visible = this.opts.showBody;
-    const qualityChanged = p.quality !== undefined && p.quality !== prev.quality;
+    const qualityChanged = (p.quality !== undefined && p.quality !== prev.quality) || (p.hoodUp !== undefined && p.hoodUp !== prev.hoodUp);
     if (qualityChanged) this.simKey = '';
     if (this.doc && (qualityChanged || (p.mode !== undefined && p.mode !== prev.mode) || (p.variantId !== undefined && p.variantId !== prev.variantId))) this.setDoc(this.doc, true);
     this.dirty = true;
@@ -237,6 +283,8 @@ export class GarmentViewer {
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
     this.renderer.setSize(w, h, false);
+    this.composer?.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer?.setSize(w, h);
     const before = this.camera.aspect;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -274,6 +322,7 @@ export class GarmentViewer {
       ex.seams.map((s) => [s.a, s.b, s.reversed]),
       ex.materials.map((m) => [m.id, m.fabric, m.gsm]),
       this.opts.quality,
+      !!this.opts.hoodUp,
     ]);
     if (key !== this.simKey) {
       this.simKey = key;
@@ -283,7 +332,8 @@ export class GarmentViewer {
       this.gap = this.strain = null;
       this.runId++;
       const human = this.human ?? undefined;
-      this.driver.start(this.runId, ex, this.opts.quality === 'high' ? { resolution: 15, substeps: 12, human } : { resolution: 24, substeps: 9, human });
+      const hood = this.opts.hoodUp ? 'up' : 'down';
+      this.driver.start(this.runId, ex, this.opts.quality === 'high' ? { resolution: 15, substeps: 12, human, hood } : { resolution: 22, substeps: 9, human, hood });
       this.status({ state: 'simulating', stats: null, parts: this.parts.length, vertices: this.n });
       if (bodyChanged || !this.parts.length) this.frameCamera();
     } else {
@@ -317,8 +367,20 @@ export class GarmentViewer {
     }
     if (m.type === 'layout') {
       this.n = m.n;
+      this.seams = null;
+      this.aoOn = false;
+      this.normals = new Float32Array(m.n * 3);
       this.parts = m.parts.map((lp) => {
-        const part = { ...lp, piece: null as unknown as ExchangePiece, material: null, box: uvBox(lp.uv, lp.count) } as ViewPart;
+        const local = new Uint32Array(lp.tris.length);
+        for (let t = 0; t < local.length; t++) local[t] = lp.tris[t] - lp.offset;
+        const part = {
+          ...lp,
+          piece: null as unknown as ExchangePiece,
+          material: null,
+          box: uvBox(lp.uv, lp.count),
+          topo: smoothTopology(local, lp.count),
+          colors: new Float32Array(lp.count * 3).fill(1),
+        } as ViewPart;
         this.bindPart(part);
         return part;
       });
@@ -331,6 +393,16 @@ export class GarmentViewer {
     if (m.gap) this.gap = m.gap;
     if (m.strain) this.strain = m.strain;
     this.status({ state: m.stats.settled ? 'ready' : 'simulating', stats: m.stats, parts: this.parts.length, vertices: this.n });
+    if (m.stats.settled) {
+      // Nähte erkennen (Randpartikel verschiedener Teile, die aufeinander liegen): Normalen mitteln, Nahtschatten
+      this.seams = seamPairs(
+        m.pos,
+        this.parts.map((p) => ({ offset: p.offset, count: p.count, boundary: p.topo.boundary })),
+        12,
+      );
+      this.aoOn = true;
+      this.updateLookColors();
+    }
     if (m.stats.settled && this.opts.mode === 'fit') this.updateFitColors();
   }
 
@@ -446,19 +518,21 @@ export class GarmentViewer {
     this.clearGarment();
     for (const part of this.parts) {
       const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(part.count * 3), 3));
-      const uv = new Float32Array(part.count * 2);
+      const fineN = part.count + part.topo.edges.length / 2;
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(fineN * 3), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(fineN * 3), 3));
+      const uv0 = new Float32Array(part.count * 2);
       const b = part.box;
       for (let i = 0; i < part.count; i++) {
-        uv[2 * i] = (part.uv[2 * i] - b.minX) / b.w;
-        uv[2 * i + 1] = (part.uv[2 * i + 1] - b.minY) / b.h;
+        uv0[2 * i] = (part.uv[2 * i] - b.minX) / b.w;
+        uv0[2 * i + 1] = (part.uv[2 * i + 1] - b.minY) / b.h;
       }
+      const uv = new Float32Array(fineN * 2);
+      smoothAttr(part.topo, uv0, uv, 2);
       g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
       // Passform-Farben erst, wenn der Stoff liegt – bis dahin neutrales Grau
-      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(part.count * 3).fill(0.62), 3));
-      const idx = new Uint32Array(part.tris.length);
-      for (let t = 0; t < idx.length; t++) idx[t] = part.tris[t] - part.offset;
-      g.setIndex(new THREE.BufferAttribute(idx, 1));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(fineN * 3).fill(1), 3));
+      g.setIndex(new THREE.BufferAttribute(part.topo.tris, 1));
       const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial());
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -502,7 +576,8 @@ export class GarmentViewer {
       const tile = fabricTileMm(fabric);
       normal.repeat.set(b.w / tile, b.h / tile);
       const motif = this.motifTexture(part, color, variant);
-      mesh.material = new THREE.MeshPhysicalMaterial({
+      const mat = new THREE.MeshPhysicalMaterial({
+        vertexColors: true,
         color: new THREE.Color(motif ? '#ffffff' : color),
         map: motif,
         roughness: look.roughness,
@@ -516,9 +591,17 @@ export class GarmentViewer {
         side: THREE.DoubleSide,
         emissive,
         emissiveIntensity: isSel ? 0.22 : 0,
+        envMapIntensity: 0.7,
       });
+      // Innenseite dunkler (liegt im Schatten des Körpers, Stoffrückseite)
+      mat.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n\tif (!gl_FrontFacing) diffuseColor.rgb *= 0.62;');
+      };
+      mat.customProgramCacheKey = () => 'fabric-inside';
+      mesh.material = mat;
     }
     if (this.opts.mode === 'fit') this.updateFitColors();
+    else this.updateLookColors();
     this.dirty = true;
   }
 
@@ -564,6 +647,33 @@ export class GarmentViewer {
     return tex;
   }
 
+  private pushColors(part: ViewPart, mesh: THREE.Mesh): void {
+    const attr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+    smoothAttr(part.topo, part.colors, attr.array as Float32Array, 3);
+    attr.needsUpdate = true;
+  }
+
+  /**
+   * Aussehen: Nähte leicht abgedunkelt (Nahtschatten wie bei echter Steppnaht), freie Kanten (Saum, Ärmelende)
+   * minimal heller – wirkt plastischer als eine glatte Fläche.
+   */
+  private updateLookColors(): void {
+    if (this.opts.mode === 'fit') return;
+    const onSeam = new Uint8Array(this.n);
+    if (this.seams) for (const g of this.seams) onSeam[g] = 1;
+    for (const part of this.parts) {
+      const mesh = this.meshes.get(part.key);
+      if (!mesh) continue;
+      const col = part.colors;
+      for (let i = 0; i < part.count; i++) {
+        const v = onSeam[part.offset + i] ? 0.8 : part.topo.boundary[i] ? 0.93 : 1;
+        col[3 * i] = col[3 * i + 1] = col[3 * i + 2] = v;
+      }
+      this.pushColors(part, mesh);
+    }
+    this.dirty = true;
+  }
+
   /** Passform-Karte: rot = gedehnt (eng), grün = liegt an, blau = locker. */
   private updateFitColors(): void {
     if (!this.strain || !this.gap) return;
@@ -575,16 +685,18 @@ export class GarmentViewer {
     for (const part of this.parts) {
       const mesh = this.meshes.get(part.key);
       if (!mesh) continue;
-      const attr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+      const col = part.colors;
       for (let i = 0; i < part.count; i++) {
         const g = part.offset + i;
         const s = this.strain[g];
         const gap = this.gap[g];
         if (s > 0.02) c.copy(warn).lerp(tight, Math.min(1, (s - 0.02) / 0.08));
         else c.copy(snug).lerp(loose, Math.min(1, Math.max(0, (gap - 6) / 45)));
-        attr.setXYZ(i, c.r, c.g, c.b);
+        col[3 * i] = c.r;
+        col[3 * i + 1] = c.g;
+        col[3 * i + 2] = c.b;
       }
-      attr.needsUpdate = true;
+      this.pushColors(part, mesh);
     }
     this.dirty = true;
   }
@@ -623,13 +735,44 @@ export class GarmentViewer {
     const pos = this.pending;
     if (pos && pos.length >= this.n * 3) {
       this.pending = null;
+      const N = this.normals;
+      for (const part of this.parts)
+        vertexNormals(pos.subarray(part.offset * 3, (part.offset + part.count) * 3), part.topo.tris.length ? localTris(part) : [], part.count, N.subarray(part.offset * 3));
+      // über Nähte mitteln: die Teile gehen ohne Knick ineinander über
+      const S = this.seams;
+      if (S) {
+        const acc = Float32Array.from(N);
+        for (let q = 0; q < S.length; q += 2) {
+          const a = 3 * S[q];
+          const b = 3 * S[q + 1];
+          if (N[a] * N[b] + N[a + 1] * N[b + 1] + N[a + 2] * N[b + 2] < 0.2) continue;
+          for (let c = 0; c < 3; c++) {
+            acc[a + c] += N[b + c];
+            acc[b + c] += N[a + c];
+          }
+        }
+        for (let i = 0; i < this.n; i++) {
+          const k = 3 * i;
+          const l = Math.hypot(acc[k], acc[k + 1], acc[k + 2]) || 1;
+          N[k] = acc[k] / l;
+          N[k + 1] = acc[k + 1] / l;
+          N[k + 2] = acc[k + 2] / l;
+        }
+      }
       for (const part of this.parts) {
         const mesh = this.meshes.get(part.key);
         if (!mesh) continue;
-        const attr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-        (attr.array as Float32Array).set(pos.subarray(part.offset * 3, (part.offset + part.count) * 3));
-        attr.needsUpdate = true;
-        mesh.geometry.computeVertexNormals();
+        const pa = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const na = mesh.geometry.getAttribute('normal') as THREE.BufferAttribute;
+        smoothFill(
+          part.topo,
+          pos.subarray(part.offset * 3, (part.offset + part.count) * 3),
+          N.subarray(part.offset * 3, (part.offset + part.count) * 3),
+          pa.array as Float32Array,
+          na.array as Float32Array,
+        );
+        pa.needsUpdate = true;
+        na.needsUpdate = true;
         mesh.geometry.computeBoundingSphere();
         mesh.visible = true;
       }
@@ -638,8 +781,13 @@ export class GarmentViewer {
     this.controls.update();
     if (this.dirty) {
       this.dirty = false;
-      this.renderer.render(this.scene, this.camera);
+      this.render();
     }
+  }
+
+  private render(): void {
+    if (this.composer && this.aoPass && this.aoOn) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
   }
 
   private lastStatus = '';
@@ -658,10 +806,14 @@ export class GarmentViewer {
     const pr = this.renderer.getPixelRatio();
     this.renderer.setPixelRatio(scale);
     this.renderer.setSize(w, h, false);
-    this.renderer.render(this.scene, this.camera);
+    this.composer?.setPixelRatio(scale);
+    this.composer?.setSize(w, h);
+    this.render();
     const url = this.renderer.domElement.toDataURL('image/png');
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
+    this.composer?.setPixelRatio(pr);
+    this.composer?.setSize(w, h);
     this.dirty = true;
     return url;
   }
@@ -747,4 +899,16 @@ export function necklineCenter(poly: [number, number][], cx: number): { x: numbe
     }
   }
   return best === null ? null : { x: cx, y: best };
+}
+
+/** Grobe Dreiecke eines Teils mit lokalen Indizes (zwischengespeichert). */
+const localCache = new WeakMap<object, Uint32Array>();
+function localTris(part: { tris: Uint32Array; offset: number }): Uint32Array {
+  let t = localCache.get(part);
+  if (!t) {
+    t = new Uint32Array(part.tris.length);
+    for (let i = 0; i < t.length; i++) t[i] = part.tris[i] - part.offset;
+    localCache.set(part, t);
+  }
+  return t;
 }

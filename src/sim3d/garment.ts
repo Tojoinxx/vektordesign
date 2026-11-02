@@ -56,6 +56,10 @@ export interface SimOptions {
   thickness?: number;
   /** Realistisches Menschen-Netz (MakeHuman); fehlt = einfache Schneiderpuppe */
   human?: HumanMesh;
+  /** Stoff stößt an sich selbst (Lagen gleiten aufeinander statt durcheinander). Standard: an */
+  selfCollision?: boolean;
+  /** Kapuze aufgesetzt oder auf dem Rücken abgelegt (Standard: abgelegt, wie auf Produktfotos) */
+  hood?: 'up' | 'down';
 }
 
 /** Ein Teil in 3D (bei gegengleichen Teilen zwei Instanzen). */
@@ -87,6 +91,8 @@ export interface SimStats {
   speed: number;
   /** Partikel im Körper (tiefer als 2 mm) */
   inside: number;
+  /** Stellen, an denen Stofflagen ineinander stecken (nur bei Eigenkollision gezählt) */
+  overlaps?: number;
   settled: boolean;
 }
 
@@ -125,6 +131,13 @@ export class GarmentSim {
   readonly substeps: number;
   readonly sewTime: number;
   readonly thickness: number;
+  readonly selfCollision: boolean;
+  readonly hood: 'up' | 'down';
+  /** Kollisionsradius je Partikel für die Eigenkollision (mm) */
+  private selfR: Float32Array;
+  /** Nachbarn im Netz (bis 3 Kanten/Nähte entfernt) – berühren sich ohnehin, nicht abstoßen. CSR, sortiert */
+  private exStart: Uint32Array = new Uint32Array(1);
+  private exList: Uint32Array = new Uint32Array(0);
   stats: SimStats = { time: 0, seamGap: Infinity, speed: 0, inside: 0, settled: false };
 
   constructor(
@@ -135,6 +148,8 @@ export class GarmentSim {
     this.substeps = opts.substeps ?? 12;
     this.sewTime = opts.sewTime ?? 1.4;
     this.thickness = opts.thickness ?? 3;
+    this.selfCollision = opts.selfCollision ?? true;
+    this.hood = opts.hood ?? 'down';
     this.mq = opts.human ? humanMannequin(ex.body, ex.gender ?? 'male', opts.human) : buildMannequin(ex.body, ex.gender ?? 'male');
     if (opts.human) this.mq.sdf = sdfFor(opts.human);
     // Teile vernetzen
@@ -202,6 +217,8 @@ export class GarmentSim {
       }
     }
     for (let i = 0; i < total; i++) this.invMass[i] = mass[i] > 0 ? 1 / mass[i] : 0;
+    this.hoodMask = new Uint8Array(total);
+    if (this.hood === 'down') for (const p of this.parts) if (p.piece.role === 'hood') this.hoodMask.fill(1, p.offset, p.offset + p.count);
     // Kanten (Dehnung) und Biegepaare aus der 2D-Ruhelage
     const edges: number[] = [];
     const eRest: number[] = [];
@@ -251,12 +268,198 @@ export class GarmentSim {
     this.bends = Uint32Array.from(bends);
     this.bendRest = Float32Array.from(bRest);
     this.bendComp = Float32Array.from(bComp);
+    // Weiche Biegung für die Kapuze, solange sie abgelegt wird: sie klappt zusammen statt als Schale stehen zu bleiben
+    this.bendCompSoft = Float32Array.from(bComp);
+    for (let b = 0; b < bComp.length; b++) if (this.hoodMask[bends[2 * b]]) this.bendCompSoft[b] *= 40;
     this.buildSeams();
     this.linkRest0 = new Float32Array(this.links.length);
     for (let l = 0; l < this.links.length; l++) this.linkRest0[l] = this.linkDist(this.links[l]);
     this.pinLoosePieces();
     this.orientOutward();
+    this.selfR = new Float32Array(total);
+    if (this.selfCollision) this.buildSelfExclusion();
     this.prev.set(this.pos);
+  }
+
+  // -------------------------------------------------------------------------
+  // Eigenkollision
+  // -------------------------------------------------------------------------
+
+  /**
+   * Nachbarschaft im Netz (über Kanten und Nähte, bis 3 Schritte): diese Partikel liegen ohnehin nah beieinander
+   * und werden nicht abgestoßen. Radius je Partikel aus Stoffdicke und Maschenweite – so rutscht keine Lage
+   * durch die Lücken der anderen.
+   */
+  private buildSelfExclusion(): void {
+    const N = this.n;
+    const adj: number[][] = Array.from({ length: N }, () => []);
+    const add = (a: number, b: number) => {
+      if (a === b) return;
+      adj[a].push(b);
+      adj[b].push(a);
+    };
+    const len = new Float32Array(N);
+    const cnt = new Float32Array(N);
+    for (let e = 0; e < this.edgeRest.length; e++) {
+      const a = this.edges[2 * e];
+      const b = this.edges[2 * e + 1];
+      add(a, b);
+      len[a] += this.edgeRest[e];
+      len[b] += this.edgeRest[e];
+      cnt[a]++;
+      cnt[b]++;
+    }
+    for (const l of this.links) {
+      add(l.i, l.j);
+      add(l.i, l.k);
+    }
+    for (let i = 0; i < N; i++) this.selfR[i] = Math.max(this.thick[i], 0.27 * (cnt[i] ? len[i] / cnt[i] : 20));
+    // An Nähten liegen Lagen bestimmungsgemäß aufeinander (Nahtzugabe, Überlappung vorne an der Kapuze):
+    // dort nur die echte Stoffdicke als Abstand
+    for (const l of this.links) for (const v of [l.i, l.j, l.k]) this.selfR[v] = this.thick[v] * 0.6;
+    const start = new Uint32Array(N + 1);
+    const list: number[] = [];
+    const mark = new Int32Array(N).fill(-1);
+    let frontier: number[] = [];
+    let next: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const found: number[] = [];
+      mark[i] = i;
+      frontier = [i];
+      for (let hop = 0; hop < 3; hop++) {
+        next = [];
+        for (const v of frontier)
+          for (const w of adj[v])
+            if (mark[w] !== i) {
+              mark[w] = i;
+              found.push(w);
+              next.push(w);
+            }
+        frontier = next;
+      }
+      found.sort((a, b) => a - b);
+      start[i] = list.length;
+      for (const w of found) list.push(w);
+    }
+    start[N] = list.length;
+    this.exStart = start;
+    this.exList = Uint32Array.from(list);
+    this.hashTable = new Int32Array(1 << Math.ceil(Math.log2(Math.max(64, 2 * N))));
+    this.hashNext = new Int32Array(N);
+    let maxR = 0;
+    for (let i = 0; i < N; i++) maxR = Math.max(maxR, this.selfR[i]);
+    this.hashCell = 2 * maxR;
+  }
+
+  /** Liegen i und j im Netz nah beieinander (bis 3 Kanten/Nähte)? Für Tests. */
+  meshNeighbors(i: number, j: number): boolean {
+    if (this.exStart.length === 1) this.buildSelfExclusion();
+    return this.excluded(i, j);
+  }
+
+  private excluded(i: number, j: number): boolean {
+    let lo = this.exStart[i];
+    let hi = this.exStart[i + 1] - 1;
+    const L = this.exList;
+    while (lo <= hi) {
+      const m = (lo + hi) >> 1;
+      const v = L[m];
+      if (v === j) return true;
+      if (v < j) lo = m + 1;
+      else hi = m - 1;
+    }
+    return false;
+  }
+
+  private hashTable = new Int32Array(0);
+  private hashNext = new Int32Array(0);
+  private hashCell = 12;
+
+  private cellHash(ix: number, iy: number, iz: number): number {
+    return (Math.imul(ix, 73856093) ^ Math.imul(iy, 19349663) ^ Math.imul(iz, 83492791)) & (this.hashTable.length - 1);
+  }
+
+  /** Räumliches Raster neu aufbauen (verkettete Listen je Zelle). */
+  private buildHash(): void {
+    const { pos, hashTable, hashNext } = this;
+    const c = this.hashCell;
+    hashTable.fill(-1);
+    for (let i = 0; i < this.n; i++) {
+      const h = this.cellHash(Math.floor(pos[3 * i] / c), Math.floor(pos[3 * i + 1] / c), Math.floor(pos[3 * i + 2] / c));
+      hashNext[i] = hashTable[h];
+      hashTable[h] = i;
+    }
+  }
+
+  /**
+   * Partikel verschiedener Stellen des Stoffs halten Abstand (Summe der Radien). Mit Reibung, damit Lagen
+   * nicht wie Eis aufeinander gleiten. Liefert die Zahl der Paare, die deutlich zu nah waren.
+   */
+  private solveSelf(countOnly = false): number {
+    const { pos, prev, invMass, selfR, hashTable, hashNext } = this;
+    const c = this.hashCell;
+    let overlaps = 0;
+    for (let i = 0; i < this.n; i++) {
+      const wi = invMass[i];
+      const ki = 3 * i;
+      const ix = Math.floor(pos[ki] / c);
+      const iy = Math.floor(pos[ki + 1] / c);
+      const iz = Math.floor(pos[ki + 2] / c);
+      for (let dz = -1; dz <= 1; dz++)
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let j = hashTable[this.cellHash(ix + dx, iy + dy, iz + dz)]; j >= 0; j = hashNext[j]) {
+              if (j <= i) continue;
+              const kj = 3 * j;
+              const ex = pos[kj] - pos[ki];
+              const ey = pos[kj + 1] - pos[ki + 1];
+              const ez = pos[kj + 2] - pos[ki + 2];
+              const r = selfR[i] + selfR[j];
+              const d2 = ex * ex + ey * ey + ez * ez;
+              if (d2 >= r * r) continue;
+              if (this.excluded(i, j)) continue;
+              const d = Math.sqrt(d2);
+              if (d < r * 0.5) overlaps++;
+              if (countOnly) continue;
+              const wj = invMass[j];
+              const W = wi + wj;
+              if (W === 0 || d < 1e-6) continue;
+              const C = (r - d) / W;
+              const nx = ex / d;
+              const ny = ey / d;
+              const nz = ez / d;
+              pos[ki] -= nx * C * wi;
+              pos[ki + 1] -= ny * C * wi;
+              pos[ki + 2] -= nz * C * wi;
+              pos[kj] += nx * C * wj;
+              pos[kj + 1] += ny * C * wj;
+              pos[kj + 2] += nz * C * wj;
+              // Reibung: Relativbewegung quer zur Kontaktnormalen bremsen
+              const rvx = pos[kj] - prev[kj] - (pos[ki] - prev[ki]);
+              const rvy = pos[kj + 1] - prev[kj + 1] - (pos[ki + 1] - prev[ki + 1]);
+              const rvz = pos[kj + 2] - prev[kj + 2] - (pos[ki + 2] - prev[ki + 2]);
+              const vn = rvx * nx + rvy * ny + rvz * nz;
+              const f = 0.3 / W;
+              const tx = (rvx - vn * nx) * f;
+              const ty = (rvy - vn * ny) * f;
+              const tz = (rvz - vn * nz) * f;
+              prev[ki] -= tx * wi;
+              prev[ki + 1] -= ty * wi;
+              prev[ki + 2] -= tz * wi;
+              prev[kj] += tx * wj;
+              prev[kj + 1] += ty * wj;
+              prev[kj + 2] += tz * wj;
+            }
+          }
+    }
+    return overlaps;
+  }
+
+  /** Wie viele Stellen stecken ineinander (für Tests und Statistik)? */
+  selfOverlaps(): number {
+    if (this.exStart.length === 1) this.buildSelfExclusion();
+    this.buildHash();
+    return this.solveSelf(true);
   }
 
   // -------------------------------------------------------------------------
@@ -373,6 +576,7 @@ export class GarmentSim {
           }
           case 'hood': {
             const headR = this.ex.body.head / (2 * Math.PI);
+            // immer aufgesetzt nähen (der Halsrand muss um den Hals); „abgelegt“ zieht sie danach vom Kopf
             const side = headR * 0.86 + 30;
             const zFace = headR * 1.05 + 25;
             set(i, side, mq.neckBaseY + 5 + (v - b.minY), zFace - (u - b.minX));
@@ -509,6 +713,17 @@ export class GarmentSim {
     this.looseGroups = [...groups.values()].filter((g) => !g.some((p) => bodyRoles.has(p.piece.role)));
   }
 
+  /** Partikel der Kapuze (nur wenn sie abgelegt wird) */
+  private hoodMask = new Uint8Array(0);
+  private bendCompSoft = new Float32Array(0);
+  /** Zeitraum, in dem die Kapuze nach hinten gezogen wird (s) */
+  private get hoodPull(): [number, number] {
+    return [this.sewTime * 0.95, this.sewTime + 1.1];
+  }
+  private hasHoodPull(): boolean {
+    return this.hood === 'down' && this.hoodMask.some((v) => v);
+  }
+
   private looseGroups: GarmentPart[][] = [];
   private groupCount = 0;
   private pinnedDone = false;
@@ -528,6 +743,11 @@ export class GarmentSim {
           }
         }
     }
+  }
+
+  /** Abstand an jeder Nahtstelle (mm), für Tests und Statistik. */
+  seamGaps(): Float32Array {
+    return Float32Array.from(this.links, (l) => this.linkDist(l));
   }
 
   private linkDist(l: SeamLink): number {
@@ -560,15 +780,23 @@ export class GarmentSim {
     if (sew >= 1 && !this.pinnedDone) this.pinNow();
     if (!this.frameStart || this.frameStart.length !== this.pos.length) this.frameStart = new Float32Array(this.pos.length);
     this.frameStart.set(this.pos);
+    // Kapuze abgelegt: kurz nach hinten und unten ziehen, wie wenn man sie vom Kopf streift
+    const [p0, p1] = this.hoodPull;
+    const pull = this.hasHoodPull() && this.t >= p0 && this.t < p1 ? Math.sin(((this.t - p0) / (p1 - p0)) * Math.PI) : 0;
+    this.pull = pull;
     for (let s = 0; s < n; s++) this.substep(h, sew, gFactor, damp);
     this.t += dt;
     this.updateStats(dt);
   }
 
+  private pull = 0;
+
   private substep(h: number, sew: number, gFactor: number, damp: number): void {
-    const { pos, prev, invMass, drag } = this;
+    const { pos, prev, invMass, drag, hoodMask } = this;
     const N = this.n;
     const gdy = -G * gFactor * h * h;
+    const pz = -3.5 * G * this.pull * h * h;
+    const py = -1.2 * G * this.pull * h * h;
     for (let i = 0; i < N; i++) {
       if (invMass[i] === 0) continue;
       const k = 3 * i;
@@ -583,6 +811,10 @@ export class GarmentSim {
       pos[k] += vx;
       pos[k + 1] += vy + gdy;
       pos[k + 2] += vz;
+      if (this.pull > 0 && hoodMask[i]) {
+        pos[k + 1] += py;
+        pos[k + 2] += pz;
+      }
     }
     // Dehnung
     this.solveDistance(this.edges, this.edgeRest, this.edgeComp, 0.15);
@@ -590,8 +822,14 @@ export class GarmentSim {
     this.solveSeams(sew);
     if (sew >= 1) this.solveSeams(sew);
     // Biegung
-    this.solveDistance(this.bends, this.bendRest, this.bendComp, 1);
+    const soft = this.hasHoodPull() && this.t >= this.hoodPull[0] && this.t < this.hoodPull[1] + 0.4;
+    this.solveDistance(this.bends, this.bendRest, soft ? this.bendCompSoft : this.bendComp, 1);
     if (sew >= 1) this.solveSeams(sew);
+    // Stoff gegen Stoff – erst wenn er fällt (beim Nähen liegen die Kanten absichtlich übereinander)
+    if (this.selfCollision && gFactor > 0) {
+      this.buildHash();
+      this.solveSelf();
+    }
     // Kollision mit der Puppe und dem Boden
     this.collide();
   }
@@ -717,11 +955,15 @@ export class GarmentSim {
       if (this.gap[i] < -2) inside++;
     }
     const speed = this.n ? v / this.n / dt : 0;
-    if (this.t > this.sewTime + 0.8 && speed < 6) this.settledFor += dt;
+    const calmAfter = this.hasHoodPull() ? this.hoodPull[1] + 0.6 : this.sewTime + 0.8;
+    if (this.t > calmAfter && speed < 6) this.settledFor += dt;
     else this.settledFor = 0;
     const settled = this.settledFor > 0.4 || this.t > 8;
     this.stats = { time: this.t, seamGap: maxGap, speed, inside, settled };
-    if (settled) this.computeStrain();
+    if (settled) {
+      this.computeStrain();
+      if (this.selfCollision) this.stats.overlaps = this.selfOverlaps();
+    }
   }
 
   /** Dehnung je Partikel (für die Passform-Karte). */

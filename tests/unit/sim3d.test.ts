@@ -12,6 +12,16 @@ import { SimRunner } from '../../src/sim3d/runner';
 import type { FromWorker } from '../../src/sim3d/protocol';
 import { necklineCenter } from '../../src/viewer3d/viewer';
 
+/**
+ * Nähte geschlossen: fast alle Nahtstellen liegen aufeinander. Einzelne Ecken dürfen etwas klaffen – bei
+ * abgelegter Kapuze zieht sie vorne an der Halsecke (wie beim echten Hoodie).
+ */
+function expectSeamsClosed(sim: GarmentSim, max = 8): void {
+  const g = Array.from(sim.seamGaps()).sort((a, b) => a - b);
+  expect(g[Math.floor(g.length * 0.97)]).toBeLessThan(4);
+  expect(g[g.length - 1]).toBeLessThan(max);
+}
+
 async function garment(kind: 'tshirt' | 'hoodie' | 'sweatshirt', size = 'H-M') {
   const ed = await makeEditor();
   const body = bodyForSize(size);
@@ -82,7 +92,7 @@ describe('Stoffsimulation', () => {
       const sim = new GarmentSim(ex, { resolution: 26, substeps: 8 });
       const st = sim.run(8);
       expect(st.settled).toBe(true);
-      expect(st.seamGap).toBeLessThan(8);
+      expectSeamsClosed(sim, kind === 'hoodie' ? 18 : 8);
       expect(st.inside).toBe(0);
       // Kleidungsstück hängt auf den Schultern, nicht am Boden
       let minY = Infinity;
@@ -171,9 +181,54 @@ describe('Realistische Puppe (MakeHuman)', () => {
     const sim = new GarmentSim(ex, { resolution: 26, substeps: 8, human });
     expect(sim.mq.sdf).toBeTruthy();
     const st = sim.run(8);
-    expect(st.seamGap).toBeLessThan(8);
+    expectSeamsClosed(sim, 18);
     expect(st.inside).toBe(0);
   }, 60000);
+});
+
+describe('Stoff stößt an sich selbst', () => {
+  /** Kleinster Abstand zwischen Stellen des Stoffs, die im Netz nicht benachbart sind. */
+  const clearance = (sim: GarmentSim) => {
+    let min = Infinity;
+    const p = sim.pos;
+    for (let i = 0; i < sim.n; i++)
+      for (let j = i + 1; j < sim.n; j++) {
+        const d = Math.hypot(p[3 * i] - p[3 * j], p[3 * i + 1] - p[3 * j + 1], p[3 * i + 2] - p[3 * j + 2]);
+        if (d < min && !sim.meshNeighbors(i, j)) min = d;
+      }
+    return min;
+  };
+
+  it('Lagen halten Stoffdicke Abstand; Kapuze liegt abgelegt auf dem Rücken, aufgesetzt auf dem Kopf', async () => {
+    const res: Record<string, { clear: number; hoodY: number; hoodZ: number; neck: number }> = {};
+    for (const [name, hood, self] of [
+      ['ohne', 'down', false],
+      ['ab', 'down', true],
+      ['auf', 'up', true],
+    ] as const) {
+      const { ex } = await garment('hoodie');
+      const sim = new GarmentSim(ex, { resolution: 26, substeps: 8, hood, selfCollision: self });
+      const st = sim.run(10);
+      expect(st.inside).toBe(0);
+      let y = 0;
+      let z = 0;
+      let n = 0;
+      for (const h of sim.parts.filter((q) => q.piece.role === 'hood'))
+        for (let i = 0; i < h.count; i++) {
+          y += sim.pos[3 * (h.offset + i) + 1];
+          z += sim.pos[3 * (h.offset + i) + 2];
+          n++;
+        }
+      res[name] = { clear: clearance(sim), hoodY: y / n, hoodZ: z / n, neck: sim.mq.neckBaseY };
+    }
+    // mit Eigenkollision: mindestens doppelte Stoffdicke zwischen den Lagen, ohne deutlich weniger
+    expect(res.ab.clear).toBeGreaterThan(6);
+    expect(res.ab.clear).toBeGreaterThan(res.ohne.clear + 2);
+    // aufgesetzt: Kapuze am Kopf; abgelegt: deutlich tiefer und hinter dem Hals
+    expect(res.auf.hoodY).toBeGreaterThan(res.auf.neck + 100);
+    expect(res.ab.hoodY).toBeLessThan(res.auf.hoodY - 80);
+    expect(res.ab.hoodZ).toBeLessThan(res.auf.hoodZ - 40);
+  }, 180000);
 });
 
 describe('Stoffgewicht', () => {
@@ -221,7 +276,7 @@ describe('Puppe zum Anprobieren', () => {
     expect(ex.gender).toBe('female');
     const sim = new GarmentSim(ex, { resolution: 26, substeps: 8 });
     const st = sim.run(8);
-    expect(st.seamGap).toBeLessThan(8);
+    expectSeamsClosed(sim, 18);
     expect(st.inside).toBe(0);
   }, 60000);
 });

@@ -50,6 +50,7 @@ export default function ViewerPanel(p: ViewerPanelProps) {
   const [body, setBody] = useState(true);
   const [variant, setVariant] = useState<string | null>(null);
   const [quality, setQuality] = useState<'preview' | 'high'>('preview');
+  const [hoodUp, setHoodUp] = useState(false);
   const [glError, setGlError] = useState<string | null>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const onSelect = useRef(p.onSelect);
@@ -72,7 +73,7 @@ export default function ViewerPanel(p: ViewerPanelProps) {
   useEffect(() => viewer.current?.setOptions({ dark: p.dark }), [p.dark]);
   useEffect(() => viewer.current?.setDoc(p.doc), [p.doc]);
   useEffect(() => viewer.current?.select(p.selected), [p.selected]);
-  useEffect(() => viewer.current?.setOptions({ mode, showBody: body, variantId: variant, quality }), [mode, body, variant, quality]);
+  useEffect(() => viewer.current?.setOptions({ mode, showBody: body, variantId: variant, quality, hoodUp }), [mode, body, variant, quality, hoodUp]);
 
   const pattern = p.doc.pattern;
   const variants = useMemo(() => productionOf(p.doc).variants, [p.doc]);
@@ -187,6 +188,11 @@ export default function ViewerPanel(p: ViewerPanelProps) {
           </select>
         )}
         {avatarOpen && <AvatarControls doc={p.doc} onAvatar={p.onAvatar} onClose={() => setAvatarOpen(false)} />}
+        {pattern?.pieces.some((x) => x.role === 'hood') && (
+          <label className="v3-quality check small" title="Kapuze aufsetzen oder auf dem Rücken ablegen">
+            <input type="checkbox" checked={hoodUp} onChange={(e) => setHoodUp(e.target.checked)} data-testid="v3-hood-up" /> Kapuze auf
+          </label>
+        )}
         <label className="v3-quality check small">
           <input type="checkbox" checked={quality === 'high'} onChange={(e) => setQuality(e.target.checked ? 'high' : 'preview')} /> Fein
         </label>
