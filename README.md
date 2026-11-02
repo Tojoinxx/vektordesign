@@ -154,9 +154,11 @@ Export-Dialog: **Je Farbe eine Datei** (für mehrfarbiges Plotten und Siebe, all
 
 ### Schnittmuster (Tab „Schnitt“)
 
-Grundlage für die 3D-Passform in **Vektordesign 3D** (nächster Meilenstein). Über **Datei → Neues Projekt** (`Strg+N`) wählst du die Projektart: *2D-Motiv* oder *Schnittmuster* (*3D-Modell* folgt).
+Grundlage für die 3D-Passform in **Vektordesign 3D**. Über **Datei → Neues Projekt** (`Strg+N`) wählst du die Projektart: *2D-Motiv*, *Schnittmuster* oder *3D-Modell*.
 
 - **Grundschnitt aus Maßen:** T-Shirt, Longsleeve, Sweatshirt oder Hoodie aus der Maßtabelle (Herren/Unisex XS–3XL, Damen XS–XL) oder eigenen Körpermaßen, Passform schmal/normal/weit, Länge und Ärmel einstellbar. Erzeugt alle Teile mit fertig verbundenen Nähten; die Ärmelkugel passt exakt ins Armloch. „Aktualisieren“ ersetzt nur die erzeugten Teile.
+- **Maße eines vorhandenen Teils nachbauen:** unter „Maße eines vorhandenen Teils“ die Fertigmaße aus der Größentabelle eintragen oder flach liegend nachmessen (cm): Gesamtlänge, ½ Brust, ½ Saum, Schulterbreite, Schulternaht, Armloch, Ärmellänge, ½ Oberarm, ½ Ärmelöffnung, Halsweite, Halsausschnitt, Bündchenhöhe, Kapuzenhöhe und -breite. Eingetragene Werte bestimmen den Schnitt genau, leere kommen aus Körpermaßen und Passform (Vorschlag grau im Feld). Die Größenstaffel im Tech-Pack stuft mit denselben Sprüngen; passt ein Maß geometrisch nicht zu den übrigen, steht es als Hinweis darunter.
+- **Vorhandene Schnittteile** als DXF, SVG oder PDF importieren, auswählen, **Aus Auswahl** – dann Nähte verbinden und in 3D anziehen.
 - **Eigene Teile:** jede geschlossene Kontur (Linienzug, Bögen, Zeichenstift) wie gewohnt zeichnen und bemaßen, auswählen, **Aus Auswahl** – fertig. Teile folgen allen späteren Bemaßungen.
 - **Nähte verbinden** (`J`): erste Kante anklicken, zweite Kante anklicken. Bei gegengleichen Teilen (2×) wird automatisch die freie Seite genommen. Nähte erscheinen farbig mit Nummer: grün = gleich lang, violett = Bündchen wird gedehnt, rot = Längen passen nicht (mit Differenz in mm).
 - Je Teil: Rolle in 3D, Zuschnitt 1× / 2× gegengleich, Nahtzugabe (gestrichelt angezeigt), Fadenlauf, Stoff. Stoffe mit Art, Farbe und Flächengewicht; Stoffbedarf in m².
@@ -172,6 +174,7 @@ Tab „Produktion“ → **Tech-Pack** (oder im Tab „Schnitt“, Befehlssuche 
 - **Verarbeitung:** Nähte als Gruppen mit Länge und Vorschlag (Overlock, Nahtband, Bündchen gedehnt, Coverstitch-Saum …), frei überschreibbar, dazu Hinweise.
 - **Referenzen:** Bilder per **Ziehen und Ablegen**, Einfügen (`Strg+V`) oder Auswahl, mit Kategorie und Notiz, sortierbar.
 - **PDF (A4 quer):** Deckblatt mit 3D-Ansichten und Eckdaten, Maßtabelle, Schnittteile mit Stoffverbrauch, Stückliste, Verarbeitung, Artwork, Referenzen.
+- **Im ZIP-Paket:** Das Export-Profil „LabwearOS“ legt Tech-Pack (PDF), Maßtabelle (CSV) und Schnitt (DXF) im Ordner `Tech-Pack/` bei, sobald das Projekt Schnittteile hat (abschaltbar im Profil).
 
 ### 3D-Vorschau und Vektordesign 3D
 
@@ -183,6 +186,8 @@ Der Knopf **3D** oben (`Strg+3`) oder „In 3D ansehen“ im Tab „Schnitt“ �
 - **Puppe aus deinen Körpermaßen** (Größe, Brust, Taille, Hüfte, Schultern, Arme, Rücken, Hals, Kopf). Die Schnittteile werden um die Puppe gelegt, an den Nähten zusammengezogen und fallen dann mit Schwerkraft auf den Körper. Stoffart und Flächengewicht bestimmen Dehnung, Steifigkeit und Fall; Bündchen werden beim Annähen gedehnt.
 - **Live:** jede Änderung am Schnitt – Maß, Kante, Naht – drapiert neu. Die Simulation läuft im Hintergrund, die Oberfläche bleibt flüssig.
 - **Aussehen:** Teil in 3D anklicken → eigene Farbe oder anderer Stoff. Stoffarten mit eigener Oberfläche (Jersey-Maschen, Sweat, Fleece, Rippe, Webware, Denim-Köper, Nylon mit leichtem Glanz, Mesh). Motive aus dem Tab „Produktion“ erscheinen an ihrer Druckposition (Abstand zur Kragennaht), Farbvarianten lassen sich umschalten.
+- **Realistischer Fall:** Der Stoff stößt an sich selbst – Lagen liegen aufeinander statt durcheinander (Kapuze auf dem Rücken, Falten, Achseln). Die Kapuze liegt wie auf Produktfotos abgelegt auf dem Rücken; **Kapuze auf** setzt sie auf.
+- **Darstellung:** glatte, gekrümmte Stoffflächen ohne Kanten an den Nähten, Licht wie im Fotostudio mit weichen Reflexen, Schatten in Falten (sobald der Stoff liegt), leichter Nahtschatten und dunklere Stoffinnenseite.
 - **Passform-Karte:** rot = spannt, gelb = leicht gedehnt, grün = liegt an, blau = locker.
 - Ansichten vorne, hinten, seitlich, schräg; Puppe ein-/ausblenden; „Fein“ für ein feineres Netz; **Bild speichern** als PNG.
 - Freie Teile, die an keinem Körperteil hängen (z. B. zwei verbundene Vierecke), hängen wie auf einer Stange vor der Puppe.

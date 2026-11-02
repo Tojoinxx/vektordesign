@@ -191,9 +191,17 @@ function BlockSection() {
         </select>
         <span>Länge</span>
         <span className="row">
-          <Field value={mm(blk.length)} numeric width={64} label="Gesamtlänge ab Halsansatz in mm" testId="block-length" onCommit={(v) => setLength(num(v))} />
+          <Field
+            value={mm(spec.len ?? blk.length)}
+            numeric
+            width={64}
+            label="Gesamtlänge ab Halsansatz in mm"
+            testId="block-length"
+            onCommit={(v) => (spec.len != null ? setSpec((o) => ({ ...o, len: num(v) ?? o.len })) : setLength(num(v)))}
+          />
           <span className="muted">mm</span>
-          {length !== null && (
+          {spec.len != null && <span className="muted small">Fertigmaß A</span>}
+          {length !== null && spec.len == null && (
             <button className="link-btn small" onClick={() => setLength(null)}>
               Standard
             </button>
@@ -201,9 +209,17 @@ function BlockSection() {
         </span>
         <span>{kind === 'tshirt' ? 'Ärmel (kurz)' : 'Ärmel'}</span>
         <span className="row">
-          <Field value={mm(blk.sleeve)} numeric width={64} label="Ärmellänge ab Schulterpunkt in mm" testId="block-sleeve" onCommit={(v) => setSleeve(num(v))} />
+          <Field
+            value={mm(spec.sleeve ?? blk.sleeve)}
+            numeric
+            width={64}
+            label="Ärmellänge ab Schulterpunkt in mm"
+            testId="block-sleeve"
+            onCommit={(v) => (spec.sleeve != null ? setSpec((o) => ({ ...o, sleeve: num(v) ?? o.sleeve })) : setSleeve(num(v)))}
+          />
           <span className="muted">mm</span>
-          {sleeve !== null && (
+          {spec.sleeve != null && <span className="muted small">Fertigmaß G</span>}
+          {sleeve !== null && spec.sleeve == null && (
             <button className="link-btn small" onClick={() => setSleeve(null)}>
               Standard
             </button>
