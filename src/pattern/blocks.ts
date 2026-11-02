@@ -17,6 +17,7 @@ export type BlockKind = PatternBlock['kind'];
 
 export const BLOCK_KINDS: { id: BlockKind; name: string; hint: string }[] = [
   { id: 'tshirt', name: 'T-Shirt', hint: 'Kurzarm, Halsbündchen' },
+  { id: 'polo', name: 'Polo', hint: 'Kurzarm, Polokragen mit Steg, Knopfleiste, Ärmelbündchen' },
   { id: 'longsleeve', name: 'Longsleeve', hint: 'Langarm, Halsbündchen' },
   { id: 'sweatshirt', name: 'Sweatshirt', hint: 'Langarm, Bündchen an Ärmel, Saum und Hals' },
   { id: 'hoodie', name: 'Hoodie', hint: 'Langarm, Bündchen, zweiteilige Kapuze' },
@@ -33,6 +34,12 @@ const ARM_EASE = { slim: 70, regular: 110, oversize: 200 };
 
 const RIB_H = 70;
 const NECKBAND_H = 22;
+/** Polo: Breite der Knopfleiste, Länge, Kragensteg, Kragen, Ärmelbündchen (fertig, mm) */
+const PLACKET_W = 30;
+const PLACKET_L = 140;
+const STAND_H = 28;
+const COLLAR_H = 75;
+const ARMBAND_H = 25;
 
 export interface BlockPiece {
   key: string;
@@ -59,8 +66,8 @@ export interface BlockResult {
 
 /** Standardwerte für Länge und Ärmel aus den Körpermaßen. */
 export function defaultBlock(kind: BlockKind, body: BodyMeasures, fit: PatternBlock['fit'] = 'regular', size = 'H-M'): PatternBlock {
-  const longArm = kind !== 'tshirt';
-  const lengthFactor = kind === 'tshirt' || kind === 'longsleeve' ? 0.405 : 0.385;
+  const longArm = kind !== 'tshirt' && kind !== 'polo';
+  const lengthFactor = kind === 'tshirt' || kind === 'polo' || kind === 'longsleeve' ? 0.405 : 0.385;
   const extra = fit === 'oversize' ? 30 : 0;
   return {
     kind,
@@ -76,10 +83,65 @@ export function defaultBlock(kind: BlockKind, body: BodyMeasures, fit: PatternBl
 const n = (x: number, y: number, h: Partial<ShapeNode> = {}): ShapeNode => ({ x, y, ...h });
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+type P2 = [number, number];
+/** Kubische Bézierkurve an der Stelle teilen, an der x den Wert `x` erreicht (x monoton). */
+function splitAtX(p0: P2, p1: P2, p2: P2, p3: P2, x: number): [P2[], P2[]] {
+  const at = (t: number) => {
+    const u = 1 - t;
+    return u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0];
+  };
+  let lo = 0;
+  let hi = 1;
+  const dec = at(1) < at(0);
+  for (let i = 0; i < 60; i++) {
+    const m = (lo + hi) / 2;
+    if (at(m) > x === dec) lo = m;
+    else hi = m;
+  }
+  const t = (lo + hi) / 2;
+  const lerp = (a: P2, b: P2): P2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const a1 = lerp(p0, p1);
+  const b1 = lerp(p1, p2);
+  const c1 = lerp(p2, p3);
+  const a2 = lerp(a1, b1);
+  const b2 = lerp(b1, c1);
+  const m = lerp(a2, b2);
+  return [
+    [p0, a1, a2, m],
+    [m, b2, c1, p3],
+  ];
+}
+
 /** Länge einer Bézierkurve zwischen zwei Knoten. */
 function curveLength(a: ShapeNode, b: ShapeNode): number {
   const pts = flattenContour({ closed: false, nodes: [a, b] }, 0.02);
   return polyLength(pts, false);
+}
+
+/**
+ * Gebogenes Band (Polokragen): Ansatzkante (Kante 0, unten) so lang wie `len`, Außenkante um `ratio` länger –
+ * so legt sich der Kragen beim Umschlagen flach auf Steg und Schultern. Kanten: 0 Ansatz, 1 rechts, 2 außen, 3 links.
+ */
+function arcBand(len: number, h: number, ratio: number): Contour {
+  const r1 = h / (ratio - 1);
+  const r2 = r1 + h;
+  const a = len / r1 / 2;
+  const k = (4 / 3) * Math.tan(a / 2);
+  // Kreismittelpunkt unterhalb (0, −r1): Ansatzkante oben gewölbt, y = 0 in der Mitte
+  const pt = (r: number, t: number): P2 => [r * Math.sin(t), r * Math.cos(t) - r1];
+  const tan = (r: number, t: number, dir: number): P2 => [r * Math.cos(t) * dir * k, -r * Math.sin(t) * dir * k];
+  const [x0, y0] = pt(r1, -a);
+  const [x1, y1] = pt(r1, a);
+  const [x2, y2] = pt(r2, a);
+  const [x3, y3] = pt(r2, -a);
+  const t0 = tan(r1, -a, 1);
+  const t1 = tan(r1, a, 1);
+  const t2 = tan(r2, a, 1);
+  const t3 = tan(r2, -a, 1);
+  return {
+    closed: true,
+    nodes: [n(x0, y0, { ox: x0 + t0[0], oy: y0 + t0[1] }), n(x1, y1, { ix: x1 - t1[0], iy: y1 - t1[1] }), n(x2, y2, { ox: x2 - t2[0], oy: y2 - t2[1] }), n(x3, y3, { ix: x3 + t3[0], iy: y3 + t3[1] })],
+  };
 }
 
 function rect(w: number, h: number): Contour {
@@ -100,7 +162,7 @@ interface BodyPieceInfo {
  * Kanten: 0 Saum, 1 Seite rechts, 2 Armloch rechts, 3 Schulter rechts, 4 Hals rechts, 5 Hals links,
  * 6 Schulter links, 7 Armloch links, 8 Seite links.
  */
-function bodyPiece(b: BodyMeasures, blk: PatternBlock, front: boolean, len: number, rib: boolean): BodyPieceInfo {
+function bodyPiece(b: BodyMeasures, blk: PatternBlock, front: boolean, len: number, rib: boolean, notch?: { w: number; d: number }): BodyPieceInfo {
   const s = blk.spec ?? {};
   const hw = s.chest ? s.chest / 2 : (b.chest + CHEST_EASE[blk.fit]) / 4;
   const sp = s.shoulder ? s.shoulder / 2 : b.shoulder / 2 + SHOULDER_DROP[blk.fit];
@@ -120,6 +182,23 @@ function bodyPiece(b: BodyMeasures, blk: PatternBlock, front: boolean, len: numb
   const neckL = n(-nw, 0, { ix: -nw, iy: -nd * 0.55 });
   const shL = n(-sp, -slope, { ox: -sp + (front ? 10 : 4), oy: -slope - (ad - slope) * scoop });
   const underL = n(-hw, -ad, { ix: -(hw - (hw - sp) * 0.9 - 4), iy: -ad + 2 });
+  if (notch) {
+    // Polo: Schlitz für die Knopfleiste in der vorderen Mitte. Halsausschnitt bis zur Schlitzkante teilen.
+    const hw2 = notch.w / 2;
+    const [a, bb] = splitAtX([neckR.x, neckR.y], [neckR.ox!, neckR.oy!], [neckC.ix!, neckC.iy!], [neckC.x, neckC.y], hw2);
+    const nR = n(neckR.x, neckR.y, { ox: a[1][0], oy: a[1][1] });
+    const tR = n(hw2, a[3][1], { ix: a[2][0], iy: a[2][1] });
+    const yN = a[3][1];
+    void bb;
+    const bR = n(hw2, yN - notch.d);
+    const bL = n(-hw2, yN - notch.d);
+    const tL = n(-hw2, yN, { ox: -a[2][0], oy: a[2][1] });
+    const nL = n(-neckR.x, neckR.y, { ix: -a[1][0], iy: a[1][1] });
+    const contour: Contour = { closed: true, nodes: [n(-hem, -len), n(hem, -len), underR, shR, nR, tR, bR, bL, tL, nL, shL, underL] };
+    const neckHalf = curveLength(contour.nodes[4], contour.nodes[5]);
+    const armhole = curveLength(contour.nodes[2], contour.nodes[3]);
+    return { contour, neckHalf, armhole, hemWidth: 2 * hem };
+  }
   const contour: Contour = {
     closed: true,
     // Schulterlinien gerade: Knoten 3 ohne Ausgangsgriff, 4 ohne Eingangsgriff
@@ -242,12 +321,14 @@ function neckband(frontHalf: number, backHalf: number, k: number, height?: numbe
 
 export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResult {
   const hasRib = blk.kind === 'sweatshirt' || blk.kind === 'hoodie';
-  const longArm = blk.kind !== 'tshirt';
+  const polo = blk.kind === 'polo';
+  const longArm = blk.kind !== 'tshirt' && !polo;
   const spec = blk.spec ?? {};
   const RIB = spec.rib ? clamp(spec.rib, 15, 200) : RIB_H;
   const length = spec.len ?? blk.length;
   const bodyLen = Math.max(250, length - (hasRib ? RIB : 0));
-  const front = bodyPiece(body, blk, true, bodyLen, hasRib);
+  const placketL = clamp(spec.placket ?? PLACKET_L, 40, 400);
+  const front = bodyPiece(body, blk, true, bodyLen, hasRib, polo ? { w: PLACKET_W, d: placketL } : undefined);
   const back = bodyPiece(body, blk, false, bodyLen, hasRib);
   const drop = spec.shoulder ? 0 : SHOULDER_DROP[blk.fit];
   const cuffW = spec.opening && hasRib && longArm ? 2 * spec.opening : body.wrist + 45;
@@ -256,14 +337,21 @@ export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResul
   const sleeveLen = Math.max(80, spec.sleeve ? spec.sleeve - cuffH : blk.sleeve - drop - cuffH);
   const hemHalf = longArm ? (hasRib ? (cuffW * 1.3) / 2 : (spec.opening ?? (body.wrist + 90) / 2)) : Infinity;
   const sleeve = sleevePiece(body, blk, front.armhole, back.armhole, sleeveLen, hemHalf === Infinity ? 1e9 : hemHalf);
+  // Polo: Ärmelbündchen (Rippe) am kurzen Ärmel, etwas enger als der Ärmelsaum
+  const bandH = polo ? clamp(spec.rib ?? ARMBAND_H, 10, 80) : 0;
+  if (polo) sleeve.contour.nodes[0].y = sleeve.contour.nodes[1].y = -Math.max(60, spec.sleeve ? spec.sleeve - bandH : blk.sleeve - drop - bandH);
   if (!longArm) {
     // Kurzarm: Saum etwas schmaler als Oberarmweite
     const nodes = sleeve.contour.nodes;
     const bw = nodes[2].x;
-    const half = spec.opening ?? bw * 0.88;
+    const half = polo ? (spec.opening ? spec.opening / 0.9 : bw * 0.88) : (spec.opening ?? bw * 0.88);
     nodes[0].x = -half;
     nodes[1].x = half;
   }
+  // Kantennummern des Vorderteils (Polo: vier Kanten mehr für den Schlitz)
+  const F = polo
+    ? { hem: 0, sideR: 1, armR: 2, shR: 3, neckR: 4, notchR: 5, notchB: 6, notchL: 7, neckL: 8, shL: 9, armL: 10, sideL: 11 }
+    : { hem: 0, sideR: 1, armR: 2, shR: 3, neckR: 4, notchR: -1, notchB: -1, notchL: -1, neckL: 5, shL: 6, armL: 7, sideL: 8 };
 
   const pieces: BlockPiece[] = [
     { key: 'front', name: 'Vorderteil', role: 'front', cut: 1, contour: front.contour },
@@ -271,14 +359,14 @@ export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResul
     { key: 'sleeve', name: 'Ärmel', role: 'sleeve', cut: 2, contour: sleeve.contour },
   ];
   const seams: BlockSeam[] = [
-    { a: ['front', 1, 0], b: ['back', 8, 0], reversed: true, name: 'Seitennaht links' },
-    { a: ['front', 8, 0], b: ['back', 1, 0], reversed: true, name: 'Seitennaht rechts' },
-    { a: ['front', 3, 0], b: ['back', 6, 0], reversed: true, name: 'Schulternaht links' },
-    { a: ['front', 6, 0], b: ['back', 3, 0], reversed: true, name: 'Schulternaht rechts' },
+    { a: ['front', F.sideR, 0], b: ['back', 8, 0], reversed: true, name: 'Seitennaht links' },
+    { a: ['front', F.sideL, 0], b: ['back', 1, 0], reversed: true, name: 'Seitennaht rechts' },
+    { a: ['front', F.shR, 0], b: ['back', 6, 0], reversed: true, name: 'Schulternaht links' },
+    { a: ['front', F.shL, 0], b: ['back', 3, 0], reversed: true, name: 'Schulternaht rechts' },
     // Ärmel links (Kopie 0) und rechts (Kopie 1, gespiegelt)
-    { a: ['sleeve', 2, 0], b: ['front', 2, 0], reversed: false, name: 'Armloch vorne links' },
+    { a: ['sleeve', 2, 0], b: ['front', F.armR, 0], reversed: false, name: 'Armloch vorne links' },
     { a: ['sleeve', 3, 0], b: ['back', 7, 0], reversed: false, name: 'Armloch hinten links' },
-    { a: ['sleeve', 2, 1], b: ['front', 7, 0], reversed: true, name: 'Armloch vorne rechts' },
+    { a: ['sleeve', 2, 1], b: ['front', F.armL, 0], reversed: true, name: 'Armloch vorne rechts' },
     { a: ['sleeve', 3, 1], b: ['back', 2, 0], reversed: true, name: 'Armloch hinten rechts' },
     { a: ['sleeve', 1, 0], b: ['sleeve', 4, 0], reversed: true, name: 'Ärmelnaht links' },
     { a: ['sleeve', 1, 1], b: ['sleeve', 4, 1], reversed: true, name: 'Ärmelnaht rechts' },
@@ -308,7 +396,56 @@ export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResul
     );
   }
 
-  if (blk.kind === 'hoodie') {
+  if (polo) {
+    // Ärmelbündchen
+    const sw = sleeve.contour.nodes[1].x * 2;
+    const bandW = spec.opening ? 2 * spec.opening : sw * 0.9;
+    pieces.push({ key: 'cuff', name: 'Ärmelbündchen', role: 'cuff', cut: 2, contour: rect(bandW, bandH), rib: true });
+    seams.push(
+      { a: ['cuff', 2, 0], b: ['sleeve', 0, 0], reversed: true, name: 'Bündchen links' },
+      { a: ['cuff', 2, 1], b: ['sleeve', 0, 1], reversed: true, name: 'Bündchen rechts' },
+      { a: ['cuff', 1, 0], b: ['cuff', 3, 0], reversed: true, name: 'Bündchennaht links' },
+      { a: ['cuff', 1, 1], b: ['cuff', 3, 1], reversed: true, name: 'Bündchennaht rechts' },
+    );
+    // Knopfleisten: obere (linke Körperseite, Herrenart) und untere, beide so breit wie der Schlitz
+    pieces.push(
+      { key: 'placketTop', name: 'Knopfleiste oben', role: 'placket', cut: 1, contour: rect(PLACKET_W, placketL) },
+      { key: 'placketUnder', name: 'Knopfleiste unten', role: 'placket', cut: 1, contour: rect(PLACKET_W, placketL) },
+    );
+    seams.push(
+      { a: ['placketTop', 1, 0], b: ['front', F.notchR, 0], reversed: true, name: 'Knopfleiste oben' },
+      { a: ['placketUnder', 3, 0], b: ['front', F.notchL, 0], reversed: true, name: 'Knopfleiste unten' },
+      { a: ['placketTop', 0, 0], b: ['front', F.notchB, 0], reversed: true, name: 'Knopfleiste oben Riegel' },
+      { a: ['placketUnder', 0, 0], b: ['front', F.notchB, 0], reversed: true, name: 'Knopfleiste unten Riegel' },
+    );
+    // Kragensteg: über die obere Leiste, rund um den Hals, über die untere Leiste (Enden überlappen vorne)
+    const frontNeck = curveLength(front.contour.nodes[4], front.contour.nodes[5]);
+    const segs = [PLACKET_W, frontNeck, back.neckHalf, back.neckHalf, frontNeck, PLACKET_W];
+    const L = segs.reduce((a, v) => a + v, 0);
+    const standNodes: ShapeNode[] = [];
+    let x = -L / 2;
+    standNodes.push(n(x, 0));
+    for (let i = 0; i < segs.length - 1; i++) {
+      x += segs[i];
+      standNodes.push(n(x, 0));
+    }
+    const standH = STAND_H;
+    standNodes.push(n(L / 2, 0), n(L / 2, standH), n(-L / 2, standH));
+    const collarH = clamp(spec.collarH ?? COLLAR_H, 30, 160);
+    pieces.push(
+      { key: 'stand', name: 'Kragensteg', role: 'collar', cut: 1, contour: { closed: true, nodes: standNodes }, rib: true },
+      { key: 'collar', name: 'Kragen', role: 'collar', cut: 1, contour: arcBand(L, collarH, 1.16), rib: true },
+    );
+    seams.push(
+      { a: ['stand', 0, 0], b: ['placketTop', 2, 0], reversed: true, name: 'Kragensteg Knopfleiste oben' },
+      { a: ['stand', 1, 0], b: ['front', F.neckR, 0], reversed: true, name: 'Kragensteg vorne links' },
+      { a: ['stand', 2, 0], b: ['back', 5, 0], reversed: true, name: 'Kragensteg hinten links' },
+      { a: ['stand', 3, 0], b: ['back', 4, 0], reversed: true, name: 'Kragensteg hinten rechts' },
+      { a: ['stand', 4, 0], b: ['front', F.neckL, 0], reversed: true, name: 'Kragensteg vorne rechts' },
+      { a: ['stand', 5, 0], b: ['placketUnder', 2, 0], reversed: true, name: 'Kragensteg Knopfleiste unten' },
+      { a: ['collar', 0, 0], b: ['stand', 7, 0], reversed: true, name: 'Kragen an Steg' },
+    );
+  } else if (blk.kind === 'hoodie') {
     pieces.push({ key: 'hood', name: 'Kapuze', role: 'hood', cut: 2, contour: hoodPiece(body, front.neckHalf, back.neckHalf, spec) });
     seams.push(
       { a: ['hood', 0, 0], b: ['front', 4, 0], reversed: true, name: 'Kapuze vorne links' },

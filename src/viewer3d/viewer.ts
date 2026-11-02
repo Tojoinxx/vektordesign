@@ -575,7 +575,7 @@ export class GarmentViewer {
       normal.needsUpdate = true;
       const tile = fabricTileMm(fabric);
       normal.repeat.set(b.w / tile, b.h / tile);
-      const motif = this.motifTexture(part, color, variant);
+      const motif = this.motifTexture(part, color, variant) ?? this.buttonTexture(part, color);
       const mat = new THREE.MeshPhysicalMaterial({
         vertexColors: true,
         color: new THREE.Color(motif ? '#ffffff' : color),
@@ -603,6 +603,49 @@ export class GarmentViewer {
     if (this.opts.mode === 'fit') this.updateFitColors();
     else this.updateLookColors();
     this.dirty = true;
+  }
+
+  /** Knöpfe auf der oberen Knopfleiste (Polo): zwei, drei Knöpfe je nach Länge, in Stofffarbe abgesetzt. */
+  private buttonTexture(part: ViewPart, color: string): THREE.Texture | null {
+    if (part.piece.role !== 'placket' || !/oben|top/i.test(part.piece.name)) return null;
+    const b = part.box;
+    const k = 8;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(b.w * k);
+    cv.height = Math.ceil(b.h * k);
+    const ctx = cv.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    const n = b.h > 120 ? 3 : 2;
+    const r = Math.min(b.w * 0.24, 7) * k;
+    for (let i = 0; i < n; i++) {
+      const y = b.h * (0.2 + (0.65 * i) / Math.max(1, n - 1)) * k;
+      const x = (b.w / 2) * k;
+      const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+      g.addColorStop(0, '#f4f1ea');
+      g.addColorStop(1, '#cfc9bc');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(60,55,50,0.55)';
+      for (const [dx, dy] of [
+        [-0.28, -0.28],
+        [0.28, -0.28],
+        [-0.28, 0.28],
+        [0.28, 0.28],
+      ]) {
+        ctx.beginPath();
+        ctx.arc(x + dx * r, y + dy * r, r * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    this.motifTextures.push(tex);
+    return tex;
   }
 
   /** Motive aus dem Tab „Produktion“ als Textur auf Vorder- und Rückenteil. */

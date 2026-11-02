@@ -1,8 +1,27 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeftRight, BookOpenText, Box, CheckCircle2, ChevronDown, ChevronRight, Download, Plus, Ruler, Scissors, Spline, Trash2, TriangleAlert, Wand2 } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  BookOpenText,
+  Box,
+  ClipboardPaste,
+  Table2,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Plus,
+  Ruler,
+  Scissors,
+  Spline,
+  Trash2,
+  TriangleAlert,
+  Wand2,
+} from 'lucide-react';
 import type { BodyMeasures, PatternBlock, PatternMaterial, PieceRole } from '../model/types';
 import { BLOCK_KINDS, FIT_NAMES, defaultBlock, generateBlock } from '../pattern/blocks';
-import { blockPoms, pomsFor, specDeviations } from '../techpack/measure';
+import { POMS, blockPoms, pomsFor, specDeviations } from '../techpack/measure';
+import { chartToSpecs, parseSizeChart } from '../pattern/sizeChart';
+import { Modal } from './Chrome';
 import { BODY_FIELDS, DEFAULT_SIZE, SIZE_TABLE, bodyForSize, checkBody } from '../pattern/body';
 import { canBePiece, checkSeams, fabricArea, freeEdges, pieceById, pieceGeom } from '../pattern/geometry';
 import { FABRICS, ROLE_NAMES, addMaterial, generatePattern, makePieces, removePiece, removeSeam, setBody, setPieceLook, updateMaterial, updatePiece, updateSeam } from '../store/patternOps';
@@ -17,6 +36,7 @@ import { useApp, useAppState } from './hooks';
  */
 
 const mm = (n: number) => formatNumber(n, 1);
+const shortSize = (id: string) => id.replace(/^[HD]-/, '');
 const num = (s: string): number | null => {
   const n = Number(s.replace(',', '.').trim());
   return Number.isFinite(n) ? n : null;
@@ -131,9 +151,19 @@ function BlockSection() {
   const [showBody, setShowBody] = useState(false);
   const [spec, setSpec] = useState<Partial<Record<string, number>>>(pat?.block?.spec ?? {});
   const [showSpec, setShowSpec] = useState(!!pat?.block?.spec && Object.keys(pat.block.spec).length > 0);
+  const [sizeSpecs, setSizeSpecs] = useState<PatternBlock['sizeSpecs']>(pat?.block?.sizeSpecs);
+  const [chartOpen, setChartOpen] = useState(false);
   const problems = checkBody(body);
   const hasSpec = Object.values(spec).some((v) => v != null);
-  const blk: PatternBlock = { kind, fit, size, length: length ?? auto.length, sleeve: sleeve ?? auto.sleeve, ...(hasSpec ? { spec } : {}) };
+  const blk: PatternBlock = {
+    kind,
+    fit,
+    size,
+    length: length ?? auto.length,
+    sleeve: sleeve ?? auto.sleeve,
+    ...(hasSpec ? { spec } : {}),
+    ...(hasSpec && sizeSpecs && Object.keys(sizeSpecs).length ? { sizeSpecs } : {}),
+  };
   // Werte, die der Schnitt ohne bzw. mit den eingetragenen Fertigmaßen ergibt (als Vorgabe im Feld)
   const current = useMemo(() => blockPoms(generateBlock(body, blk)), [body, JSON.stringify(blk)]); // eslint-disable-line react-hooks/exhaustive-deps
   const deviations = useMemo(() => specDeviations(body, blk), [body, JSON.stringify(blk)]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -158,6 +188,40 @@ function BlockSection() {
 
   return (
     <section className="props-section">
+      {chartOpen && (
+        <SizeChartDialog
+          kind={kind}
+          size={size}
+          initial={{ ...(sizeSpecs ?? {}), ...(hasSpec ? { [size]: spec } : {}) }}
+          onClose={() => setChartOpen(false)}
+          onApply={(base, all) => {
+            const b = bodyForSize(base);
+            const next: PatternBlock = {
+              kind,
+              fit,
+              size: base,
+              length: defaultBlock(kind, b, fit, base).length,
+              sleeve: defaultBlock(kind, b, fit, base).sleeve,
+              spec: all[base] ?? {},
+              sizeSpecs: all,
+            };
+            setSize(base);
+            setBodyState(b);
+            setSpec(all[base] ?? {});
+            setSizeSpecs(all);
+            setLength(null);
+            setSleeve(null);
+            setShowSpec(true);
+            setChartOpen(false);
+            const out = generatePattern(ed, b, base, next);
+            if (!out.ok) ed.toast('Schnitt konnte nicht erzeugt werden', 'error');
+            else {
+              ed.zoomToFit();
+              ed.toast(`Schnitt aus der Größentabelle erzeugt (${Object.keys(all).length} Größen)`, 'success');
+            }
+          }}
+        />
+      )}
       <h3>Grundschnitt aus Maßen</h3>
       <div className="form-grid">
         <span>Kleidungsstück</span>
@@ -269,10 +333,27 @@ function BlockSection() {
               />
             ))}
           </div>
-          {hasSpec && (
-            <button className="link-btn small" onClick={() => setSpec({})} data-testid="spec-clear">
-              Alle Fertigmaße löschen
+          <div className="row">
+            <button className="btn" onClick={() => setChartOpen(true)} data-testid="spec-chart" title="Größentabelle eines Shops einfügen oder je Größe eintragen">
+              <Table2 size={15} /> Größentabelle übernehmen …
             </button>
+            {hasSpec && (
+              <button
+                className="link-btn small"
+                onClick={() => {
+                  setSpec({});
+                  setSizeSpecs(undefined);
+                }}
+                data-testid="spec-clear"
+              >
+                Alle Fertigmaße löschen
+              </button>
+            )}
+          </div>
+          {sizeSpecs && Object.keys(sizeSpecs).length > 1 && hasSpec && (
+            <p className="muted small" data-testid="spec-sizes">
+              Größentabelle: {Object.keys(sizeSpecs).map(shortSize).join(', ')} – jede Größe trifft ihre Werte genau.
+            </p>
           )}
           {deviations.length > 0 && (
             <ul className="warn-list" data-testid="spec-deviations">
@@ -311,10 +392,157 @@ function BlockSection() {
         )}
       </div>
       <p className="muted small">
-        Erzeugt Vorder- und Rückenteil, Ärmel{kind === 'sweatshirt' || kind === 'hoodie' ? ', Bündchen' : ', Halsbündchen'}
+        Erzeugt Vorder- und Rückenteil, Ärmel
+        {kind === 'polo' ? ' mit Bündchen, Knopfleisten, Kragensteg und Kragen' : kind === 'sweatshirt' || kind === 'hoodie' ? ', Bündchen' : ', Halsbündchen'}
         {kind === 'hoodie' ? ' und Kapuze' : ''} mit fertig verbundenen Nähten. Beim Aktualisieren werden nur diese Teile ersetzt – eigene Teile bleiben.
       </p>
     </section>
+  );
+}
+
+/**
+ * Größentabelle eines vorhandenen Produkts: aus dem Shop kopierten Text einfügen (cm oder inch, deutsch oder
+ * englisch) oder je Größe eintragen. Jede Größe trifft danach ihre Werte genau.
+ */
+function SizeChartDialog(p: {
+  kind: PatternBlock['kind'];
+  size: string;
+  initial: Record<string, Partial<Record<string, number>>>;
+  onClose: () => void;
+  onApply: (base: string, all: Record<string, Partial<Record<string, number>>>) => void;
+}) {
+  const group: 'H' | 'D' = p.size.startsWith('D-') ? 'D' : 'H';
+  const [grp, setGrp] = useState<'H' | 'D'>(group);
+  const sizes = SIZE_TABLE.filter((r) => r.id.startsWith(`${grp}-`));
+  const poms = pomsFor(p.kind);
+  const [vals, setVals] = useState<Record<string, Partial<Record<string, number>>>>(p.initial);
+  const [base, setBase] = useState(p.size !== 'custom' && p.size.startsWith(`${grp}-`) ? p.size : `${grp}-M`);
+  const [text, setText] = useState('');
+  const [note, setNote] = useState<string | null>(null);
+  const read = () => {
+    const c = parseSizeChart(text);
+    if (!c) {
+      setNote('Keine Tabelle erkannt. Erwartet: eine Zeile mit Größen (z. B. „XS S M L XL“) und darunter je Messpunkt eine Zeile mit Werten.');
+      return;
+    }
+    const specs = chartToSpecs(
+      c,
+      grp,
+      sizes.map((r) => r.id),
+    );
+    setVals(specs);
+    const names = c.rows.map((r) => POMS.find((x) => x.id === r.pom)?.label ?? r.pom);
+    const missing = c.sizes.filter((s) => !sizes.some((r) => r.id === `${grp}-${s}`));
+    setNote(
+      `Erkannt: ${names.join(', ')} · ${Object.keys(specs).length} Größen · Einheit ${c.unit}` +
+        (c.unknown.length ? ` · nicht zugeordnet: ${c.unknown.join(', ')}` : '') +
+        (missing.length ? ` · Größe(n) ${missing.join(', ')} gibt es in der Maßtabelle nicht` : ''),
+    );
+    if (!specs[base]) setBase(Object.keys(specs)[Math.floor(Object.keys(specs).length / 2)] ?? base);
+  };
+  const filled = Object.values(vals).some((v) => Object.values(v).some((x) => x != null));
+  const rows = poms;
+  return (
+    <Modal title="Größentabelle übernehmen" onClose={p.onClose} wide testId="sizechart">
+      <p className="muted small">
+        Größentabelle aus dem Shop kopieren und hier einfügen – oder die Werte je Größe eintragen (cm, flach gemessen: „Chest width“ = ½ Brustweite). Jede Größe bekommt ihre Werte genau, leere Felder
+        kommen aus Körpermaßen und Passform.
+      </p>
+      <div className="row" style={{ alignItems: 'stretch', gap: 8 }}>
+        <textarea
+          rows={4}
+          style={{ flex: 1 }}
+          value={text}
+          placeholder={'z. B.\nCM  XS  S  M  L  XL  XXL\nTotal length  65  67  69  71  73  75\nChest width  56  58  60  62  64  66'}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+          aria-label="Größentabelle einfügen"
+          data-testid="sizechart-text"
+        />
+        <div className="stack">
+          <button className="btn accent" onClick={read} disabled={!text.trim()} data-testid="sizechart-read">
+            <ClipboardPaste size={15} /> Einlesen
+          </button>
+          <select value={grp} onChange={(e) => setGrp(e.target.value as 'H' | 'D')} aria-label="Größengruppe" data-testid="sizechart-group">
+            <option value="H">Herren / Unisex</option>
+            <option value="D">Damen</option>
+          </select>
+        </div>
+      </div>
+      {note && (
+        <p className="small" data-testid="sizechart-note">
+          {note}
+        </p>
+      )}
+      <div style={{ maxHeight: '48vh', overflow: 'auto' }}>
+        <table className="tp-table" data-testid="sizechart-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Messpunkt (cm)</th>
+              {sizes.map((r) => (
+                <th key={r.id} className={`num ${r.id === base ? 'base' : ''}`}>
+                  <label title="Basisgröße: auf diese Größe wird der Schnitt gelegt">
+                    <input type="radio" name="sc-base" checked={r.id === base} onChange={() => setBase(r.id)} /> {shortSize(r.id)}
+                  </label>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((pom) => (
+              <tr key={pom.id} title={pom.how}>
+                <td>
+                  <b>{pom.code}</b>
+                </td>
+                <td>{pom.label}</td>
+                {sizes.map((r) => {
+                  const v = vals[r.id]?.[pom.id];
+                  return (
+                    <td key={r.id} className={`num ${r.id === base ? 'base' : ''}`}>
+                      <Field
+                        value={v != null ? mm(v / 10) : ''}
+                        numeric
+                        width={52}
+                        label={`${pom.label} ${shortSize(r.id)} in cm`}
+                        testId={`sc-${r.id}-${pom.id}`}
+                        onCommit={(t) => {
+                          const n = num(t);
+                          setVals((o) => {
+                            const next = { ...o, [r.id]: { ...(o[r.id] ?? {}) } };
+                            if (!t.trim() || n === null || n <= 0) delete next[r.id][pom.id];
+                            else next[r.id][pom.id] = Math.round(n * 10);
+                            return next;
+                          });
+                        }}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+        <span className="muted small spacer">Basisgröße: {shortSize(base)} (Spalte markiert)</span>
+        <button className="btn" onClick={p.onClose}>
+          Abbrechen
+        </button>
+        <button
+          className="btn accent"
+          disabled={!filled}
+          onClick={() => {
+            const all: Record<string, Partial<Record<string, number>>> = {};
+            for (const [k, v] of Object.entries(vals)) if (k.startsWith(`${grp}-`) && Object.keys(v).length) all[k] = v;
+            p.onApply(base, all);
+          }}
+          data-testid="sizechart-apply"
+        >
+          <Wand2 size={15} /> Übernehmen und Schnitt erzeugen
+        </button>
+      </div>
+    </Modal>
   );
 }
 

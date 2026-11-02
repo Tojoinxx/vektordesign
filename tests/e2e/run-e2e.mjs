@@ -2023,6 +2023,40 @@ await step('Schnitt aus Fertigmaßen eines vorhandenen Hoodies: ½ Brust 62 cm, 
   await page.keyboard.press('Escape');
 });
 
+await step('Größentabelle eines Shops einfügen: Polo XS–XXL, jede Größe exakt, Kragen und Knopfleiste', async () => {
+  await page.select('[data-testid="block-kind"]', 'polo');
+  if (!(await page.$('[data-testid="spec-chart"]'))) await page.click('[data-testid="block-spec-toggle"]');
+  await page.click('[data-testid="spec-chart"]');
+  await page.waitForSelector('[data-testid="sizechart"]');
+  await page.click('[data-testid="sizechart-text"]');
+  await page.keyboard.type('SIZE GUIDE Polo Shirt\nCM XS S M L XL XXL\nA TOTAL LENGTH 65 67 69 71 73 75\nB CHEST WIDTH 56 58 60 62 64 66\nINCH XS S M L XL XXL\nA TOTAL LENGTH 25.6 26.4 27.2 28 28.8 29.5');
+  await page.click('[data-testid="sizechart-read"]');
+  const note = await page.$eval('[data-testid="sizechart-note"]', (e) => e.textContent);
+  assert(/Gesamtlänge/.test(note) && /Brustweite/.test(note) && /6 Größen/.test(note) && /cm/.test(note), `Erkannt: ${note}`);
+  const xl = await page.$eval('[data-testid="sc-H-XL-chest"]', (e) => e.value);
+  assert(xl === '64', `XL Brust im Raster: ${xl}`);
+  await shot('21-groessentabelle');
+  await page.click('[data-testid="sizechart-apply"]');
+  await sleep(400);
+  const r = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return { kind: d.pattern.block.kind, sizes: Object.keys(d.pattern.block.sizeSpecs ?? {}).length, pieces: d.pattern.pieces.filter((p) => p.block).map((p) => p.name) };
+  });
+  assert(r.kind === 'polo' && r.sizes === 6, `Polo: ${JSON.stringify(r)}`);
+  assert(r.pieces.includes('Kragen') && r.pieces.includes('Knopfleiste oben'), `Teile: ${r.pieces}`);
+  await page.click('[data-testid="pattern-techpack"]');
+  await page.waitForSelector('[data-testid="techpack"]');
+  await page.click('[data-testid="tp-tab-measures"]');
+  const cells = await page.$$eval('[data-testid="tp-measures"] tbody tr', (rows) => {
+    const f = (t) => [...rows].find((r) => r.textContent.includes(t));
+    return [f('Gesamtlänge'), f('Brustweite')].map((r) => [...r.querySelectorAll('td.num')].map((c) => c.textContent.trim()));
+  });
+  // Spalten XS … 3XL; Toleranz am Ende ist ein Eingabefeld
+  assert(cells[0].slice(0, 6).join(' ') === '65,0 67,0 69,0 71,0 73,0 75,0', `Länge: ${cells[0]}`);
+  assert(cells[1].slice(0, 6).join(' ') === '56,0 58,0 60,0 62,0 64,0 66,0', `Brust: ${cells[1]}`);
+  await page.keyboard.press('Escape');
+});
+
 await browser.close();
 // Ganze Prozessgruppe beenden (npx startet vite als Kindprozess)
 if (server) {

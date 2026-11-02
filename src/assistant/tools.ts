@@ -14,6 +14,11 @@ import type { CommitOutcome, Editor, PlacedPoint } from '../store/editor';
 import { drawableTargets } from '../store/editor';
 import { linearSpec, angleSpec } from '../tools/dimensionTool';
 import type { ContentBlock, ToolDef } from './api';
+import type { PatternBlock } from '../model/types';
+import { BLOCK_KINDS, defaultBlock } from '../pattern/blocks';
+import { SIZE_TABLE, bodyForSize } from '../pattern/body';
+import { normalizeSize } from '../pattern/sizeChart';
+import { generatePattern } from '../store/patternOps';
 
 /** Was der Agent von der App braucht. */
 export interface AgentHost {
@@ -367,6 +372,46 @@ export const TOOL_DEFS: ToolDef[] = [
         },
         pantone: { type: 'object', additionalProperties: { type: 'string' } },
       },
+    },
+  },
+  {
+    name: 'make_pattern_from_size_chart',
+    description:
+      'Build a garment pattern (Schnitt) from the size chart of an existing product, e.g. read from a screenshot of a shop size guide. Values in cm as printed. Flat widths ("chest width", "pit to pit") are half circumferences – pass them as chest; if the chart gives full circumference, pass chest_circumference instead. Every size gets exactly its values; missing measurements come from body measurements and fit. Pattern opens with seams connected, ready for the 3D preview and the tech pack size table.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['tshirt', 'polo', 'longsleeve', 'sweatshirt', 'hoodie'] },
+        fit: { type: 'string', enum: ['slim', 'regular', 'oversize'] },
+        group: { type: 'string', enum: ['men', 'women'], description: 'men = Herren/Unisex sizes XS–3XL, women = Damen XS–XL' },
+        base_size: { type: 'string', description: 'Size to lay the pattern on, e.g. "M"' },
+        unit: { type: 'string', enum: ['cm', 'inch'] },
+        sizes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              size: { type: 'string', description: 'XS, S, M, L, XL, XXL, 3XL' },
+              total_length: { type: 'number' },
+              chest: { type: 'number', description: 'half chest width, flat' },
+              chest_circumference: { type: 'number' },
+              hem: { type: 'number', description: 'half hem width, flat' },
+              shoulder: { type: 'number' },
+              sleeve: { type: 'number', description: 'sleeve length from shoulder point' },
+              bicep: { type: 'number', description: 'half upper arm width' },
+              sleeve_opening: { type: 'number', description: 'half sleeve opening' },
+              neck_width: { type: 'number' },
+              rib_height: { type: 'number' },
+              hood_height: { type: 'number' },
+              hood_width: { type: 'number' },
+              placket_length: { type: 'number' },
+              collar_height: { type: 'number' },
+            },
+            required: ['size'],
+          },
+        },
+      },
+      required: ['kind', 'sizes'],
     },
   },
   {
@@ -1015,6 +1060,55 @@ export async function runTool(host: AgentHost, name: string, input: Record<strin
         });
         if (!out.ok) return fail(out.message);
         return { content: 'OK', summary: 'Produktionsangaben geändert' };
+      }
+      case 'make_pattern_from_size_chart': {
+        const kind = String(input.kind) as PatternBlock['kind'];
+        if (!BLOCK_KINDS.some((k) => k.id === kind)) return fail(`Unknown kind ${String(input.kind)}`);
+        const fit = (['slim', 'regular', 'oversize'].includes(String(input.fit)) ? input.fit : 'regular') as PatternBlock['fit'];
+        const grp = input.group === 'women' ? 'D' : 'H';
+        const k = input.unit === 'inch' ? 25.4 : 10;
+        const map: Record<string, string> = {
+          total_length: 'len',
+          chest: 'chest',
+          hem: 'hem',
+          shoulder: 'shoulder',
+          sleeve: 'sleeve',
+          bicep: 'bicep',
+          sleeve_opening: 'opening',
+          neck_width: 'neckW',
+          rib_height: 'rib',
+          hood_height: 'hoodH',
+          hood_width: 'hoodW',
+          placket_length: 'placket',
+          collar_height: 'collarH',
+        };
+        const all: Record<string, Partial<Record<string, number>>> = {};
+        const skipped: string[] = [];
+        for (const row of (Array.isArray(input.sizes) ? input.sizes : []) as Record<string, unknown>[]) {
+          const sz = normalizeSize(String(row.size ?? ''));
+          const id = sz ? `${grp}-${sz}` : '';
+          if (!sz || !SIZE_TABLE.some((r) => r.id === id)) {
+            skipped.push(String(row.size));
+            continue;
+          }
+          const spec: Partial<Record<string, number>> = {};
+          for (const [key, pom] of Object.entries(map)) if (typeof row[key] === 'number' && (row[key] as number) > 0) spec[pom] = Math.round((row[key] as number) * k * 10) / 10;
+          if (typeof row.chest_circumference === 'number' && spec.chest == null) spec.chest = Math.round((row.chest_circumference * k * 10) / 2) / 10;
+          all[id] = spec;
+        }
+        const ids = Object.keys(all);
+        if (!ids.length) return fail('No usable sizes');
+        const baseSz = normalizeSize(String(input.base_size ?? 'M'));
+        const base = baseSz && all[`${grp}-${baseSz}`] ? `${grp}-${baseSz}` : ids[Math.floor(ids.length / 2)];
+        const body = bodyForSize(base);
+        const d = defaultBlock(kind, body, fit, base);
+        const out = generatePattern(ed, body, base, { ...d, spec: all[base], sizeSpecs: all });
+        if (!out.ok) return fail(out.message);
+        host.fitView();
+        return {
+          content: `Pattern created: ${kind}, base ${base}, sizes ${ids.join(', ')}${skipped.length ? `; skipped sizes not in the size table: ${skipped.join(', ')}` : ''}. The user can open the 3D preview (Strg+3) and the tech pack size table.`,
+          summary: `Schnitt aus Größentabelle (${ids.map((x) => x.slice(2)).join(', ')})`,
+        };
       }
       case 'open_export_dialog': {
         const fmt = input.format === 'png' ? 'png' : 'svg';

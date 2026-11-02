@@ -377,7 +377,7 @@ export interface Production {
 // ---------------------------------------------------------------------------
 
 /** Rolle eines Schnittteils – bestimmt, wo es in 3D um den Körper gelegt wird. */
-export type PieceRole = 'front' | 'back' | 'sleeve' | 'hood' | 'cuff' | 'hem' | 'neckband' | 'pocket' | 'other';
+export type PieceRole = 'front' | 'back' | 'sleeve' | 'hood' | 'cuff' | 'hem' | 'neckband' | 'collar' | 'placket' | 'pocket' | 'other';
 
 /** Körpermaße in mm (Umfänge als ganzer Umfang). */
 export interface BodyMeasures {
@@ -463,7 +463,7 @@ export interface PatternMaterial {
 
 /** Grundschnitt-Einstellungen, aus denen die Teile mit `block: true` erzeugt wurden. */
 export interface PatternBlock {
-  kind: 'tshirt' | 'longsleeve' | 'sweatshirt' | 'hoodie';
+  kind: 'tshirt' | 'polo' | 'longsleeve' | 'sweatshirt' | 'hoodie';
   /** Größe aus der Maßtabelle oder 'custom' */
   size: string;
   /** Passform: Bewegungszugabe */
@@ -477,6 +477,11 @@ export interface PatternBlock {
    * Gesetzte Werte legen die Geometrie direkt fest; fehlende kommen aus Körpermaßen und Passform.
    */
   spec?: Partial<Record<string, number>>;
+  /**
+   * Fertigmaße weiterer Größen aus einer Größentabelle (Größen-ID → Messpunkte). Gesetzte Werte gelten für diese
+   * Größe genau; fehlende werden von der Basisgröße aus gestuft.
+   */
+  sizeSpecs?: Record<string, Partial<Record<string, number>>>;
 }
 
 /** Puppe zum Anprobieren (unabhängig von der Größe des Schnitts). */

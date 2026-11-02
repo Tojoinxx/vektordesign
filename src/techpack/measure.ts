@@ -37,6 +37,8 @@ export const POMS: Pom[] = [
   { id: 'neckband', code: 'N', label: 'Halsbündchen Höhe', how: 'Fertige Höhe des Halsbündchens', tol: 2 },
   { id: 'hoodH', code: 'O', label: 'Kapuzenhöhe', how: 'Von der Halsnaht hinten bis zum höchsten Punkt der Kapuze', tol: 10 },
   { id: 'hoodW', code: 'P', label: 'Kapuzenbreite', how: 'Flach liegend von der Gesichtskante bis zur hinteren Mitte', tol: 8 },
+  { id: 'placket', code: 'Q', label: 'Knopfleiste Länge', how: 'Von der Kragenansatznaht bis zum unteren Ende der Knopfleiste', tol: 5 },
+  { id: 'collarH', code: 'R', label: 'Kragenhöhe', how: 'Höhe des Kragens in der hinteren Mitte (ohne Steg)', tol: 3 },
 ];
 
 export interface SizeColumn {
@@ -76,6 +78,10 @@ export function blockPoms(r: BlockResult): Record<string, number | null> {
   const hemB = r.pieces.find((p) => p.key === 'hemBack');
   const hood = r.pieces.find((p) => p.key === 'hood');
   const nb = r.pieces.find((p) => p.key === 'neckband');
+  const placket = r.pieces.find((p) => p.key === 'placketTop');
+  const collar = r.pieces.find((p) => p.key === 'collar');
+  // Polo-Vorderteil hat vier Knoten mehr (Schlitz): Knotennummern ab dem linken Halspunkt verschoben
+  const k = f && f.contour.nodes.length === 12 ? 3 : 0;
   const width = (p: BlockPiece | undefined, i: number, j: number) => {
     const a = node(p, i);
     const c = node(p, j);
@@ -84,21 +90,24 @@ export function blockPoms(r: BlockResult): Record<string, number | null> {
   const ribH = hemF ? box(hemF)!.h : 0;
   const out: Record<string, number | null> = {};
   out.len = b ? -node(b, 0)!.y + ribH : null;
-  out.chest = f && b ? (width(f, 2, 8) + width(b, 2, 8)) / 2 : null;
+  out.chest = f && b ? (width(f, 2, 8 + k) + width(b, 2, 8)) / 2 : null;
   out.hem = hemF && hemB ? (box(hemF)!.w + box(hemB)!.w) / 2 : f && b ? (width(f, 0, 1) + width(b, 0, 1)) / 2 : null;
-  out.shoulder = f ? width(f, 3, 7) : null;
+  out.shoulder = f ? width(f, 3, 7 + k) : null;
   out.shoulderSeam = f ? segLen(f, 3) : null;
   out.armhole = f ? Math.hypot(node(f, 3)!.x - node(f, 2)!.x, node(f, 3)!.y - node(f, 2)!.y) : null;
   out.sleeve = s ? -node(s, 0)!.y + (cuff ? box(cuff)!.h : 0) : null;
   out.bicep = s ? width(s, 2, 4) / 2 : null;
   out.opening = cuff ? box(cuff)!.w / 2 : s ? width(s, 0, 1) / 2 : null;
-  out.neckW = f ? width(f, 4, 6) : null;
+  out.neckW = f ? width(f, 4, 6 + k) : null;
+  // Polo: Halsausschnitt bis zur Knopfleiste (Kragenansatz vorne)
   out.neckFront = f ? node(f, 4)!.y - node(f, 5)!.y : null;
   out.neckBack = b ? node(b, 4)!.y - node(b, 5)!.y : null;
   out.rib = hemF ? ribH : cuff ? box(cuff)!.h : null;
   out.neckband = nb ? box(nb)!.h : null;
   out.hoodH = hood ? box(hood)!.h : null;
   out.hoodW = hood ? box(hood)!.w : null;
+  out.placket = placket ? box(placket)!.h : null;
+  out.collarH = collar ? box(collar)!.h : null;
   return out;
 }
 
@@ -123,6 +132,9 @@ export function gradedBlock(blk: PatternBlock, baseBody: BodyMeasures, size: str
     for (const [k, v] of Object.entries(blk.spec)) if (v != null) spec[k] = v + ((p1[k] ?? 0) - (p0[k] ?? 0));
     out.spec = spec;
   }
+  // Werte aus der Größentabelle gelten für ihre Größe genau
+  const own = blk.sizeSpecs?.[size];
+  if (own && size !== blk.size) out.spec = { ...(out.spec ?? {}), ...Object.fromEntries(Object.entries(own).filter(([, v]) => v != null)) };
   return { body, blk: out };
 }
 

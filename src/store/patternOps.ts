@@ -24,6 +24,8 @@ export const ROLE_NAMES: Record<PieceRole, string> = {
   cuff: 'Ärmelbündchen',
   hem: 'Saumbund',
   neckband: 'Halsbündchen',
+  collar: 'Kragen',
+  placket: 'Knopfleiste',
   pocket: 'Tasche',
   other: 'Sonstiges',
 };
@@ -68,7 +70,12 @@ export function pieceStyle(color: string): Style {
 }
 
 function defaultMaterials(kind: PatternBlock['kind']): PatternMaterial[] {
-  const main = kind === 'tshirt' || kind === 'longsleeve' ? FABRICS[0] : FABRICS[1];
+  const main = kind === 'tshirt' || kind === 'longsleeve' || kind === 'polo' ? FABRICS[0] : FABRICS[1];
+  if (kind === 'polo')
+    return [
+      { id: 'm-main', name: 'Oberstoff (Piqué)', fabric: main.id, color: '#4a6a8f', gsm: 220 },
+      { id: 'm-rib', name: 'Strickkragen/Bündchen', fabric: 'rib', color: '#4a6a8f', gsm: FABRICS[3].gsm },
+    ];
   return [
     { id: 'm-main', name: 'Oberstoff', fabric: main.id, color: '#4a6a8f', gsm: main.gsm },
     { id: 'm-rib', name: 'Bündchen', fabric: 'rib', color: '#4a6a8f', gsm: FABRICS[3].gsm },

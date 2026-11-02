@@ -217,8 +217,26 @@ export class GarmentSim {
       }
     }
     for (let i = 0; i < total; i++) this.invMass[i] = mass[i] > 0 ? 1 / mass[i] : 0;
+    // Teile, die nach dem Nähen in Form gezogen werden: Kapuze (ablegen) und Polokragen (umschlagen)
     this.hoodMask = new Uint8Array(total);
-    if (this.hood === 'down') for (const p of this.parts) if (p.piece.role === 'hood') this.hoodMask.fill(1, p.offset, p.offset + p.count);
+    this.pullAcc = new Float32Array(total * 3);
+    const neckZ = sectionAt(this.mq, this.mq.neckBaseY - 1)?.cz ?? 0;
+    for (const p of this.parts) {
+      const isHood = p.piece.role === 'hood' && this.hood === 'down';
+      const isFall = p.piece.role === 'collar' && !/steg|stand/i.test(p.piece.name);
+      if (!isHood && !isFall) continue;
+      this.hoodMask.fill(1, p.offset, p.offset + p.count);
+      for (let i = p.offset; i < p.offset + p.count; i++) {
+        if (isHood) this.pullAcc.set([0, -1.2 * G, -3.5 * G], 3 * i);
+        else {
+          // nach außen und unten: der Kragen klappt über den Steg auf die Schultern
+          const dx = this.pos[3 * i];
+          const dz = this.pos[3 * i + 2] - neckZ;
+          const l = Math.hypot(dx, dz) || 1;
+          this.pullAcc.set([(dx / l) * 1.6 * G, -1.4 * G, (dz / l) * 1.6 * G], 3 * i);
+        }
+      }
+    }
     // Kanten (Dehnung) und Biegepaare aus der 2D-Ruhelage
     const edges: number[] = [];
     const eRest: number[] = [];
@@ -574,6 +592,27 @@ export class GarmentSim {
             set(i, -Math.sin(a) * Rn, mq.neckBaseY + 8 + (v - b.minY), (sec?.cz ?? 0) - Math.cos(a) * Rn);
             break;
           }
+          case 'placket': {
+            // vor dem Schlitz in der vorderen Mitte; obere Leiste außen
+            const top0 = /oben|top/i.test(p.piece.name);
+            const th = (u - b.cx) / R;
+            const y = top - 45 - (b.maxY - v);
+            set(i, R * Math.sin(th), y, R * Math.cos(th) + (top0 ? 16 : 8));
+            break;
+          }
+          case 'collar': {
+            // Ring um den Hals, Anfang und Ende vorne (überlappen über den Leisten); Kragen über dem Steg,
+            // leicht nach außen geneigt, damit er beim Umschlagen nach außen fällt
+            const stand = /steg|stand/i.test(p.piece.name);
+            const W = b.w;
+            const sec = sectionAt(mq, mq.neckBaseY - 1);
+            const a = ((u - b.minX) / W) * Math.PI * 2;
+            const h0 = v - b.minY;
+            const Rn = W / (2 * Math.PI) + 10 + (stand ? 0 : 8 + h0 * 0.35);
+            const y = mq.neckBaseY + 8 + (stand ? h0 : 34 + h0 * 0.9);
+            set(i, Math.sin(a) * Rn, y, (sec?.cz ?? 0) + Math.cos(a) * Rn);
+            break;
+          }
           case 'hood': {
             const headR = this.ex.body.head / (2 * Math.PI);
             // immer aufgesetzt nähen (der Halsrand muss um den Hals); „abgelegt“ zieht sie danach vom Kopf
@@ -608,16 +647,22 @@ export class GarmentSim {
     const seen = new Set<string>();
     const list: { a: { piece: string; edge: number; copy: 0 | 1 }; b: { piece: string; edge: number; copy: 0 | 1 }; reversed: boolean }[] = [];
     const key = (a: { piece: string; edge: number; copy: 0 | 1 }) => `${a.piece}/${a.edge}/${a.copy}`;
-    const push = (s: (typeof list)[number]) => {
+    const pairs = new Set<string>();
+    const push = (s: (typeof list)[number], explicit = false) => {
       const k1 = key(s.a);
       const k2 = key(s.b);
-      if (seen.has(k1) || seen.has(k2)) return;
+      const pk = k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`;
+      if (pairs.has(pk)) return;
+      // Ausdrückliche Nähte dürfen eine Kante mehrfach nutzen (z. B. beide Knopfleisten am Riegel),
+      // gespiegelte Ergänzungen nur freie Kanten
+      if (!explicit && (seen.has(k1) || seen.has(k2))) return;
+      pairs.add(pk);
       seen.add(k1);
       seen.add(k2);
       list.push(s);
     };
     // Zuerst ausdrücklich angegebene Kopien, dann gespiegelte Ergänzungen für gegengleiche Teile
-    for (const s of this.ex.seams) push({ a: { piece: s.a.piece, edge: s.a.edge, copy: s.a.copy ?? 0 }, b: { piece: s.b.piece, edge: s.b.edge, copy: s.b.copy ?? 0 }, reversed: s.reversed });
+    for (const s of this.ex.seams) push({ a: { piece: s.a.piece, edge: s.a.edge, copy: s.a.copy ?? 0 }, b: { piece: s.b.piece, edge: s.b.edge, copy: s.b.copy ?? 0 }, reversed: s.reversed }, true);
     const cut = (id: string) => this.ex.pieces.find((p) => p.id === id)?.cut ?? 1;
     for (const s of this.ex.seams) {
       if (s.a.copy || s.b.copy) continue;
@@ -694,7 +739,7 @@ export class GarmentSim {
 
   /** Freie Teile, die an keinem Körperteil hängen, oben aufhängen (wie auf einer Stange). */
   private pinLoosePieces(): void {
-    const bodyRoles = new Set<PieceRole>(['front', 'back', 'sleeve', 'hood', 'cuff', 'hem', 'neckband']);
+    const bodyRoles = new Set<PieceRole>(['front', 'back', 'sleeve', 'hood', 'cuff', 'hem', 'neckband', 'collar', 'placket']);
     const partOf = (i: number) => this.parts.find((p) => i >= p.offset && i < p.offset + p.count)!;
     // Zusammenhängende Gruppen über Nähte
     const parent = this.parts.map((_, i) => i);
@@ -715,13 +760,15 @@ export class GarmentSim {
 
   /** Partikel der Kapuze (nur wenn sie abgelegt wird) */
   private hoodMask = new Uint8Array(0);
+  /** Zugbeschleunigung je Partikel (mm/s²) während des Ziehens */
+  private pullAcc = new Float32Array(0);
   private bendCompSoft = new Float32Array(0);
   /** Zeitraum, in dem die Kapuze nach hinten gezogen wird (s) */
   private get hoodPull(): [number, number] {
     return [this.sewTime * 0.95, this.sewTime + 1.1];
   }
   private hasHoodPull(): boolean {
-    return this.hood === 'down' && this.hoodMask.some((v) => v);
+    return this.hoodMask.some((v) => v);
   }
 
   private looseGroups: GarmentPart[][] = [];
@@ -795,8 +842,8 @@ export class GarmentSim {
     const { pos, prev, invMass, drag, hoodMask } = this;
     const N = this.n;
     const gdy = -G * gFactor * h * h;
-    const pz = -3.5 * G * this.pull * h * h;
-    const py = -1.2 * G * this.pull * h * h;
+    const pk = this.pull * h * h;
+    const acc = this.pullAcc;
     for (let i = 0; i < N; i++) {
       if (invMass[i] === 0) continue;
       const k = 3 * i;
@@ -812,8 +859,9 @@ export class GarmentSim {
       pos[k + 1] += vy + gdy;
       pos[k + 2] += vz;
       if (this.pull > 0 && hoodMask[i]) {
-        pos[k + 1] += py;
-        pos[k + 2] += pz;
+        pos[k] += acc[k] * pk;
+        pos[k + 1] += acc[k + 1] * pk;
+        pos[k + 2] += acc[k + 2] * pk;
       }
     }
     // Dehnung
