@@ -1,4 +1,5 @@
 import type { BodyMeasures } from '../model/types';
+import { sampleSdf, type Sdf } from './sdf';
 
 /**
  * Schneiderpuppe aus Körpermaßen, männlich oder weiblich: Rumpf als Stapel von Querschnitten (Breite,
@@ -62,6 +63,8 @@ export interface Mannequin {
   ellipsoids: Ellipsoid[];
   /** Größter Rumpfradius (für die Anordnung der Teile) */
   maxR: number;
+  /** Abstandsfeld des realistischen Menschen-Netzes (falls vorhanden: ersetzt die einfachen Formen) */
+  sdf?: Sdf;
 }
 
 /** Ellipsenumfang nach Ramanujan. */
@@ -287,6 +290,7 @@ const tmp: Contact = { d: 0, nx: 0, ny: 0, nz: 0 };
  * Normale nach außen. `maxD`: nur Kontakte näher als dieser Wert werden genau berechnet.
  */
 export function bodyContact(mq: Mannequin, x: number, y: number, z: number, maxD: number, out: Contact = tmp): Contact | null {
+  if (mq.sdf) return sampleSdf(mq.sdf, x, y, z, out) && out.d < maxD ? out : null;
   let best = maxD;
   let found = false;
   // Rumpf

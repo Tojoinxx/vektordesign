@@ -483,6 +483,8 @@ export interface PatternAvatar {
   height: number;
   /** Körperbau −1 (schlank) … +1 (kräftig) */
   build: number;
+  /** Hautton der Puppe (fehlt = Standard) */
+  skin?: string;
 }
 
 export interface Pattern {

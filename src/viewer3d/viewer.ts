@@ -6,6 +6,8 @@ import { applyVariant, motifDoc, motifSize, productionOf } from '../model/produc
 import { drawDesign } from '../render/drawDesign';
 import type { SimOptions, SimStats } from '../sim3d/garment';
 import { buildMannequin, mannequinMesh, type Mannequin } from '../sim3d/body';
+import { buildHuman, humanMannequin, type HumanData, type HumanMesh } from '../sim3d/human';
+import { loadHumanData } from '../sim3d/humanLoader';
 import type { FromWorker, LayoutPart, ToWorker } from '../sim3d/protocol';
 import { SimRunner } from '../sim3d/runner';
 import { avatarBody, genderOfSize } from '../sim3d/avatar';
@@ -51,6 +53,8 @@ interface ViewPart extends LayoutPart {
 }
 
 const BODY_COLOR = '#d8d2c8';
+export const DEFAULT_SKIN = '#d9a283';
+const UNDERWEAR = '#2b2f36';
 
 /** Treiber der Simulation: Worker, sonst Hauptthread. */
 class Driver {
@@ -116,6 +120,11 @@ export class GarmentViewer {
   private strain: Float32Array | null = null;
   private n = 0;
   stats: SimStats | null = null;
+  /** Menschen-Modell: undefined = lädt noch, null = nicht verfügbar (einfache Puppe) */
+  private humanData: HumanData | null | undefined = undefined;
+  private human: HumanMesh | null = null;
+  private bodyKey = '';
+  private eyesMesh: THREE.Mesh | null = null;
   opts: ViewerOptions = { mode: 'look', showBody: true, variantId: null, quality: 'preview', dark: false };
 
   constructor(
@@ -173,6 +182,14 @@ export class GarmentViewer {
     this.applyTheme();
 
     this.driver = new Driver((m) => this.onSim(m));
+    void loadHumanData().then((d) => {
+      this.humanData = d;
+      if (this.doc) {
+        this.simKey = '';
+        this.bodyKey = '';
+        this.setDoc(this.doc, true);
+      }
+    });
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(container);
     this.resize();
@@ -198,7 +215,7 @@ export class GarmentViewer {
     const prev = this.opts;
     this.opts = { ...prev, ...p };
     if (p.dark !== undefined && p.dark !== prev.dark) this.applyTheme();
-    if (p.showBody !== undefined && this.bodyMesh) this.bodyMesh.visible = this.opts.showBody;
+    if (p.showBody !== undefined) for (const m of [this.bodyMesh, this.eyesMesh]) if (m) m.visible = this.opts.showBody;
     const qualityChanged = p.quality !== undefined && p.quality !== prev.quality;
     if (qualityChanged) this.simKey = '';
     if (this.doc && (qualityChanged || (p.mode !== undefined && p.mode !== prev.mode) || (p.variantId !== undefined && p.variantId !== prev.variantId))) this.setDoc(this.doc, true);
@@ -232,8 +249,13 @@ export class GarmentViewer {
   setDoc(doc: SketchDoc, force = false): void {
     if (doc === this.doc && !force) return;
     this.doc = doc;
+    if (this.humanData === undefined) {
+      this.status({ state: 'simulating', stats: null, parts: 0, vertices: 0, message: 'Puppe wird geladen …' });
+      return;
+    }
     const ex = patternExchange(doc);
     this.ex = ex;
+    const skin = doc.pattern?.avatar?.skin ?? DEFAULT_SKIN;
     if (!ex) {
       this.driver.stop();
       this.clearGarment();
@@ -241,7 +263,7 @@ export class GarmentViewer {
       this.simKey = '';
       this.stats = null;
       const av = doc.pattern?.avatar;
-      this.setBody(av ? avatarBody(av) : (doc.pattern?.body ?? bodyForSize('H-M')), av?.gender ?? genderOfSize(doc.pattern?.bodySize ?? 'H-M'));
+      this.setBody(av ? avatarBody(av) : (doc.pattern?.body ?? bodyForSize('H-M')), av?.gender ?? genderOfSize(doc.pattern?.bodySize ?? 'H-M'), av?.build ?? 0, skin);
       this.status({ state: 'empty', stats: null, parts: 0, vertices: 0, message: 'Noch keine Schnittteile. Im Tab „Schnitt“ einen Grundschnitt erzeugen oder Teile anlegen.' });
       return;
     }
@@ -255,16 +277,18 @@ export class GarmentViewer {
     ]);
     if (key !== this.simKey) {
       this.simKey = key;
-      const bodyChanged = !this.mq || this.mq.gender !== ex.gender || JSON.stringify(this.mq.measures) !== JSON.stringify(ex.body);
-      if (bodyChanged) this.setBody(ex.body, ex.gender);
+      const bodyChanged = !this.bodyKey.startsWith(JSON.stringify([ex.body, ex.gender, ex.build, !!this.humanData]).slice(0, -1));
+      this.setBody(ex.body, ex.gender, ex.build, skin);
       this.stats = null;
       this.gap = this.strain = null;
       this.runId++;
-      this.driver.start(this.runId, ex, this.opts.quality === 'high' ? { resolution: 15, substeps: 12 } : { resolution: 24, substeps: 9 });
+      const human = this.human ?? undefined;
+      this.driver.start(this.runId, ex, this.opts.quality === 'high' ? { resolution: 15, substeps: 12, human } : { resolution: 24, substeps: 9, human });
       this.status({ state: 'simulating', stats: null, parts: this.parts.length, vertices: this.n });
       if (bodyChanged || !this.parts.length) this.frameCamera();
     } else {
       // Nur Aussehen geändert: Teile behalten ihre Lage
+      this.setBody(ex.body, ex.gender, ex.build, skin);
       for (const part of this.parts) this.bindPart(part);
       this.updateMaterials();
     }
@@ -310,27 +334,101 @@ export class GarmentViewer {
     if (m.stats.settled && this.opts.mode === 'fit') this.updateFitColors();
   }
 
-  private setBody(body: PatternExchange['body'] | null, gender: 'male' | 'female' = 'male'): void {
-    if (this.bodyMesh) {
-      this.scene.remove(this.bodyMesh);
-      this.bodyMesh.geometry.dispose();
-      (this.bodyMesh.material as THREE.Material).dispose();
-      this.bodyMesh = null;
+  private setBody(body: PatternExchange['body'] | null, gender: 'male' | 'female' = 'male', build = 0, skin = DEFAULT_SKIN): void {
+    const key = JSON.stringify([body, gender, build, !!this.humanData, skin]);
+    if (key === this.bodyKey && this.bodyMesh) return;
+    this.bodyKey = key;
+    for (const m of [this.bodyMesh, this.eyesMesh]) {
+      if (!m) continue;
+      this.scene.remove(m);
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
     }
-    this.mq = body ? buildMannequin(body, gender) : null;
-    if (!this.mq) return;
-    // Etwas kleiner zeichnen als die Kollision: Stoff liegt sichtbar auf, nichts sticht durch
-    const data = mannequinMesh(this.mq, 4);
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
-    g.setIndex(data.indices);
-    g.computeVertexNormals();
-    this.bodyMesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: BODY_COLOR, roughness: 0.55, metalness: 0 }));
-    this.bodyMesh.castShadow = true;
-    this.bodyMesh.receiveShadow = true;
-    this.bodyMesh.visible = this.opts.showBody;
-    this.scene.add(this.bodyMesh);
+    this.bodyMesh = this.eyesMesh = null;
+    this.human = null;
+    this.mq = null;
+    if (!body) return;
+    if (this.humanData) {
+      this.human = buildHuman(this.humanData, body, gender, build);
+      this.mq = humanMannequin(body, gender, this.human);
+      this.buildHumanMeshes(this.human, this.mq, skin);
+    } else {
+      this.mq = buildMannequin(body, gender);
+      // Etwas kleiner zeichnen als die Kollision: Stoff liegt sichtbar auf, nichts sticht durch
+      const data = mannequinMesh(this.mq, 4);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
+      g.setIndex(data.indices);
+      g.computeVertexNormals();
+      this.bodyMesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: BODY_COLOR, roughness: 0.55, metalness: 0 }));
+    }
+    for (const m of [this.bodyMesh, this.eyesMesh]) {
+      if (!m) continue;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.visible = this.opts.showBody;
+      this.scene.add(m);
+    }
     this.dirty = true;
+  }
+
+  /** Menschen-Netz mit Haut, schlichter Unterwäsche (wie bei Anprobe-Avataren) und Augen. */
+  private buildHumanMeshes(h: HumanMesh, mq: Mannequin, skin: string): void {
+    const g = new THREE.BufferGeometry();
+    const pos = Float32Array.from(h.positions);
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setIndex(new THREE.BufferAttribute(h.body, 1));
+    g.computeVertexNormals();
+    // 5 mm nach innen versetzt zeichnen: der Stoff liegt sichtbar auf, kleine Formen stechen nicht durch
+    const nrm = g.getAttribute('normal') as THREE.BufferAttribute;
+    for (let i = 0; i < pos.length / 3; i++) {
+      pos[3 * i] -= nrm.getX(i) * 5;
+      pos[3 * i + 1] -= nrm.getY(i) * 5;
+      pos[3 * i + 2] -= nrm.getZ(i) * 5;
+    }
+    // Unterwäsche als Vertex-Farbe (Weiß = Haut, Dunkel = Stoff)
+    const m = mq.measures;
+    const neckBase = mq.neckBaseY;
+    const waistY = neckBase - m.backLength;
+    const hipY = waistY - m.height * (mq.gender === 'female' ? 0.11 : 0.105);
+    const chestY = neckBase - m.backLength * (mq.gender === 'female' ? 0.52 : 0.5);
+    const shX = Math.abs(h.joints['l-shoulder'][0]) * 0.92;
+    const col = new Float32Array(pos.length).fill(1);
+    const cloth = new THREE.Color(UNDERWEAR).convertSRGBToLinear();
+    const skinC = new THREE.Color(skin).convertSRGBToLinear();
+    const k = (c: number, s: number) => c / Math.max(0.02, s);
+    for (let i = 0; i < pos.length / 3; i++) {
+      const x = h.positions[3 * i];
+      const y = h.positions[3 * i + 1];
+      // weiche Kanten (über ca. 12 mm), damit die Ränder nicht ausfransen
+      const band = (lo: number, hi: number) => Math.max(0, Math.min(1, (y - lo) / 12 + 0.5, (hi - y) / 12 + 0.5));
+      const briefs = Math.abs(x) < shX * 1.3 ? band(mq.crotchY - 70, hipY + (waistY - hipY) * 0.35) : 0;
+      const top = mq.gender === 'female' && Math.abs(x) < shX ? band(chestY - 85, chestY + 55) : 0;
+      const w = Math.max(briefs, top);
+      if (w > 0) {
+        col[3 * i] = 1 + (k(cloth.r, skinC.r) - 1) * w;
+        col[3 * i + 1] = 1 + (k(cloth.g, skinC.g) - 1) * w;
+        col[3 * i + 2] = 1 + (k(cloth.b, skinC.b) - 1) * w;
+      }
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    this.bodyMesh = new THREE.Mesh(
+      g,
+      new THREE.MeshPhysicalMaterial({ color: skin, vertexColors: true, roughness: 0.58, metalness: 0, sheen: 0.35, sheenRoughness: 0.6, sheenColor: new THREE.Color(skin), clearcoat: 0.04 }),
+    );
+    // Augen: weiß mit dunkler Iris nach vorne
+    const eg = new THREE.BufferGeometry();
+    eg.setAttribute('position', new THREE.BufferAttribute(h.positions, 3));
+    eg.setIndex(new THREE.BufferAttribute(h.eyes, 1));
+    const ec = new Float32Array(h.positions.length).fill(0.92);
+    const ids = new Set(h.eyes);
+    let maxZ = -Infinity;
+    for (const i of ids) maxZ = Math.max(maxZ, h.positions[3 * i + 2]);
+    for (const i of ids) if (h.positions[3 * i + 2] > maxZ - 6) ec[3 * i] = ec[3 * i + 1] = ec[3 * i + 2] = 0.06;
+    eg.setAttribute('color', new THREE.BufferAttribute(ec, 3));
+    eg.computeVertexNormals();
+    this.eyesMesh = new THREE.Mesh(eg, new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.15, clearcoat: 1 }));
   }
 
   private clearGarment(): void {

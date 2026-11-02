@@ -3466,3 +3466,18 @@ body {
   gap: 4px;
   flex-wrap: nowrap;
 }
+.skin-row {
+  display: flex;
+  gap: 6px;
+}
+.skin-row .skin {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  padding: 0;
+}
+.skin-row .skin.on {
+  border-color: var(--tape-dark);
+  box-shadow: 0 0 0 2px var(--tape-soft);
+}

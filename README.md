@@ -177,7 +177,9 @@ Tab „Produktion“ → **Tech-Pack** (oder im Tab „Schnitt“, Befehlssuche 
 
 Der Knopf **3D** oben (`Strg+3`) oder „In 3D ansehen“ im Tab „Schnitt“ öffnet rechts neben der Zeichenfläche die 3D-Vorschau. Projektart **3D-Modell** im Dialog „Neues Projekt“ startet direkt mit Schnitt-Tab und 3D-Vorschau.
 
+- **Realistische Puppe** auf Basis des freien MakeHuman-Modells (CC0): echte Anatomie mit Gesicht und Händen, Hautton wählbar, schlichte Unterwäsche wie bei Anprobe-Avataren. Das Netz wird auf Körpergröße, Brust-, Taillen-, Hüftumfang und Armlänge eingepasst; der Stoff liegt über ein Abstandsfeld exakt auf dieser Oberfläche.
 - **Puppe männlich oder weiblich** (Symbol „Puppe“ in der Vorschau): Ausgangsgröße, Körpergröße (150–205 cm) und Körperbau (schlank bis kräftig) per Regler – unabhängig von der Größe des Schnitts, zum Anprobieren an verschiedenen Figuren. Ohne eigene Puppe gelten die Körpermaße des Schnitts.
+- **Stoffgewicht wirkt physikalisch:** leichter Jersey fällt weich, liegt an und hängt tiefer; schwerer Sweat (400–500 g/m²) steht steifer, boxiger ab und trägt dicker auf. Gewicht per Regler beim angeklickten Teil oder im Tab „Schnitt“.
 - **Puppe aus deinen Körpermaßen** (Größe, Brust, Taille, Hüfte, Schultern, Arme, Rücken, Hals, Kopf). Die Schnittteile werden um die Puppe gelegt, an den Nähten zusammengezogen und fallen dann mit Schwerkraft auf den Körper. Stoffart und Flächengewicht bestimmen Dehnung, Steifigkeit und Fall; Bündchen werden beim Annähen gedehnt.
 - **Live:** jede Änderung am Schnitt – Maß, Kante, Naht – drapiert neu. Die Simulation läuft im Hintergrund, die Oberfläche bleibt flüssig.
 - **Aussehen:** Teil in 3D anklicken → eigene Farbe oder anderer Stoff. Stoffarten mit eigener Oberfläche (Jersey-Maschen, Sweat, Fleece, Rippe, Webware, Denim-Köper, Nylon mit leichtem Glanz, Mesh). Motive aus dem Tab „Produktion“ erscheinen an ihrer Druckposition (Abstand zur Kragennaht), Farbvarianten lassen sich umschalten.

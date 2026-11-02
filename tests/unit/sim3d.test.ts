@@ -126,6 +126,56 @@ describe('Stoffsimulation', () => {
   }, 60000);
 });
 
+describe('Realistische Puppe (MakeHuman)', () => {
+  const load = async () => {
+    const { readFileSync } = await import('node:fs');
+    const { parseHumanData } = await import('../../src/sim3d/human');
+    const b = readFileSync('src/sim3d/avatar-data/makehuman.bin');
+    return parseHumanData(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+  };
+
+  it('Körpergröße stimmt, Arme auf Maß, kräftiger Körperbau hat mehr Volumen', async () => {
+    const { buildHuman } = await import('../../src/sim3d/human');
+    const data = await load();
+    const body = bodyForSize('D-M');
+    const h = buildHuman(data, body, 'female', 0);
+    let maxY = 0;
+    for (let j = 0; j < h.body.length; j++) maxY = Math.max(maxY, h.positions[3 * h.body[j] + 1]);
+    expect(maxY).toBeCloseTo(body.height, -1);
+    const sh = h.joints['l-shoulder'];
+    const el = h.joints['l-elbow'];
+    const wr = h.joints['l-hand'];
+    const chain = Math.hypot(el[0] - sh[0], el[1] - sh[1], el[2] - sh[2]) + Math.hypot(wr[0] - el[0], wr[1] - el[1], wr[2] - el[2]);
+    expect(Math.abs(chain - body.arm * 0.95)).toBeLessThan(25);
+    const vol = (hm: typeof h) => {
+      let v = 0;
+      const p = hm.positions;
+      for (let t = 0; t < hm.body.length; t += 3) {
+        const a = 3 * hm.body[t];
+        const b = 3 * hm.body[t + 1];
+        const c = 3 * hm.body[t + 2];
+        v += (p[a] * (p[b + 1] * p[c + 2] - p[b + 2] * p[c + 1]) - p[a + 1] * (p[b] * p[c + 2] - p[b + 2] * p[c]) + p[a + 2] * (p[b] * p[c + 1] - p[b + 1] * p[c])) / 6;
+      }
+      return v;
+    };
+    const { avatarBody } = await import('../../src/sim3d/avatar');
+    const heavy = avatarBody({ gender: 'female', base: 'D-M', height: body.height, build: 1 });
+    expect(vol(buildHuman(data, heavy, 'female', 1))).toBeGreaterThan(vol(h) * 1.08);
+  });
+
+  it('Hoodie auf der realistischen Puppe: Nähte zu, nichts im Körper', async () => {
+    const { buildHuman } = await import('../../src/sim3d/human');
+    const data = await load();
+    const { ex } = await garment('hoodie');
+    const human = buildHuman(data, ex.body, ex.gender, 0);
+    const sim = new GarmentSim(ex, { resolution: 26, substeps: 8, human });
+    expect(sim.mq.sdf).toBeTruthy();
+    const st = sim.run(8);
+    expect(st.seamGap).toBeLessThan(8);
+    expect(st.inside).toBe(0);
+  }, 60000);
+});
+
 describe('Stoffgewicht', () => {
   it('Leichter Jersey fällt weicher und tiefer, schwerer Sweat steht steifer ab', async () => {
     const { updateMaterial } = await import('../../src/store/patternOps');

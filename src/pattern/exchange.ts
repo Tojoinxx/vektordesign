@@ -46,6 +46,8 @@ export interface PatternExchange {
   /** Körpermaße der Puppe (eigene Puppe oder Maße des Schnitts) */
   body: BodyMeasures;
   gender: 'male' | 'female';
+  /** Körperbau der Puppe (−1 … +1) für das Menschen-Modell */
+  build: number;
   bodySize: string;
   block: PatternBlock | null;
   materials: PatternMaterial[];
@@ -100,6 +102,7 @@ export function patternExchange(doc: SketchDoc): PatternExchange | null {
     unit: 'mm',
     body: pat.avatar ? avatarBody(pat.avatar) : { ...pat.body },
     gender: pat.avatar?.gender ?? genderOfSize(pat.bodySize),
+    build: pat.avatar?.build ?? 0,
     bodySize: pat.bodySize,
     block: pat.block ? { ...pat.block } : null,
     materials: pat.materials.map((m) => ({ ...m })),

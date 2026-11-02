@@ -6,7 +6,16 @@ import { bodyForSize } from '../pattern/body';
 import { productionOf } from '../model/production';
 import { FABRICS } from '../store/patternOps';
 import { ColorButton } from '../ui/ColorPicker';
-import { GarmentViewer, type CameraView, type ViewMode, type ViewerStatus } from './viewer';
+import { DEFAULT_SKIN, GarmentViewer, type CameraView, type ViewMode, type ViewerStatus } from './viewer';
+
+const SKINS = [
+  { hex: '#f2d3bf', name: 'Hell' },
+  { hex: DEFAULT_SKIN, name: 'Mittel' },
+  { hex: '#b9805c', name: 'Oliv' },
+  { hex: '#8a5a3e', name: 'Dunkel' },
+  { hex: '#5a3826', name: 'Sehr dunkel' },
+  { hex: '#d8d2c8', name: 'Schneiderpuppe (neutral)' },
+];
 import type { MaterialPatch, PieceLookPatch } from '../pattern/edit';
 
 /**
@@ -340,6 +349,25 @@ function AvatarControls({ doc, onAvatar, onClose }: { doc: SketchDoc; onAvatar: 
           onKeyUp={() => commit(draft)}
         />
       </label>
+      <div className="v3-field">
+        <span>Hautton</span>
+        <span className="skin-row" role="radiogroup" aria-label="Hautton">
+          {SKINS.map((c) => (
+            <button
+              key={c.hex}
+              className={`skin ${(draft.skin ?? DEFAULT_SKIN) === c.hex ? 'on' : ''}`}
+              style={{ background: c.hex }}
+              title={c.name}
+              aria-label={c.name}
+              onClick={() => {
+                const next = { ...draft, skin: c.hex };
+                setDraft(next);
+                commit(next);
+              }}
+            />
+          ))}
+        </span>
+      </div>
       <p className="muted small">
         Brust {cm(b.chest)} · Taille {cm(b.waist)} · Hüfte {cm(b.hip)} cm
       </p>

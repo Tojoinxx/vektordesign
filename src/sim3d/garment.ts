@@ -2,6 +2,21 @@ import type { PatternMaterial, PieceRole } from '../model/types';
 import type { ExchangePiece, PatternExchange } from '../pattern/exchange';
 import { bodyContact, buildMannequin, sectionAt, type Contact, type Mannequin } from './body';
 import { meshPiece, type PieceMesh } from './mesh';
+import { humanMannequin, type HumanMesh } from './human';
+import { buildSdf, type Sdf } from './sdf';
+
+/** Abstandsfelder zwischenspeichern: dieselbe Puppe wird bei jeder Schnittänderung wiederverwendet. */
+const sdfCache: { key: Float32Array | null; sdf: Sdf | null; sum: number } = { key: null, sdf: null, sum: 0 };
+function sdfFor(h: HumanMesh): Sdf {
+  let sum = 0;
+  for (let i = 0; i < h.positions.length; i += 97) sum += h.positions[i] * (i + 1);
+  if (sdfCache.sdf && sdfCache.sum === sum && sdfCache.key?.length === h.positions.length) return sdfCache.sdf;
+  const sdf = buildSdf(h.positions, h.body);
+  sdfCache.key = h.positions;
+  sdfCache.sdf = sdf;
+  sdfCache.sum = sum;
+  return sdf;
+}
 
 /**
  * Stoffsimulation (XPBD, „Small Steps“): Schnittteile werden um die Puppe angeordnet, an den Nähten
@@ -39,6 +54,8 @@ export interface SimOptions {
   sewTime?: number;
   /** Stoffdicke / Abstand zur Puppe (mm) */
   thickness?: number;
+  /** Realistisches Menschen-Netz (MakeHuman); fehlt = einfache Schneiderpuppe */
+  human?: HumanMesh;
 }
 
 /** Ein Teil in 3D (bei gegengleichen Teilen zwei Instanzen). */
@@ -118,7 +135,8 @@ export class GarmentSim {
     this.substeps = opts.substeps ?? 12;
     this.sewTime = opts.sewTime ?? 1.4;
     this.thickness = opts.thickness ?? 3;
-    this.mq = buildMannequin(ex.body, ex.gender ?? 'male');
+    this.mq = opts.human ? humanMannequin(ex.body, ex.gender ?? 'male', opts.human) : buildMannequin(ex.body, ex.gender ?? 'male');
+    if (opts.human) this.mq.sdf = sdfFor(opts.human);
     // Teile vernetzen
     let total = 0;
     for (const piece of ex.pieces) {
@@ -275,10 +293,27 @@ export class GarmentSim {
     const sleeveP = this.parts.find((x) => x.piece.role === 'sleeve');
     const sleeveLen = sleeveP ? this.partBox(sleeveP).h : this.ex.body.arm * 0.8;
     const [jx, jy, jz] = mq.shoulderJoint;
-    const [dx, dy] = mq.armDir;
-    // Senkrecht zur Armachse in der x-y-Ebene, nach oben/außen
-    const ux = -dy;
-    const uy = dx;
+    const [dx, dy, dz] = mq.armDir;
+    // Orthonormales System um die Armachse: e1 nach oben/außen, e2 nach vorne
+    let e1x = -dy;
+    let e1y = dx;
+    let e1z = 0;
+    const dot1 = e1x * dx + e1y * dy + e1z * dz;
+    e1x -= dot1 * dx;
+    e1y -= dot1 * dy;
+    e1z -= dot1 * dz;
+    const l1 = Math.hypot(e1x, e1y, e1z) || 1;
+    e1x /= l1;
+    e1y /= l1;
+    e1z /= l1;
+    let e2x = dy * e1z - dz * e1y;
+    let e2y = dz * e1x - dx * e1z;
+    let e2z = dx * e1y - dy * e1x;
+    if (e2z < 0) {
+      e2x = -e2x;
+      e2y = -e2y;
+      e2z = -e2z;
+    }
     const others = this.parts.filter((p) => p.piece.role === 'other' || p.piece.role === 'pocket');
     let otherX = -others.reduce((s, p) => s + this.partBox(p).w + 30, 0) / 2;
 
@@ -321,9 +356,11 @@ export class GarmentSim {
             const s = role === 'sleeve' ? -8 + (b.maxY - v) : sleeveLen + 6 + (b.maxY - v);
             const cx = jx + dx * s;
             const cy = jy + dy * s;
-            const cz = jz;
+            const cz = jz + dz * s;
             // Ring um die Armachse: cos → nach oben/außen, sin → nach vorne
-            set(i, cx + Rs * Math.cos(th) * ux, cy + Rs * Math.cos(th) * uy, cz + Rs * Math.sin(th));
+            const co = Rs * Math.cos(th);
+            const si = Rs * Math.sin(th);
+            set(i, cx + co * e1x + si * e2x, cy + co * e1y + si * e2y, cz + co * e1z + si * e2z);
             break;
           }
           case 'neckband': {
@@ -417,6 +454,7 @@ export class GarmentSim {
    */
   private orientOutward(): void {
     const c: Contact = { d: 0, nx: 0, ny: 0, nz: 0 };
+    const analytic = { ...this.mq, sdf: undefined };
     const p = this.pos;
     for (const part of this.parts) {
       let sum = 0;
@@ -437,7 +475,7 @@ export class GarmentSim {
         const cx = (p[a] + p[b] + p[d]) / 3;
         const cy = (p[a + 1] + p[b + 1] + p[d + 1]) / 3;
         const cz = (p[a + 2] + p[b + 2] + p[d + 2]) / 3;
-        if (!bodyContact(this.mq, cx, cy, cz, 1e5, c)) continue;
+        if (!bodyContact(analytic, cx, cy, cz, 1e5, c)) continue;
         sum += nx * c.nx + ny * c.ny + nz * c.nz;
       }
       if (sum < 0) {
