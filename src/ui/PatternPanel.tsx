@@ -481,13 +481,24 @@ function MaterialSection() {
               </option>
             ))}
           </select>
-          <span className="muted small" title="Flächengewicht">
-            {m.gsm} g/m²
+          <span className="row gsm-field" title="Flächengewicht: bestimmt in 3D, wie schwer der Stoff fällt">
+            <Field
+              value={String(m.gsm)}
+              numeric
+              width={46}
+              label={`Flächengewicht ${m.name} in g/m²`}
+              onCommit={(v) => {
+                const n = Math.round(Number(v.replace(',', '.')));
+                if (Number.isFinite(n) && n >= 30 && n <= 1000) upd(m.id, { gsm: n });
+                else ed.toast('Flächengewicht: 30 bis 1000 g/m²', 'error');
+              }}
+            />
+            <span className="muted small">g/m²</span>
           </span>
         </div>
       ))}
       <p className="muted small">
-        <Scissors size={13} /> Stoffart und Farbe nutzt die 3D-Ansicht für Fall und Aussehen. Je Schnittteil wählbar.
+        <Scissors size={13} /> Stoffart, Gewicht und Farbe nutzt die 3D-Ansicht: leichter Stoff fällt weich und liegt an, schwerer steht steifer ab und trägt dicker auf. Je Schnittteil wählbar.
       </p>
     </section>
   );

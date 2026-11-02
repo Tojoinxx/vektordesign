@@ -126,6 +126,33 @@ describe('Stoffsimulation', () => {
   }, 60000);
 });
 
+describe('Stoffgewicht', () => {
+  it('Leichter Jersey fällt weicher und tiefer, schwerer Sweat steht steifer ab', async () => {
+    const { updateMaterial } = await import('../../src/store/patternOps');
+    const result: Record<string, { hem: number; gap: number }> = {};
+    for (const [name, fabric, gsm] of [
+      ['leicht', 'jersey', 140],
+      ['schwer', 'sweat', 480],
+    ] as const) {
+      const { ed } = await garment('hoodie');
+      updateMaterial(ed, 'm-main', { fabric, gsm });
+      const sim = new GarmentSim(patternExchange(ed.s.doc)!, { resolution: 26, substeps: 8 });
+      const st = sim.run(8);
+      expect(st.inside).toBe(0);
+      const front = sim.parts.find((p) => p.piece.role === 'front')!;
+      let hem = Infinity;
+      let gap = 0;
+      for (let i = 0; i < front.count; i++) {
+        hem = Math.min(hem, sim.pos[3 * (front.offset + i) + 1]);
+        gap += sim.gap[front.offset + i];
+      }
+      result[name] = { hem, gap: gap / front.count };
+    }
+    expect(result.leicht.hem).toBeLessThan(result.schwer.hem - 3);
+    expect(result.schwer.gap).toBeGreaterThan(result.leicht.gap);
+  }, 90000);
+});
+
 describe('Puppe zum Anprobieren', () => {
   it('Regler: größer und kräftiger ergibt längere Maße und größere Umfänge', async () => {
     const { avatarBody, defaultAvatar } = await import('../../src/sim3d/avatar');

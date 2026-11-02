@@ -3449,3 +3449,20 @@ body {
 .tp-ref-body select {
   width: 100%;
 }
+.gsm-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.gsm-slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--tape-dark);
+}
+.material-row.a3 .gsm-slider {
+  grid-column: 2 / -1;
+}
+.gsm-field {
+  gap: 4px;
+  flex-wrap: nowrap;
+}

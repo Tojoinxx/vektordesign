@@ -74,6 +74,8 @@ export interface SimStats {
 }
 
 const G = 9810;
+/** Bezugsgewicht (g/m²), auf das die Stoffwerte abgestimmt sind */
+const REF_GSM = 200;
 
 export class GarmentSim {
   readonly mq: Mannequin;
@@ -96,8 +98,10 @@ export class GarmentSim {
   private linkRest0: Float32Array;
   private pinned: Uint8Array;
   private friction: Float32Array;
-  private damping: number;
-  private wAvg = 1;
+  /** Luftwiderstand je Partikel (leichte Stoffe schweben länger) */
+  private drag: Float32Array;
+  /** Stoffdicke je Partikel (mm): schwere Stoffe tragen dicker auf */
+  private thick: Float32Array;
   readonly n: number;
   t = 0;
   private settledFor = 0;
@@ -154,6 +158,8 @@ export class GarmentSim {
     this.strain = new Float32Array(total);
     this.pinned = new Uint8Array(total);
     this.friction = new Float32Array(total);
+    this.drag = new Float32Array(total);
+    this.thick = new Float32Array(total);
     this.place();
     // Massen aus Flächengewicht
     const mass = new Float32Array(total);
@@ -169,15 +175,15 @@ export class GarmentSim {
         for (const v of [a, b, c]) mass[p.offset + v] += m / 3;
       }
       const phys = FABRIC_PHYSICS[p.material?.fabric ?? 'jersey'];
-      for (let v = 0; v < p.count; v++) this.friction[p.offset + v] = phys.friction;
+      const drag = Math.min(0.08, Math.max(0.006, phys.damping + 0.018 * (REF_GSM / gsm - 1)));
+      const th = Math.min(7, Math.max(2, 1.4 + gsm / 110)) * (this.thickness / 3);
+      for (let v = 0; v < p.count; v++) {
+        this.friction[p.offset + v] = phys.friction;
+        this.drag[p.offset + v] = drag;
+        this.thick[p.offset + v] = th;
+      }
     }
-    let wSum = 0;
-    for (let i = 0; i < total; i++) {
-      this.invMass[i] = mass[i] > 0 ? 1 / mass[i] : 0;
-      wSum += this.invMass[i];
-    }
-    this.wAvg = total ? wSum / total : 1;
-    this.damping = Math.max(...this.parts.map((p) => FABRIC_PHYSICS[p.material?.fabric ?? 'jersey'].damping), 0.02);
+    for (let i = 0; i < total; i++) this.invMass[i] = mass[i] > 0 ? 1 / mass[i] : 0;
     // Kanten (Dehnung) und Biegepaare aus der 2D-Ruhelage
     const edges: number[] = [];
     const eRest: number[] = [];
@@ -185,8 +191,13 @@ export class GarmentSim {
     const bends: number[] = [];
     const bRest: number[] = [];
     const bComp: number[] = [];
+    const invM = this.invMass;
     for (const p of this.parts) {
       const phys = FABRIC_PHYSICS[p.material?.fabric ?? 'jersey'];
+      // Physikalisch: Nachgiebigkeit absolut (nicht relativ zur Masse) – schwerer Stoff zieht stärker an sich
+      // selbst und hängt mehr durch; dickerer Stoff ist biegesteifer (große, weiche Falten statt feiner).
+      const g = Math.max(30, p.material?.gsm ?? REF_GSM);
+      const heavy = g / REF_GSM;
       const uv = p.mesh.uv;
       const map = new Map<string, number>();
       const tri = p.mesh.tris;
@@ -201,7 +212,7 @@ export class GarmentSim {
             map.set(key, edges.length / 2);
             edges.push(p.offset + a, p.offset + b);
             eRest.push(Math.hypot(uv[2 * a] - uv[2 * b], uv[2 * a + 1] - uv[2 * b + 1]));
-            eComp.push(phys.stretch);
+            eComp.push(phys.stretch * ((invM[p.offset + a] + invM[p.offset + b]) / 2) * heavy);
           }
           const o = opp.get(key) ?? [];
           o.push(c);
@@ -213,7 +224,7 @@ export class GarmentSim {
         const [c, d] = o;
         bends.push(p.offset + c, p.offset + d);
         bRest.push(Math.hypot(uv[2 * c] - uv[2 * d], uv[2 * c + 1] - uv[2 * d + 1]));
-        bComp.push(phys.bend);
+        bComp.push((phys.bend * ((invM[p.offset + c] + invM[p.offset + d]) / 2)) / (heavy * heavy));
       }
     }
     this.edges = Uint32Array.from(edges);
@@ -507,7 +518,7 @@ export class GarmentSim {
         : Math.min(1, (this.t - this.sewTime * 0.7) / (this.sewTime * 0.6)) * (this.looseGroups.length && !this.pinnedDone && this.looseGroups.length === this.groupCount ? 0 : 1);
     // Nach dem Fallen zunehmend dämpfen (Luftwiderstand), damit der Stoff zur Ruhe kommt
     const late = Math.min(1, Math.max(0, (this.t - this.sewTime - 1.2) / 2));
-    const damp = this.t < this.sewTime ? 0.12 : this.damping + late * 0.12;
+    const damp = this.t < this.sewTime ? -1 : late * 0.12;
     if (sew >= 1 && !this.pinnedDone) this.pinNow();
     if (!this.frameStart || this.frameStart.length !== this.pos.length) this.frameStart = new Float32Array(this.pos.length);
     this.frameStart.set(this.pos);
@@ -517,15 +528,17 @@ export class GarmentSim {
   }
 
   private substep(h: number, sew: number, gFactor: number, damp: number): void {
-    const { pos, prev, invMass } = this;
+    const { pos, prev, invMass, drag } = this;
     const N = this.n;
     const gdy = -G * gFactor * h * h;
     for (let i = 0; i < N; i++) {
       if (invMass[i] === 0) continue;
       const k = 3 * i;
-      const vx = (pos[k] - prev[k]) * (1 - damp);
-      const vy = (pos[k + 1] - prev[k + 1]) * (1 - damp);
-      const vz = (pos[k + 2] - prev[k + 2]) * (1 - damp);
+      // Während des Nähens kräftig gedämpft, danach Luftwiderstand je Stoff
+      const f = 1 - (damp < 0 ? 0.12 : Math.min(0.3, drag[i] + damp));
+      const vx = (pos[k] - prev[k]) * f;
+      const vy = (pos[k + 1] - prev[k + 1]) * f;
+      const vz = (pos[k + 2] - prev[k + 2]) * f;
       prev[k] = pos[k];
       prev[k + 1] = pos[k + 1];
       prev[k + 2] = pos[k + 2];
@@ -533,20 +546,19 @@ export class GarmentSim {
       pos[k + 1] += vy + gdy;
       pos[k + 2] += vz;
     }
-    const wAvg = this.wAvg;
     // Dehnung
-    this.solveDistance(this.edges, this.edgeRest, this.edgeComp, wAvg);
+    this.solveDistance(this.edges, this.edgeRest, this.edgeComp, 0.15);
     // Nähte (Ruhelänge schrumpft während des Nähens auf 0)
     this.solveSeams(sew);
     if (sew >= 1) this.solveSeams(sew);
     // Biegung
-    this.solveDistance(this.bends, this.bendRest, this.bendComp, wAvg);
+    this.solveDistance(this.bends, this.bendRest, this.bendComp, 1);
     if (sew >= 1) this.solveSeams(sew);
     // Kollision mit der Puppe und dem Boden
     this.collide();
   }
 
-  private solveDistance(idx: Uint32Array, rest: Float32Array, comp: Float32Array, wAvg: number): void {
+  private solveDistance(idx: Uint32Array, rest: Float32Array, comp: Float32Array, compressK: number): void {
     const { pos, invMass } = this;
     for (let e = 0; e < rest.length; e++) {
       const a = idx[2 * e];
@@ -564,7 +576,7 @@ export class GarmentSim {
       if (L < 1e-9) continue;
       const C = L - rest[e];
       // Stauchen fast unnachgiebig (Stoff wirft lieber Falten), Dehnen je nach Stoff
-      const alpha = (C < 0 ? comp[e] * 0.15 : comp[e]) * wAvg;
+      const alpha = C < 0 ? comp[e] * compressK : comp[e];
       const lambda = -C / (w + alpha);
       const sx = (dx / L) * lambda;
       const sy = (dy / L) * lambda;
@@ -623,10 +635,10 @@ export class GarmentSim {
 
   private collide(): void {
     const { pos, prev, invMass, gap } = this;
-    const th = this.thickness;
     const c = this.contact;
     for (let i = 0; i < this.n; i++) {
       if (invMass[i] === 0) continue;
+      const th = this.thick[i];
       const k = 3 * i;
       const hit = bodyContact(this.mq, pos[k], pos[k + 1], pos[k + 2], 40, c);
       gap[i] = hit ? c.d : 40;

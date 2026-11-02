@@ -216,6 +216,8 @@ export default function ViewerPanel(p: ViewerPanelProps) {
               <>
                 <span>Stoffart</span>
                 <FabricSelect m={pieceMat} onChange={(patch) => p.onMaterial(pieceMat.id, patch)} />
+                <span>Gewicht</span>
+                <GsmSlider m={pieceMat} onChange={(gsm) => p.onMaterial(pieceMat.id, { gsm })} />
               </>
             )}
           </div>
@@ -347,5 +349,32 @@ function AvatarControls({ doc, onAvatar, onClose }: { doc: SketchDoc; onAvatar: 
         </button>
       )}
     </div>
+  );
+}
+
+/** Flächengewicht per Regler (80–600 g/m²): schwerer Stoff hängt anders, steht steifer ab, trägt dicker auf. */
+export function GsmSlider({ m, onChange }: { m: PatternMaterial; onChange: (gsm: number) => void }) {
+  const [v, setV] = useState(m.gsm);
+  useEffect(() => setV(m.gsm), [m.gsm]);
+  const commit = () => v !== m.gsm && onChange(v);
+  const label = v < 160 ? 'leicht' : v < 260 ? 'mittel' : v < 380 ? 'schwer' : 'sehr schwer';
+  return (
+    <span className="gsm-slider">
+      <input
+        type="range"
+        min={80}
+        max={600}
+        step={10}
+        value={v}
+        aria-label={`Flächengewicht ${m.name}`}
+        data-testid="v3-gsm"
+        onChange={(e) => setV(Number(e.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+      />
+      <span className="small">
+        <b>{v} g/m²</b> <span className="muted">{label}</span>
+      </span>
+    </span>
   );
 }

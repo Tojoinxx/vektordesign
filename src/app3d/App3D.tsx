@@ -6,7 +6,7 @@ import { openFile, PNG_TYPE, PROJECT_TYPE, safeName, saveFile } from '../platfor
 import { readAutosave } from '../platform/autosave';
 import { applyAvatar, applyMaterial, applyPieceLook, type MaterialPatch, type PieceLookPatch } from '../pattern/edit';
 import { openChannel, type BridgeMessage } from '../viewer3d/bridge';
-import ViewerPanel, { FabricSelect } from '../viewer3d/ViewerPanel';
+import ViewerPanel, { FabricSelect, GsmSlider } from '../viewer3d/ViewerPanel';
 import { ColorButton } from '../ui/ColorPicker';
 import { ROLE_NAMES, sizeName } from '../store/patternOps';
 import { loadAppearance, resolveTheme, applyAppearance } from '../ui/appearance';
@@ -202,6 +202,7 @@ export function App3D() {
                   <ColorButton value={m.color} label={`Farbe ${m.name}`} onChange={(c) => material(m.id, { color: c })} />
                   <span>{m.name}</span>
                   <FabricSelect m={m} onChange={(patch) => material(m.id, patch)} />
+                  <GsmSlider m={m} onChange={(gsm) => material(m.id, { gsm })} />
                 </div>
               ))}
             </section>
