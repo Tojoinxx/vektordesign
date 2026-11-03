@@ -15,10 +15,8 @@ import {
   FileDown,
   Grid3x3,
   Maximize,
-  Palette,
   Paintbrush,
   Ruler,
-  Sparkles,
   Trash2,
   Eye,
   EyeOff,
@@ -220,9 +218,8 @@ function PrintAreaSelect() {
   const g = garmentOf(productionOf(doc).garment);
   return (
     <label className="rb-select" title="Druckbereich in echten Maßen als Rahmen anzeigen (wird nicht exportiert)">
-      <span>Druckbereich</span>
       <select value={area ?? ''} onChange={(e) => app.ui.setState({ printArea: e.target.value || null })} data-testid="print-area">
-        <option value="">keiner</option>
+        <option value="">Druckbereich: keiner</option>
         {g.areas.map((a) => (
           <option key={a.id} value={a.id}>
             {a.name} ({a.w} × {a.h})
@@ -325,8 +322,6 @@ function SketchRibbon() {
         </div>
         <Big icon={<IconText />} label="Text" kbd="T" active={tool === 'text'} onClick={() => set('text')} testId="tool-text" />
         <Big icon={<IconSketch />} label="Freihand" kbd="S" active={tool === 'sketch'} onClick={() => set('sketch')} testId="tool-sketch" />
-        <Big icon={<ImagePlus size={24} strokeWidth={1.75} />} label="Bild" onClick={() => void app.insertImage()} testId="insert-image" />
-        <Big icon={<IconBadge />} label="Vorlagen" onClick={() => app.ui.setState({ generator: true })} testId="insert-generator" />
         <div className="rb-col">
           <Small icon={<IconPoint size={18} />} label="Punkt" kbd="P" active={tool === 'point'} onClick={() => set('point')} />
           <Small
@@ -339,6 +334,8 @@ function SketchRibbon() {
             }}
             testId="draw-profile"
           />
+        </div>
+        <div className="rb-col">
           <Small
             icon={<IconConstruction size={18} />}
             label="Neue Geometrie als Konstruktion (gestrichelt, nicht exportiert)"
@@ -353,6 +350,11 @@ function SketchRibbon() {
             testId="symmetry"
           />
         </div>
+      </Group>
+
+      <Group title="Einfügen">
+        <Big icon={<ImagePlus size={24} strokeWidth={1.75} />} label="Bild" onClick={() => void app.insertImage()} testId="insert-image" />
+        <Big icon={<IconBadge />} label="Vorlagen" onClick={() => app.ui.setState({ generator: true })} testId="insert-generator" />
       </Group>
 
       <Group title="Bemaßung">
@@ -392,15 +394,6 @@ function SketchRibbon() {
 
       <Group title="Gestalten">
         <Big icon={<IconGradient />} label="Verlauf" kbd="G" active={tool === 'gradient'} onClick={() => set('gradient')} testId="tool-gradient" />
-        <Big
-          icon={<Palette size={24} strokeWidth={1.75} />}
-          label="Vorschläge"
-          onClick={() => {
-            app.ui.setState({ side: 'props', sideOpen: true });
-            app.showTutorialFor('suggestions');
-            setTimeout(() => document.getElementById('stilvorschlaege')?.scrollIntoView({ behavior: 'smooth' }), 50);
-          }}
-        />
         <Big icon={<Paintbrush size={24} strokeWidth={1.75} />} label="Format übertragen" active={tool === 'format'} onClick={() => set('format')} testId="tool-format" />
         <div className="rb-col">
           <Small icon={<ArrowUpToLine size={17} />} label="Ganz nach vorne" kbd="Strg+Umschalt+]" onClick={() => app.editor.arrange(app.editor.s.selection, 'front')} />
@@ -424,35 +417,16 @@ function SketchRibbon() {
       </Group>
 
       <Group title="Ansicht">
-        <Big icon={<Maximize size={24} strokeWidth={1.75} />} label="Alles" kbd="F" onClick={() => app.editor.zoomToFit()} testId="view-fit" />
-        <div className="rb-col">
-          <Small icon={<Grid3x3 size={17} />} label="Raster" active={settings.grid} onClick={() => toggleSetting('grid')} />
-          <Small icon={<Magnet size={17} />} label="Am Raster fangen" active={settings.gridSnap} onClick={() => toggleSetting('gridSnap')} />
+        <div className="rb-stack">
+          <div className="rb-row">
+            <Small icon={<Maximize size={17} />} label="Alles anzeigen" kbd="F" onClick={() => app.editor.zoomToFit()} testId="view-fit" />
+            <Small icon={<Grid3x3 size={17} />} label="Raster" active={settings.grid} onClick={() => toggleSetting('grid')} />
+            <Small icon={<Magnet size={17} />} label="Am Raster fangen" active={settings.gridSnap} onClick={() => toggleSetting('gridSnap')} />
+            <Small icon={<Ruler size={17} />} label="Bemaßungen anzeigen" active={settings.showDims} onClick={() => toggleSetting('showDims')} />
+            <Small icon={<IconLine size={17} />} label="Skizzenlinien anzeigen (aus = reine Designvorschau)" active={settings.showOverlay} onClick={() => toggleSetting('showOverlay')} />
+          </div>
+          <PrintAreaSelect />
         </div>
-        <div className="rb-col">
-          <Small icon={<Ruler size={17} />} label="Bemaßungen anzeigen" active={settings.showDims} onClick={() => toggleSetting('showDims')} />
-          <Small icon={<IconLine size={17} />} label="Skizzenlinien anzeigen (aus = reine Designvorschau)" active={settings.showOverlay} onClick={() => toggleSetting('showOverlay')} />
-        </div>
-        <PrintAreaSelect />
-      </Group>
-
-      <Group title="Export">
-        <Big icon={<FileCode2 size={24} strokeWidth={1.75} />} label="SVG" onClick={() => app.openExport('svg')} testId="export-svg" />
-        <Big icon={<FileText size={24} strokeWidth={1.75} />} label="PDF" onClick={() => app.openExport('pdf')} />
-        <Big icon={<FileImage size={24} strokeWidth={1.75} />} label="PNG" onClick={() => app.openExport('png', 300)} testId="export-png" />
-      </Group>
-
-      <Group title="KI">
-        <Big
-          icon={<Sparkles size={24} strokeWidth={1.75} />}
-          label="Claude"
-          kbd="Strg+I"
-          onClick={() => {
-            app.ui.setState({ side: 'claude', sideOpen: true });
-            app.showTutorialFor('claude');
-          }}
-          testId="open-claude"
-        />
       </Group>
     </nav>
   );

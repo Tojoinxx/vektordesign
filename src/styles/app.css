@@ -3481,3 +3481,324 @@ body {
   border-color: var(--tape-dark);
   box-shadow: 0 0 0 2px var(--tape-soft);
 }
+
+/* ===========================================================================
+   Feinschliff: einheitliche Felder, ruhigere Leisten, klare Reiter
+   (bewusst am Ende – überschreibt ältere Einzelregeln)
+   =========================================================================== */
+:root {
+  --field-h: 30px;
+  --focus-soft: rgba(47, 111, 214, 0.18);
+}
+:root[data-theme='dark'] {
+  --focus-soft: rgba(106, 161, 255, 0.22);
+}
+
+/* Alle Eingabefelder gleich – auch solche ohne eigene Klasse (vorher teils Browser-Standardrahmen) */
+:where(input:not([type]), input[type='text'], input[type='number'], input[type='search'], input[type='password'], input[type='email'], input[type='url'], select, textarea) {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 0 8px;
+  color: var(--ink);
+  background-color: var(--paper);
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+:where(input:not([type]), input[type='text'], input[type='number'], input[type='search'], input[type='password'], input[type='email'], input[type='url'], select) {
+  min-height: var(--field-h);
+}
+:where(textarea) {
+  padding: 6px 8px;
+  line-height: 1.4;
+  resize: vertical;
+}
+:where(input:not([type]), input[type='text'], input[type='number'], input[type='search'], input[type='password'], select, textarea):hover {
+  border-color: var(--muted);
+}
+:where(input:not([type]), input[type='text'], input[type='number'], input[type='search'], input[type='password'], select, textarea):focus {
+  outline: none;
+  border-color: var(--free);
+  box-shadow: 0 0 0 3px var(--focus-soft);
+}
+::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+/* Deaktiviert: grau statt halbtransparentem Gelb */
+.btn:disabled {
+  opacity: 0.5;
+}
+.btn.accent:disabled {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Seitenleiste: alle Reiter mit Symbol und Namen, gleich breit */
+.side-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 6px 6px 0;
+}
+.side-tabs button,
+.side-tabs button:not(.on) {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  height: 46px;
+  padding: 0 1px;
+  font-size: 10.5px;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+  color: var(--muted);
+  border-radius: 6px 6px 0 0;
+}
+.side-tabs button .tab-label,
+.side-tabs button:not(.on) .tab-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-tabs button svg {
+  width: 17px;
+  height: 17px;
+}
+.side-tabs button:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.side-tabs button.on {
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: inset 0 2px 0 var(--tape);
+}
+
+/* Abschnitte: Überschriften leiser, Abstände einheitlich */
+.props-section {
+  padding: 14px 16px;
+}
+.props-section h4 {
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-align: left;
+}
+.section-toggle h4 {
+  margin: 0 !important;
+  color: inherit;
+}
+.section-toggle:hover {
+  color: var(--ink);
+}
+.section-toggle[aria-expanded='true'] {
+  margin-bottom: 8px;
+}
+.dim-filter {
+  width: 100%;
+  margin: 6px 0;
+}
+.link.small {
+  font-size: 12px;
+}
+
+/* Werkzeugband: flacher und dichter, Titel leise */
+.ribbon {
+  padding: 4px 4px 0;
+}
+.rb-group {
+  padding: 0 6px;
+}
+.rb-big {
+  min-width: 50px;
+  height: 58px;
+  padding: 4px 5px;
+  gap: 4px;
+  font-size: 11.5px;
+}
+.rb-small {
+  width: 28px;
+  height: 28px;
+}
+.rb-col,
+.rb-split-modes {
+  gap: 2px;
+}
+.rb-grid {
+  grid-template-columns: repeat(6, 28px);
+  grid-auto-rows: 28px;
+  gap: 2px;
+}
+.rb-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 42px);
+  grid-auto-rows: 28px;
+  gap: 2px;
+  align-content: center;
+}
+.rb-text {
+  height: 28px;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.rb-text:hover {
+  background: var(--paper);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.rb-title {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  padding: 1px 0 3px;
+}
+.rb-select select {
+  max-width: 118px;
+  min-height: 28px;
+  font-size: 12px;
+}
+
+/* Statusleiste: Fang-Schalter als ruhige Umschalter statt gelber Chips */
+.snaps button {
+  border-color: transparent;
+  color: var(--muted);
+}
+.snaps button.on {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--tape);
+  border-radius: 3px 3px 0 0;
+}
+
+/* Leere Zeichenfläche */
+.empty-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, calc(-50% - 30px));
+  width: min(440px, calc(100% - 48px));
+  padding: 18px 22px 14px;
+  border: 1px solid var(--cv-card-line);
+  border-radius: 12px;
+  background: var(--cv-card);
+  color: var(--cv-ink);
+  box-shadow: var(--shadow);
+  text-align: center;
+  z-index: 3;
+  pointer-events: none;
+}
+.empty-hint button {
+  pointer-events: auto;
+}
+.empty-hint strong {
+  font-size: 15px;
+}
+.empty-hint p {
+  margin: 4px 0 12px;
+  opacity: 0.8;
+}
+.empty-hint p.muted {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+.empty-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.empty-keys button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px 0 6px;
+  border: 1px solid var(--cv-card-line);
+  border-radius: 15px;
+  background: transparent;
+  color: inherit;
+}
+.empty-keys button:hover {
+  border-color: var(--tape-dark);
+  background: color-mix(in srgb, var(--tape) 14%, transparent);
+}
+.empty-hint .link {
+  font-size: inherit;
+}
+
+@media (pointer: coarse) {
+  .side-tabs button,
+  .side-tabs button:not(.on) {
+    height: 52px;
+    font-size: 11px;
+  }
+  .rb-small,
+  .rb-text {
+    min-width: 36px;
+    height: 36px;
+  }
+  .rb-grid {
+    grid-template-columns: repeat(6, 36px);
+    grid-auto-rows: 36px;
+  }
+  .rb-grid2 {
+    grid-auto-rows: 36px;
+  }
+}
+.rb-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+.rb-row {
+  display: flex;
+  gap: 2px;
+}
+.rb-stack .rb-select {
+  padding: 0;
+}
+.rb-stack .rb-select select {
+  max-width: none;
+  width: 100%;
+}
+.topbtn.export-btn {
+  background: var(--tape);
+  border-color: var(--tape-dark);
+  color: var(--on-tape);
+  font-weight: 500;
+}
+.topbtn.export-btn:hover {
+  background: var(--tape-hover);
+}
+/* Claude-Panel: Kopf, Modus und Hinweis behalten ihre Höhe, nur der Verlauf scrollt */
+.assistant > :not(.chat) {
+  flex-shrink: 0;
+}
+/* Aufklappzeilen untereinander statt nebeneinander */
+.disclosure {
+  display: flex;
+  width: 100%;
+}

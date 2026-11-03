@@ -703,6 +703,44 @@ export function CanvasView() {
       <DimensionEditor layout={() => layoutRef.current} vp={vp} />
       <TextEditor vp={vp} />
       <MarkingMenu />
+      <EmptyHint />
+    </div>
+  );
+}
+
+/** Leere Zeichenfläche: kurzer Einstieg statt eines leeren Rasters. Verschwindet mit dem ersten Objekt. */
+function EmptyHint() {
+  const app = useApp();
+  const empty = useAppState((s) => s.doc.order.length === 0 && !s.doc.pattern?.pieces.length);
+  const tool = useAppState((s) => s.tool);
+  const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+  if (!empty || tool !== 'select') return null;
+  const item = (key: string, label: string, run: () => void) => (
+    <button onClick={run}>
+      <kbd>{key}</kbd> {label}
+    </button>
+  );
+  return (
+    <div className="empty-hint" data-testid="empty-hint">
+      <strong>Leere Skizze</strong>
+      <p>Grob zeichnen, dann mit Bemaßungen exakt festlegen.</p>
+      <div className="empty-keys">
+        {item('L', 'Linie', () => app.setTool('line'))}
+        {item('R', 'Rechteck', () => app.setTool('rect'))}
+        {item('C', 'Kreis', () => app.setTool('circle'))}
+        {item('T', 'Text', () => app.setTool('text'))}
+        {item('D', 'Bemaßung', () => app.setTool('dimension'))}
+      </div>
+      <p className="muted">
+        {touch ? 'Mit dem Apple Pencil frei skizzieren – Formen werden erkannt.' : 'Bild, SVG oder DXF hierher ziehen'} ·{' '}
+        <button className="link" onClick={() => app.ui.setState({ newProject: true })}>
+          Schnittmuster oder 3D-Modell
+        </button>{' '}
+        ·{' '}
+        <button className="link" onClick={() => app.ui.setState({ tutorialList: true })}>
+          Tutorials
+        </button>
+      </p>
     </div>
   );
 }

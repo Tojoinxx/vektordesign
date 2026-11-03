@@ -125,6 +125,9 @@ export function TopBar() {
       >
         <Sparkles size={16} /> <span>Claude</span>
       </button>
+      <button className="topbtn export-btn" onClick={() => app.openExport('svg')} title="Exportieren: SVG, PDF, EPS, DXF oder PNG (Strg+E)" data-testid="export-svg">
+        <Download size={16} /> <span>Exportieren</span>
+      </button>
       <button
         className="topbtn icon"
         onClick={() => app.ui.setState({ sideOpen: !sideOpen })}

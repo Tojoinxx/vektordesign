@@ -316,7 +316,7 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
   },
   text: {
     title: 'Text',
-    steps: ['Klicken setzt den Text auf die Grundlinie, dann tippen und Enter.', 'Schriftart, Größe (mm) und Farbe stellst du rechts unter „Eigenschaften“ ein. Doppelklick bearbeitet den Text.'],
+    steps: ['Klicken setzt den Text auf die Grundlinie, dann tippen und Enter.', 'Schriftart, Größe (mm) und Farbe stellst du rechts im Reiter „Objekt“ ein. Doppelklick bearbeitet den Text.'],
     anim: () => (
       <Frame>
         <line x1="70" y1="95" x2="190" y2="95" stroke={K.cardLine} strokeDasharray="3 3" />
@@ -453,7 +453,7 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
   suggestions: {
     title: 'Stilvorschläge',
     steps: [
-      'Element oder ganzes Motiv auswählen – rechts erscheinen mindestens 8 Vorschläge als Vorschaubilder.',
+      'Element oder ganzes Motiv auswählen und rechts im Reiter „Objekt“ „Stilvorschläge“ aufklappen – mindestens 8 Vorschläge als Vorschaubilder.',
       'Klick übernimmt den Stil, Strg+Z nimmt ihn zurück. Mit Claude gibt es KI-Vorschläge zu einem Stichwort wie „Vintage“.',
     ],
     anim: () => (

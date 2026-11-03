@@ -42,8 +42,15 @@ function SidePanel({ app }: { app: AppController }) {
   return (
     <aside className="side" aria-label="Seitenleiste">
       <div className="side-tabs" role="tablist">
-        <button role="tab" aria-selected={side === 'props'} className={side === 'props' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'props' })} data-testid="tab-props" title="Eigenschaften">
-          <Settings2 size={15} /> <span className="tab-label">Eigenschaften</span>
+        <button
+          role="tab"
+          aria-selected={side === 'props'}
+          className={side === 'props' ? 'on' : ''}
+          onClick={() => app.ui.setState({ side: 'props' })}
+          data-testid="tab-props"
+          title="Objekt: Füllung, Kontur, Anordnen, Bemaßungen"
+        >
+          <Settings2 size={15} /> <span className="tab-label">Objekt</span>
         </button>
         <button role="tab" aria-selected={side === 'layers'} className={side === 'layers' ? 'on' : ''} onClick={() => app.ui.setState({ side: 'layers' })} data-testid="tab-layers" title="Ebenen">
           <Layers size={15} /> <span className="tab-label">Ebenen</span>

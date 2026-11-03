@@ -237,8 +237,9 @@ await step('SVG-Export über die Oberfläche hat exakt 80 × 40 mm', async () =>
 
 await step('PNG-Export: 300 dpi, 945 × 473 px, transparenter Hintergrund', async () => {
   const before = readdirSync(DL);
-  await page.click('[data-testid="export-png"]');
+  await page.click('[data-testid="export-svg"]');
   await page.waitForSelector('[data-testid="export-dialog"]');
+  await page.click('[data-testid="format-png"]');
   await page.click('[data-testid="export-run"]');
   const file = await waitDownload('png', before);
   const bytes = readFileSync(file);

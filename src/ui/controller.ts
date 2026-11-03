@@ -264,7 +264,7 @@ export class AppController {
       tutorial: null,
       tutorialList: false,
       side: 'props',
-      sideOpen: true,
+      sideOpen: typeof window === 'undefined' || window.innerWidth > 1000,
       chat: [],
       chatBusy: false,
       cursorWorld: null,

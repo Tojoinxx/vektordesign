@@ -52,6 +52,14 @@ npm run desktop:build  # Installer unter src-tauri/target/release/bundle/
 
 Während des Zeichnens lassen sich Länge, Winkel, Breite, Höhe oder Durchmesser direkt eintippen: einfach Zahlen tippen, `Tab` wechselt das Feld, `Enter` übernimmt.
 
+### Oberfläche
+
+- **Oben:** Datei, Rückgängig/Wiederholen, Befehlssuche (`Strg+K`), Design hell/dunkel, Hilfe, 3D-Vorschau, Claude und **Exportieren** (immer sichtbar, `Strg+E`).
+- **Werkzeugband** mit zwei Reitern: *Skizze* (Zeichnen, Einfügen, Bemaßung, Abhängigkeiten, Gestalten, Ansicht) und *Bearbeiten* (Ändern, Stutzen, Form, Kombinieren, Textil, Messen, Export). Einklappbar über den Pfeil rechts.
+- **Seitenleiste** mit sechs Reitern: *Objekt* (Füllung, Kontur, Anordnen, Stilvorschläge, Bemaßungstabelle), *Ebenen*, *Produktion*, *Schnitt*, *Bibliothek*, *Claude*.
+- **Leere Zeichenfläche:** ein kurzer Einstieg mit den wichtigsten Werkzeugen; verschwindet mit dem ersten Objekt.
+- **Flüssig auch bei großen Zeichnungen:** Die Zeichenfläche wird in Schichten gezeichnet – Mausbewegung, Werkzeug-Vorschau und Überfahren zeichnen nur neu, was sich ändert; beim Zoomen und Verschieben großer Zeichnungen wird erst das letzte Bild skaliert gezeigt und gleich danach scharf neu gezeichnet.
+
 ### Abnahmetest Meilenstein 1 (in einer Minute)
 
 ![Rechteck vom Mittelpunkt mit direkter Werteingabe](docs/screenshot-werteingabe.png)
@@ -65,27 +73,27 @@ Inventor-Weg: Rechteck irgendwo grob aufziehen, mit `D` die Breite (80) und Höh
 
 ### Gestalten
 
-- **Füllung und Kontur** im Bereich *Eigenschaften*: Farbwähler mit HEX, RGB, HSV und CMYK, Pipette, zuletzt benutzte Farben; Konturstärke in mm, Linienenden und Linientyp; Deckkraft pro Objekt.
+- **Füllung und Kontur** im Reiter *Objekt*: Farbwähler mit HEX, RGB, HSV und CMYK, Pipette, zuletzt benutzte Farben; Konturstärke in mm, Linienenden und Linientyp; Deckkraft pro Objekt.
 - **Farbverlauf**: Füllung „Verlauf“ wählen oder mit `G` einen Strich durch die Form ziehen (`Umschalt` rastet auf 45°). Richtungen links→rechts, rechts→links, oben→unten, unten→oben und kreisförmig; „Verblassen“ lässt den Verlauf in Transparenz auslaufen.
-- **Stilvorschläge**: Objekt auswählen – im Bereich *Stilvorschläge* erscheinen zehn Varianten als Vorschau, ein Klick übernimmt (`Strg+Z` nimmt zurück). Mit Claude-Schlüssel gibt es zusätzlich KI-Vorschläge zu einem Stichwort („Vintage“, „Neon“, „Vereinsfarben Blau-Weiß“).
+- **Stilvorschläge**: Objekt auswählen – im Reiter *Objekt* „Stilvorschläge“ aufklappen: zehn Varianten als Vorschau, ein Klick übernimmt (`Strg+Z` nimmt zurück). Mit Claude-Schlüssel gibt es zusätzlich KI-Vorschläge zu einem Stichwort („Vintage“, „Neon“, „Vereinsfarben Blau-Weiß“).
 - **Konstruktionslinien** (`Q`) sind gestrichelt und werden nie exportiert; Bemaßungen und Glyphen ebenso nicht.
 
 ### Bild als Vorlage nachzeichnen
 
 1. **Bild** im Band (Gruppe *Zeichnen*) oder ein Foto/Logo einfach auf die Zeichenfläche ziehen bzw. mit `Strg+V` aus der Zwischenablage einfügen (PNG, JPG, WebP).
 2. Das Bild landet auf einer eigenen Ebene **„Vorlage“** ganz unten, halbtransparent, und wird **nicht exportiert**.
-3. Unter *Eigenschaften* die Breite in mm eintragen – oder **„Maßstab über bekannte Strecke festlegen“**: zwei Punkte im Bild anklicken (z. B. linke und rechte Kante eines Logos) und das echte Maß eingeben.
+3. Im Reiter *Objekt* die Breite in mm eintragen – oder **„Maßstab über bekannte Strecke festlegen“**: zwei Punkte im Bild anklicken (z. B. linke und rechte Kante eines Logos) und das echte Maß eingeben.
 4. **Fixieren** sperrt die Ebene „Vorlage“, damit das Bild beim Nachzeichnen nicht verrutscht.
 5. Mit Linie, Kreis, Freihand oder Bemaßung darüber zeichnen. Deckkraft nach Geschmack anpassen.
 
-**Vektorisieren:** Bild auswählen → *Eigenschaften* → **Vektorisieren …** → Anzahl Farben und Detailgrad wählen. Daraus entsteht je Farbe eine Form in genau der Größe und Lage des Bildes (Hintergrund wird weggelassen). Ideal für Logos mit klaren Flächen; danach mit Bearbeiten-Werkzeugen und Bemaßungen nacharbeiten.
+**Vektorisieren:** Bild auswählen → Reiter *Objekt* → **Vektorisieren …** → Anzahl Farben und Detailgrad wählen. Daraus entsteht je Farbe eine Form in genau der Größe und Lage des Bildes (Hintergrund wird weggelassen). Ideal für Logos mit klaren Flächen; danach mit Bearbeiten-Werkzeugen und Bemaßungen nacharbeiten.
 
 Soll das Bild selbst ins Motiv (z. B. für DTF), das Häkchen „Nur Vorlage“ entfernen: Dann ist es in PNG, SVG und PDF enthalten (EPS und DXF enthalten keine Pixelbilder).
 
 ### Ebenen, Bearbeiten und Messen
 
 - **Ebenen** (Tab *Ebenen*): anlegen, umbenennen, ein-/ausblenden, sperren, Reihenfolge ändern; neue Objekte landen auf der aktiven Ebene. Ebenennamen gehen als benannte Ebenen in SVG, PDF, EPS und DXF.
-- **Gruppieren** (`Strg+G`, aufheben `Strg+Umschalt+G`), **Anordnen** und **Ausrichten/Verteilen** im Bereich *Eigenschaften*.
+- **Gruppieren** (`Strg+G`, aufheben `Strg+Umschalt+G`), **Anordnen** und **Ausrichten/Verteilen** im Reiter *Objekt*.
 - Registerkarte **Bearbeiten** über dem Band:
   - *Ändern*: Verschieben, Drehen, Skalieren (Faktor oder Zielbreite), Spiegeln, rechteckiges und kreisförmiges Muster – jeweils mit Eingabedialog (Ausdrücke wie `20+5` erlaubt, optional als Kopie).
   - *Skizze*: **Stutzen** (`X`) entfernt das angeklickte Linienstück bis zu den nächsten Schnittpunkten, **Dehnen** (`E`) verlängert eine Linie bis zur nächsten Geometrie.
