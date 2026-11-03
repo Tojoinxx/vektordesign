@@ -87,6 +87,23 @@ for (const theme of ['light', 'dark']) {
     await shot('datei');
   });
 }
+await session('dialoge', {}, async (page, shot) => {
+  await page.evaluate(demo);
+  for (const [flag, value] of [
+    ['mockup', true],
+    ['generator', true],
+    ['costs', true],
+    ['gangSheet', true],
+    ['screenPrint', true],
+    ['techPack', true],
+    ['placement', 'm1'],
+  ]) {
+    await page.evaluate(([f, v]) => window.vektordesign.ui.setState({ [f]: v }), [flag, value]);
+    await sleep(900);
+    await shot(flag);
+    await page.evaluate((f) => window.vektordesign.ui.setState({ [f]: f === 'placement' ? null : false }), flag);
+  }
+});
 await session('ipad', { width: 1180, height: 820, scale: 1 }, async (page, shot) => {
   await page.evaluate(demo);
   await shot('zeichnung');

@@ -1033,7 +1033,7 @@ kbd {
   min-width: 44px;
   color: var(--ink-2);
 }
-.field input,
+.field input:not([type='checkbox'], [type='radio']),
 .field select {
   width: 82px;
   height: 30px;
@@ -1042,7 +1042,7 @@ kbd {
   border-radius: var(--r);
   background: var(--paper);
 }
-.field.wide input,
+.field.wide input:not([type='checkbox'], [type='radio']),
 .field.wide select {
   flex: 1;
   width: auto;
@@ -2155,7 +2155,7 @@ kbd {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 .placement-canvas {
   position: relative;
@@ -2177,6 +2177,7 @@ kbd {
   pointer-events: none;
 }
 .placement-side {
+  width: 300px;
   padding: 12px 14px;
   overflow: auto;
   border-left: 1px solid var(--line);
@@ -2212,7 +2213,9 @@ kbd {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr) auto;
   }
-  .placement-side {
+  .placement-side,
+  .placement-side.gang-side {
+    width: auto;
     border-left: 0;
     border-top: 1px solid var(--line);
     max-height: 40vh;
@@ -2556,12 +2559,12 @@ body {
   color: var(--muted, #7a7f87);
   text-align: center;
 }
-.gang-side {
-  width: 320px;
+.placement-side.gang-side {
+  width: 330px;
 }
 .gang-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px 10px;
   margin: 8px 0;
 }
@@ -2713,7 +2716,7 @@ body {
 }
 .gen-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px 12px;
 }
 .gen-fields .field.wide {
@@ -3673,4 +3676,10 @@ body {
 }
 .palette-input input {
   background: transparent;
+}
+
+/* Vorlagen-Generator: Beschriftungen gleich breit, damit die Felder bündig stehen */
+.gen-fields .field > span:first-child {
+  flex: none;
+  width: 118px;
 }

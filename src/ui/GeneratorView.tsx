@@ -42,7 +42,7 @@ const FIELDS: Record<Kind, { key: string; label: string; unit?: string; kind?: '
     { key: 'center', label: 'Mitte', kind: 'text' },
     { key: 'stars', label: 'Sterne', kind: 'check' },
     { key: 'color', label: 'Farbe', kind: 'color' },
-    { key: 'accent', label: 'Schrift', kind: 'color' },
+    { key: 'accent', label: 'Schriftfarbe', kind: 'color' },
   ],
   shield: [
     { key: 'width', label: 'Breite', unit: 'mm' },
@@ -59,7 +59,7 @@ const FIELDS: Record<Kind, { key: string; label: string; unit?: string; kind?: '
     { key: 'text', label: 'Text', kind: 'text' },
     { key: 'color', label: 'Band', kind: 'color' },
     { key: 'shade', label: 'Umschlag', kind: 'color' },
-    { key: 'textColor', label: 'Schrift', kind: 'color' },
+    { key: 'textColor', label: 'Schriftfarbe', kind: 'color' },
   ],
   frame: [
     { key: 'width', label: 'Breite', unit: 'mm' },
