@@ -215,9 +215,9 @@ function EditRibbon() {
 /** Druckbereich des gewählten Kleidungsstücks als Rahmen auf der Arbeitsfläche. */
 function PrintAreaSelect() {
   const app = useApp();
-  const doc = useAppState((s) => s.doc);
+  const garment = useAppState((s) => productionOf(s.doc).garment);
   const area = useUi((s) => s.printArea);
-  const g = garmentOf(productionOf(doc).garment);
+  const g = garmentOf(garment);
   return (
     <label className="rb-select" title="Druckbereich in echten Maßen als Rahmen anzeigen (wird nicht exportiert)">
       <span>Druckbereich</span>

@@ -37,10 +37,20 @@ export function LayersPanel() {
             const i = layers.indexOf(l);
             return (
               <li key={l.id} className={`layer-row ${l.id === active ? 'on' : ''} ${l.visible ? '' : 'off'}`} data-testid={`layer-${l.id}`}>
-                <button className="icon-btn" onClick={() => report(ed.updateLayer(l.id, { visible: !l.visible }))} title={l.visible ? 'Ausblenden' : 'Einblenden'} aria-label={l.visible ? `${l.name} ausblenden` : `${l.name} einblenden`}>
+                <button
+                  className="icon-btn"
+                  onClick={() => report(ed.updateLayer(l.id, { visible: !l.visible }))}
+                  title={l.visible ? 'Ausblenden' : 'Einblenden'}
+                  aria-label={l.visible ? `${l.name} ausblenden` : `${l.name} einblenden`}
+                >
                   {l.visible ? <Eye size={15} /> : <EyeOff size={15} />}
                 </button>
-                <button className="icon-btn" onClick={() => report(ed.updateLayer(l.id, { locked: !l.locked }))} title={l.locked ? 'Entsperren' : 'Sperren'} aria-label={l.locked ? `${l.name} entsperren` : `${l.name} sperren`}>
+                <button
+                  className="icon-btn"
+                  onClick={() => report(ed.updateLayer(l.id, { locked: !l.locked }))}
+                  title={l.locked ? 'Entsperren' : 'Sperren'}
+                  aria-label={l.locked ? `${l.name} entsperren` : `${l.name} sperren`}
+                >
                   {l.locked ? <Lock size={15} /> : <LockOpen size={15} />}
                 </button>
                 {editing === l.id ? (

@@ -529,7 +529,15 @@ function PlacementInner({ motifId }: { motifId: string }) {
                   </button>
                   <label className="field small">
                     Seite
-                    <input type="number" min={1} value={tplPage} onChange={(e) => setTplPage(Math.max(1, Number(e.target.value) || 1))} onKeyDown={(e) => e.stopPropagation()} style={{ width: 52 }} aria-label="Seite der PDF-Vorlage" />
+                    <input
+                      type="number"
+                      min={1}
+                      value={tplPage}
+                      onChange={(e) => setTplPage(Math.max(1, Number(e.target.value) || 1))}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      style={{ width: 52 }}
+                      aria-label="Seite der PDF-Vorlage"
+                    />
                   </label>
                 </div>
               </>

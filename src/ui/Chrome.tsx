@@ -365,7 +365,8 @@ export function ExportDialog() {
   const app = useApp();
   const open = useAppState((s) => s.exportOpen);
   const preset = useAppState((s) => s.exportPreset);
-  const doc = useAppState((s) => s.doc);
+  // Zeichnung nur abonnieren, solange der Dialog offen ist (sonst rendert er bei jeder Änderung mit)
+  const doc = useAppState((s) => (s.exportOpen ? s.doc : null));
   const [format, setFormat] = useState<ExportFormat>('svg');
   const [dpi, setDpi] = useState(300);
   const [bounds, setBounds] = useState<'geometry' | 'stroke'>('geometry');
@@ -383,7 +384,7 @@ export function ExportDialog() {
       if (preset.dpi) setDpi(Math.max(300, preset.dpi));
     }
   }, [open, preset]);
-  if (!open) return null;
+  if (!open || !doc) return null;
   const close = () => app.store.setState({ exportOpen: false, exportPreset: null });
   const box = docBBox(doc, { includeStroke: bounds === 'stroke' });
   const px = format === 'png' ? pngSize(doc, dpi, bounds) : null;
@@ -999,7 +1000,8 @@ export function ShareReadyDialog() {
 export function PreflightCard() {
   const app = useApp();
   const pf = useUi((s) => s.preflight);
-  const doc = useAppState((s) => s.doc);
+  const open = !!pf;
+  const doc = useAppState((s) => (open ? s.doc : null));
   const [ml, setMl] = useState('');
   useEffect(() => {
     if (pf) setMl(pf.minLine != null ? String(pf.minLine).replace('.', ',') : '');

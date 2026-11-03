@@ -14,10 +14,10 @@ export function Preview3D() {
   const open = useUi((s) => s.preview3d);
   const width = useUi((s) => s.preview3dWidth);
   const theme = useUi((s) => s.appearance.theme);
-  const doc = useAppState((s) => s.doc);
+  const doc = useAppState((s) => (open ? s.doc : null));
   const selection = useAppState((s) => s.selection);
   const drag = useRef<{ x: number; w: number } | null>(null);
-  const selected = doc.pattern?.pieces.find((p) => selection.includes(p.outline))?.id ?? null;
+  const selected = doc?.pattern?.pieces.find((p) => selection.includes(p.outline))?.id ?? null;
   const ed = app.editor;
   const onSelect = useCallback(
     (id: string | null) => {
@@ -27,7 +27,7 @@ export function Preview3D() {
     },
     [app, ed],
   );
-  if (!open) return null;
+  if (!open || !doc) return null;
   return (
     <section className="preview3d" style={{ width }} aria-label="3D-Vorschau" data-testid="preview3d">
       <div

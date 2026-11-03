@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bold, CircleDot, Italic, Repeat, Trash2 } from 'lucide-react';
 import type { Gradient, GradientStop, Id, ImageEntity, ShapeEntity, Style, TextEntity } from '../model/types';
 import { contoursBBox, shapeWorldContours } from '../model/shape';
@@ -240,7 +240,12 @@ function GradientEditor({ gradient, onChange, onPreview }: { gradient: Gradient;
           <ColorButton
             label="Farbe der Stufe"
             value={sel.color}
-            onPreview={(c) => setStops(stops.map((s, k) => (k === selIdx ? { ...s, color: c } : s)), false)}
+            onPreview={(c) =>
+              setStops(
+                stops.map((s, k) => (k === selIdx ? { ...s, color: c } : s)),
+                false,
+              )
+            }
             onChange={(c) => {
               const next = stops.map((s, k) => (k === selIdx ? { ...s, color: c } : s));
               if (app.editor.dragging) {
@@ -256,7 +261,12 @@ function GradientEditor({ gradient, onChange, onPreview }: { gradient: Gradient;
               min={0}
               max={100}
               value={Math.round(sel.opacity * 100)}
-              onChange={(e) => setStops(stops.map((s, k) => (k === selIdx ? { ...s, opacity: Number(e.target.value) / 100 } : s)), false)}
+              onChange={(e) =>
+                setStops(
+                  stops.map((s, k) => (k === selIdx ? { ...s, opacity: Number(e.target.value) / 100 } : s)),
+                  false,
+                )
+              }
               onPointerUp={() => app.editor.dragging && app.editor.endDrag()}
               onKeyUp={() => app.editor.dragging && app.editor.endDrag()}
             />
@@ -303,7 +313,13 @@ function GradientEditor({ gradient, onChange, onPreview }: { gradient: Gradient;
           data-testid="fade-btn"
           onClick={() => {
             const firstStop = stops[0];
-            onChange({ ...gradient, stops: [{ ...firstStop, offset: 0, opacity: 1 }, { offset: 1, color: firstStop.color, opacity: 0 }] });
+            onChange({
+              ...gradient,
+              stops: [
+                { ...firstStop, offset: 0, opacity: 1 },
+                { offset: 1, color: firstStop.color, opacity: 0 },
+              ],
+            });
           }}
         >
           Verblassen
@@ -335,7 +351,7 @@ function StrokeEditor({ targets, style }: { targets: Id[]; style: Style }) {
             { value: 'off', label: 'Keine' },
             { value: 'on', label: 'Farbe' },
           ]}
-          onChange={(v) => apply.commit({ stroke: v === 'on' ? style.stroke ?? DEFAULT_STYLE.stroke : null })}
+          onChange={(v) => apply.commit({ stroke: v === 'on' ? (style.stroke ?? DEFAULT_STYLE.stroke) : null })}
         />
         {on && <ColorButton label="Konturfarbe" value={style.stroke!} onPreview={(c) => apply.preview({ stroke: c })} onChange={(c) => apply.commit({ stroke: c })} />}
       </div>
@@ -456,7 +472,7 @@ function ImageProps({ image }: { image: ImageEntity }) {
         Nur Vorlage zum Nachzeichnen (wird nicht exportiert)
       </label>
       <div className="stack">
- <button className="btn accent" onClick={() => app.vectorizeImageDialog(image.id)} data-testid="image-vectorize" title="Aus dem Bild saubere Vektorformen machen (je Farbe eine Form)">
+        <button className="btn accent" onClick={() => app.vectorizeImageDialog(image.id)} data-testid="image-vectorize" title="Aus dem Bild saubere Vektorformen machen (je Farbe eine Form)">
           Vektorisieren …
         </button>
         <button className="btn" onClick={() => app.calibrateImage(image.id)} data-testid="image-calibrate" title="Zwei Punkte einer bekannten Strecke anklicken und das echte Maß eingeben">
@@ -523,7 +539,9 @@ function ShapeProps({ shape }: { shape: ShapeEntity }) {
         {field('height', 'Höhe', hv, setHv)}
       </div>
       <p className="muted small">
-        {driving ? `Festgelegt durch ${driving.name} (${driving.kind === 'width' ? 'Breite' : 'Höhe'}) – Seitenverhältnis bleibt erhalten.` : 'Wert eingeben – die Form wird proportional skaliert. Ausdrücke wie 100/2 sind erlaubt.'}
+        {driving
+          ? `Festgelegt durch ${driving.name} (${driving.kind === 'width' ? 'Breite' : 'Höhe'}) – Seitenverhältnis bleibt erhalten.`
+          : 'Wert eingeben – die Form wird proportional skaliert. Ausdrücke wie 100/2 sind erlaubt.'}
       </p>
     </section>
   );
@@ -712,7 +730,7 @@ function SketchInfo() {
   );
 }
 
-function DimRow({ id }: { id: Id }) {
+const DimRow = memo(function DimRow({ id }: { id: Id }) {
   const app = useApp();
   const d = useAppState((s) => s.doc.dims[id]);
   const selected = useAppState((s) => s.selection.includes(id));
@@ -756,4 +774,4 @@ function DimRow({ id }: { id: Id }) {
       <td className="num">{d.driven ? `(${formatNumber(d.value, 2)}${unit})` : `${formatNumber(d.value, 2)}${unit}`}</td>
     </tr>
   );
-}
+});

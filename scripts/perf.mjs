@@ -222,6 +222,28 @@ async function scenario(name, build) {
 
   let st;
   let t;
+  // Geometrie ziehen über die Editor-Schnittstelle (Solver + Neuzeichnen + React)
+  await resetStats();
+  let dragMs = 0;
+  await profile('Geometrie ziehen', async () => {
+    dragMs = await page.evaluate(async () => {
+      const a = window.vektordesign;
+      const d = a.store.getState().doc;
+      const p = Object.values(d.entities).find((e) => e.kind === 'line');
+      if (!p) return 0;
+      a.editor.beginDrag();
+      const t0 = performance.now();
+      for (let k = 0; k < 30; k++) {
+        a.editor.dragTo({ kind: 'points', targets: [{ id: p.p1, x: d.points[p.p1].x + k * 0.2, y: d.points[p.p1].y + k * 0.3 }] });
+        await new Promise((r) => requestAnimationFrame(() => r()));
+      }
+      const ms = (performance.now() - t0) / 30;
+      a.editor.endDrag();
+      return ms;
+    });
+  });
+  st = await readStats();
+  console.log(`  Geometrie ziehen: ${dragMs.toFixed(1)} ms/Bild, ${st.commits} Commits, ${st.fibers} Komponenten (${st.top}) [Auslöser: ${st.roots}]`);
   // Ziehen eines Objekts mit dem Auswahlwerkzeug
   const tgt = await page.evaluate(() => {
     const a = window.vektordesign;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { Id, SketchDoc } from '../model/types';
 import { docBBox } from '../model/bounds';
@@ -8,7 +8,7 @@ import { aiSuggestions, localSuggestions, previewDoc, type StyleSuggestion } fro
 import { loadApiKey, loadModel } from '../assistant/api';
 import { useApp, useAppState, useUi } from './hooks';
 
-function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
+const Thumb = memo(function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
   const ref = useRef<HTMLCanvasElement>(null);
   // Neu zeichnen, wenn die Zeichenfläche hell/dunkel umschaltet (Hilfsumriss passt sich an)
   const appearance = useUi((s) => s.appearance);
@@ -32,18 +32,26 @@ function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
     const ox = (W - w * s) / 2;
     const oy = (H - h * s) / 2;
     drawDesign(
-      { ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75, design: true, contrast: { background: THEME.paper, hint: THEME.contrastHint } },
+      {
+        ctx,
+        toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }),
+        scale: s,
+        minStrokePx: 0.75,
+        design: true,
+        contrast: { background: THEME.paper, hint: THEME.contrastHint },
+      },
       doc,
       { only },
     );
   }, [doc, only, appearance]);
   return <canvas ref={ref} className="sugg-thumb" />;
-}
+});
 
 /** Stilvorschläge für Auswahl oder ganzes Motiv. */
 export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; whole?: boolean }) {
   const app = useApp();
-  const doc = useAppState((s) => s.doc);
+  // Vorschaubilder mit niedriger Priorität: beim Ziehen und Tippen nicht jedes Bild neu zeichnen
+  const doc = useDeferredValue(useAppState((s) => s.doc));
   const [ai, setAi] = useState<StyleSuggestion[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -57,6 +65,16 @@ export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; wh
     setAi([]);
     setErr(null);
   }, [key]);
+  // Vorschau-Zeichnungen je Zeichnungsstand nur einmal bauen
+  const previews = useMemo(() => new Map<string, SketchDoc>(), [doc]);
+  const preview = (sg: StyleSuggestion) => {
+    let d = previews.get(sg.id);
+    if (!d) {
+      d = previewDoc(doc, sg);
+      previews.set(sg.id, d);
+    }
+    return d;
+  };
 
   if (!targets.length) return null;
 
@@ -87,7 +105,7 @@ export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; wh
     <div className="sugg-grid">
       {list.map((s) => (
         <button key={s.id} className="sugg" onClick={() => apply(s)} title={`Übernehmen: ${s.name}`} data-testid="suggestion">
-          <Thumb doc={previewDoc(doc, s)} only={only} />
+          <Thumb doc={preview(s)} only={only} />
           <span>{s.name}</span>
         </button>
       ))}
@@ -98,8 +116,8 @@ export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; wh
     <section className="props-section" id="stilvorschlaege">
       <h4>Stilvorschläge</h4>
       <p className="muted small">
-        {whole ? `Für das ganze Motiv (${targets.length} Objekt${targets.length === 1 ? '' : 'e'})` : targets.length === 1 ? 'Für die Auswahl' : `Für ${targets.length} ausgewählte Objekte`} · Klick übernimmt, Strg+Z nimmt
-        zurück
+        {whole ? `Für das ganze Motiv (${targets.length} Objekt${targets.length === 1 ? '' : 'e'})` : targets.length === 1 ? 'Für die Auswahl' : `Für ${targets.length} ausgewählte Objekte`} · Klick
+        übernimmt, Strg+Z nimmt zurück
       </p>
       {ai.length > 0 && (
         <>
