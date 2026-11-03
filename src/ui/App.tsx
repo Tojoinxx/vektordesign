@@ -1,23 +1,16 @@
-import { useEffect } from 'react';
-import { LibraryPanel } from './LibraryPanel';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { BookMarked, Layers, Scissors, Settings2, Shirt, Sparkles } from 'lucide-react';
-import { PatternPanel } from './PatternPanel';
 import { Preview3D } from './Preview3D';
-import { TechPackView } from './TechPackView';
+import { PatternPanel } from './PatternPanel';
+import { LibraryPanel } from './LibraryPanel';
+import { AssistantPanel } from './AssistantPanel';
 import type { AppController } from './controller';
 import { AppCtx, useUi } from './hooks';
 import { CanvasView } from './CanvasView';
 import { Ribbon } from './Ribbon';
 import { PropertiesPanel } from './PropertiesPanel';
-import { AssistantPanel } from './AssistantPanel';
 import { LayersPanel } from './LayersPanel';
 import { ProductionPanel, ProfileEditor } from './ProductionPanel';
-import { PlacementView } from './PlacementView';
-import { MockupView } from './MockupView';
-import { GangSheetView } from './GangSheetView';
-import { ScreenPrintView } from './ScreenPrintView';
-import { CostView } from './CostView';
-import { GeneratorView } from './GeneratorView';
 import {
   AboutDialog,
   NewProjectDialog,
@@ -36,6 +29,70 @@ import {
   TutorialList,
 } from './Chrome';
 import { buildCommands, matchKey } from './commands';
+
+// Selten benötigte Ansichten erst bei Bedarf laden (kürzerer Start, besonders auf dem iPad)
+const views = {
+  placement: () => import('./PlacementView'),
+  mockup: () => import('./MockupView'),
+  gang: () => import('./GangSheetView'),
+  techPack: () => import('./TechPackView'),
+  screen: () => import('./ScreenPrintView'),
+  costs: () => import('./CostView'),
+  generator: () => import('./GeneratorView'),
+};
+const PlacementView = lazy(() => views.placement().then((m) => ({ default: m.PlacementView })));
+const MockupView = lazy(() => views.mockup().then((m) => ({ default: m.MockupView })));
+const GangSheetView = lazy(() => views.gang().then((m) => ({ default: m.GangSheetView })));
+const TechPackView = lazy(() => views.techPack().then((m) => ({ default: m.TechPackView })));
+const ScreenPrintView = lazy(() => views.screen().then((m) => ({ default: m.ScreenPrintView })));
+const CostView = lazy(() => views.costs().then((m) => ({ default: m.CostView })));
+const GeneratorView = lazy(() => views.generator().then((m) => ({ default: m.GeneratorView })));
+
+/** Nach dem Start im Leerlauf vorladen, damit das erste Öffnen ohne Wartezeit klappt. */
+function preloadViews() {
+  const idle = (window as unknown as { requestIdleCallback?: (f: () => void) => void }).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500));
+  idle(() => Object.values(views).forEach((v) => void v().catch(() => {})));
+}
+
+function Gate({ when, children }: { when: unknown; children: ReactNode }) {
+  return when ? <Suspense fallback={null}>{children}</Suspense> : null;
+}
+
+/** Dialoge, die nur geöffnet gerendert werden. */
+function LazyViews() {
+  const placement = useUi((s) => s.placement);
+  const mockup = useUi((s) => s.mockup);
+  const gang = useUi((s) => s.gangSheet);
+  const techPack = useUi((s) => s.techPack);
+  const screen = useUi((s) => s.screenPrint);
+  const costs = useUi((s) => s.costs);
+  const generator = useUi((s) => s.generator);
+  return (
+    <>
+      <Gate when={placement}>
+        <PlacementView />
+      </Gate>
+      <Gate when={mockup}>
+        <MockupView />
+      </Gate>
+      <Gate when={gang}>
+        <GangSheetView />
+      </Gate>
+      <Gate when={techPack}>
+        <TechPackView />
+      </Gate>
+      <Gate when={screen}>
+        <ScreenPrintView />
+      </Gate>
+      <Gate when={costs}>
+        <CostView />
+      </Gate>
+      <Gate when={generator}>
+        <GeneratorView />
+      </Gate>
+    </>
+  );
+}
 
 function SidePanel({ app }: { app: AppController }) {
   const side = useUi((s) => s.side);
@@ -204,6 +261,7 @@ function Shell({ app }: { app: AppController }) {
   }, [app]);
 
   useEffect(() => {
+    preloadViews();
     const t = setTimeout(() => app.showTutorialFor('welcome'), 600);
     return () => clearTimeout(t);
   }, [app]);
@@ -224,13 +282,7 @@ function Shell({ app }: { app: AppController }) {
       <StatusBar />
       <ExportDialog />
       <ParamDialog />
-      <PlacementView />
-      <MockupView />
-      <GangSheetView />
-      <TechPackView />
-      <ScreenPrintView />
-      <CostView />
-      <GeneratorView />
+      <LazyViews />
       <SyncConflictDialog />
       <ShareReadyDialog />
       <ProfileEditor />

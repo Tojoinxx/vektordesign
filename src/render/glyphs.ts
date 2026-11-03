@@ -31,11 +31,7 @@ export function layoutGlyphs(doc: SketchDoc, vp: Viewport, only?: Set<Id>, focus
     const e = doc.entities[id];
     if (e?.kind === 'path') for (const ed of e.edges) near.add(ed.id);
   }
-  for (const id of [...near]) {
-    const e = doc.entities[id];
-    if (!e) continue;
-    for (const p of Object.values(doc.points)) if (p.owner === id) near.add(p.id);
-  }
+  if (near.size) for (const p of Object.values(doc.points)) if (p.owner && near.has(p.owner) && doc.entities[p.owner]) near.add(p.id);
   const stack = new Map<string, number>();
   const nextIndex = (key: string) => {
     const n = stack.get(key) ?? 0;

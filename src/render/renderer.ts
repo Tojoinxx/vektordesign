@@ -49,7 +49,96 @@ function labelWidth(ctx: Ctx, label: string): number {
   return w;
 }
 
-export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp: Viewport) => void): SceneLayout {
+/**
+ * Zwischenspeicher der ruhenden Ebene (Raster, Design, Skizzenüberlagerung, Bemaßungen, Glyphen).
+ * Ändert sich nur der Mauszeiger oder die Werkzeugvorschau, wird das gespeicherte Bild kopiert
+ * statt alles neu zu zeichnen.
+ */
+export interface SceneCache {
+  canvas: HTMLCanvasElement | OffscreenCanvas | null;
+  key: readonly unknown[] | null;
+  layout: SceneLayout | null;
+  /** Schlüssel des letzten Bildes (auch ohne Zwischenspeicher gezeichnet) */
+  last: readonly unknown[] | null;
+}
+
+export const createSceneCache = (): SceneCache => ({ canvas: null, key: null, layout: null, last: null });
+
+const sameKey = (a: readonly unknown[] | null, b: readonly unknown[]) => !!a && a.length === b.length && a.every((v, i) => v === b[i]);
+
+/**
+ * Zeichnet die Szene in zwei Ebenen: `staticExtra` landet in der ruhenden Ebene, `toolOverlay`
+ * und die Lineal-Markierung werden jedes Bild frisch darübergelegt. Mit `cache` und `key` wird
+ * die ruhende Ebene nur bei geändertem Schlüssel neu gezeichnet.
+ */
+export function renderScene(
+  ctx: Ctx,
+  s: SceneState,
+  toolOverlay?: (ctx: Ctx, vp: Viewport) => void,
+  opts: { staticExtra?: (ctx: Ctx, vp: Viewport) => void; cache?: SceneCache; key?: readonly unknown[]; dpr?: number } = {},
+): SceneLayout {
+  const { vp } = s;
+  const { cache, key } = opts;
+  let layout: SceneLayout;
+  // Ändert sich die ruhende Ebene gerade jedes Bild (Zoomen, Ziehen), direkt zeichnen –
+  // der Zwischenspeicher lohnt erst, wenn sie zwei Bilder lang gleich bleibt.
+  const steady = !!cache && !!key && sameKey(cache.last, key);
+  if (cache && key) cache.last = key;
+  if (cache && key && (steady || sameKey(cache.key, key))) {
+    const dpr = opts.dpr ?? 1;
+    const w = Math.max(1, Math.round(vp.width * dpr));
+    const h = Math.max(1, Math.round(vp.height * dpr));
+    if (!cache.canvas || cache.canvas.width !== w || cache.canvas.height !== h) {
+      cache.canvas = Object.assign(document.createElement('canvas'), { width: w, height: h });
+      cache.key = null;
+    }
+    if (!sameKey(cache.key, key) || !cache.layout) {
+      const cctx = cache.canvas.getContext('2d') as unknown as Ctx | null;
+      if (!cctx) return renderScene(ctx, s, toolOverlay, { staticExtra: opts.staticExtra });
+      cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Überfahren wird darübergelegt, damit Mausbewegungen die ruhende Ebene nicht verwerfen
+      cache.layout = renderStatic(cctx, { ...s, hover: null }, opts.staticExtra);
+      cache.key = key;
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(cache.canvas as CanvasImageSource, 0, 0);
+    ctx.restore();
+    layout = cache.layout;
+    if (s.hover) drawHover(ctx, s, layout);
+  } else layout = renderStatic(ctx, s, opts.staticExtra);
+
+  if (toolOverlay) {
+    ctx.save();
+    toolOverlay(ctx, vp);
+    ctx.restore();
+  }
+  drawRulers(ctx, vp, s.cursor ?? null);
+  return layout;
+}
+
+/** Überfahrenes Objekt (samt Kanten eines Pfads), Bemaßung oder Glyph über die ruhende Ebene legen. */
+function drawHover(ctx: Ctx, s: SceneState, layout: SceneLayout): void {
+  const id = s.hover!;
+  const { doc, vp } = s;
+  ctx.save();
+  const problems = problemSet(doc, s.analysis);
+  if (id === ORIGIN_ID) drawOrigin(ctx, vp, true);
+  else if (doc.dims[id]) {
+    if (s.settings.showDims) drawDimensions(ctx, s, problems.items, id);
+  } else if (doc.constraints[id]) {
+    const items = layout.glyphs.filter((g) => g.constraintId === id);
+    if (items.length) drawGlyphs(ctx, items, { hover: id, selection: s.selection, problems: problems.items });
+  } else if (s.settings.showOverlay) {
+    const only = new Set<Id>([id]);
+    const e = doc.entities[id];
+    if (e?.kind === 'path') for (const ed of e.edges) only.add(ed.id);
+    drawSketchOverlay(ctx, s, problems.entities, only);
+  }
+  ctx.restore();
+}
+
+function renderStatic(ctx: Ctx, s: SceneState, extra?: (ctx: Ctx, vp: Viewport) => void): SceneLayout {
   const { vp, doc, settings } = s;
   ctx.save();
   ctx.fillStyle = THEME.paper;
@@ -75,12 +164,11 @@ export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp
   }
   drawOrigin(ctx, vp, s.hover === ORIGIN_ID || s.selection.has(ORIGIN_ID));
 
-  if (toolOverlay) {
+  if (extra) {
     ctx.save();
-    toolOverlay(ctx, vp);
+    extra(ctx, vp);
     ctx.restore();
   }
-  drawRulers(ctx, vp, s.cursor ?? null);
   ctx.restore();
   return layout;
 }
@@ -232,13 +320,14 @@ function isFree(s: SceneState, e: Entity): boolean {
   }
 }
 
-function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
+function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>, only?: Set<Id>): void {
   const { doc, vp } = s;
   const T = (p: Vec2) => toScreen(vp, p);
   ctx.save();
   ctx.lineCap = 'round';
   // Pfadinneres hervorheben, wenn ausgewählt/überfahren
   for (const e of Object.values(doc.entities)) {
+    if (only && !only.has(e.id)) continue;
     if (e.kind !== 'path' || isHidden(doc, e.id)) continue;
     if (!(s.selection.has(e.id) || s.hover === e.id)) continue;
     ctx.beginPath();
@@ -259,6 +348,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     return b.path;
   };
   for (const e of Object.values(doc.entities)) {
+    if (only && !only.has(e.id)) continue;
     if (e.kind === 'path' || isHidden(doc, e.id)) continue;
     if (e.kind === 'text') {
       const sel = s.selection.has(e.id) || s.hover === e.id;
@@ -345,6 +435,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     return p;
   };
   for (const p of Object.values(doc.points)) {
+    if (only && !only.has(p.id)) continue;
     if (p.id === ORIGIN_ID || isHidden(doc, p.id)) continue;
     const sp = T(p);
     if (sp.x < -10 || sp.y < -10 || sp.x > vp.width + 10 || sp.y > vp.height + 10) continue;
@@ -405,7 +496,7 @@ function arrowPath(path: Path2D, tip: Vec2, dir: Vec2, size = 9): void {
   path.closePath();
 }
 
-function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>): SceneLayout['dims'] {
+function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>, only?: Id): SceneLayout['dims'] {
   const { doc, vp } = s;
   const px = 1 / vp.zoom;
   const out: SceneLayout['dims'] = [];
@@ -414,7 +505,7 @@ function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>): SceneLayout
   const labels: { x: number; y: number; text: string; color: string; box: { x: number; y: number; w: number; h: number }; sel: boolean; hov: boolean }[] = [];
   ctx.save();
   ctx.font = DIM_FONT;
-  for (const d of Object.values(doc.dims) as Dimension[]) {
+  for (const d of (only ? [doc.dims[only]] : Object.values(doc.dims)) as Dimension[]) {
     if (d.refs.some((r) => isHidden(doc, r))) continue;
     const g = dimGeometry(doc, d, px, s.settings.dimDisplay);
     if (!g) continue;

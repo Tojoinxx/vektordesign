@@ -178,12 +178,11 @@ function needsHint(t: DesignTarget, e: Entity): string | null {
 }
 
 /** Zeichnet ein einzelnes Objekt in seinem echten Stil. */
-export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
+function drawEntityInner(t: DesignTarget, doc: SketchDoc, e: Entity): void {
   if (e.construction) return;
   if (e.kind === 'image' && e.reference && t.design) return;
   const ctx = t.ctx;
   const s = e.style;
-  ctx.save();
   ctx.globalAlpha = Math.min(1, Math.max(0, s.opacity ?? 1));
   if (e.kind === 'image') {
     const img = imageElement(e.src);
@@ -198,14 +197,12 @@ export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, -w / 2, -h / 2, w, h);
     }
-    ctx.restore();
     return;
   }
   if (e.kind === 'text') {
     const a = t.toScreen(pt(doc, e.anchor));
     const size = e.fontSize * t.scale;
     if (size < 0.5) {
-      ctx.restore();
       return;
     }
     ctx.font = cssFont(e, size);
@@ -225,13 +222,9 @@ export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
       ctx.strokeStyle = hint;
       ctx.strokeText(e.text, a.x, a.y);
     }
-    ctx.restore();
     return;
   }
-  if (!buildPath(t, doc, e)) {
-    ctx.restore();
-    return;
-  }
+  if (!buildPath(t, doc, e)) return;
   const closed = e.kind === 'circle' || e.kind === 'shape' || (e.kind === 'path' && e.closed);
   if (closed && s.fill) {
     ctx.fillStyle = isGradient(s.fill) ? makePaint(t, s.fill, doc, e) : s.fill;
@@ -247,11 +240,28 @@ export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
     ctx.strokeStyle = hint;
     ctx.stroke();
   }
-  ctx.restore();
+}
+
+/**
+ * Zeichnet ein einzelnes Objekt in seinem echten Stil. Ohne save/restore je Objekt (teuer bei
+ * vielen Objekten): nur Bilder (Transformation) sichern den Zustand, sonst wird zurückgesetzt.
+ */
+export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
+  const ctx = t.ctx;
+  if (e.kind === 'image') {
+    ctx.save();
+    drawEntityInner(t, doc, e);
+    ctx.restore();
+    return;
+  }
+  drawEntityInner(t, doc, e);
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
 }
 
 /** Zeichnet alle sichtbaren Objekte in Zeichenreihenfolge (ohne Konstruktionsgeometrie). */
 export function drawDesign(t: DesignTarget, doc: SketchDoc, opts: DesignOptions = {}): void {
+  t.ctx.save();
   for (const id of visibleOrder(doc)) {
     const e = doc.entities[id];
     if (!e) continue;
@@ -259,4 +269,5 @@ export function drawDesign(t: DesignTarget, doc: SketchDoc, opts: DesignOptions 
     if (opts.skip?.has(id)) continue;
     drawEntity(t, doc, e);
   }
+  t.ctx.restore();
 }

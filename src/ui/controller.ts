@@ -244,10 +244,11 @@ export class AppController {
   private tools = new Map<string, Tool>();
   current: Tool;
   /** Wird von der Zeichenfläche gesetzt */
-  canvas: { vp(): Viewport; layout(): SceneLayout | null; requestRender(): void } = {
+  canvas: { vp(): Viewport; layout(): SceneLayout | null; requestRender(): void; invalidate(): void } = {
     vp: () => ({ cx: 0, cy: 0, zoom: 4, width: 800, height: 600 }),
     layout: () => null,
     requestRender: () => {},
+    invalidate: () => {},
   };
   readonly ctx: ToolContext;
 
@@ -308,7 +309,7 @@ export class AppController {
       const a = this.ui.getState().appearance;
       if (a.theme !== 'system') return;
       applyAppearance(a);
-      this.canvas.requestRender();
+      this.canvas.invalidate();
     });
     const app = this;
     this.ctx = {
@@ -1630,7 +1631,7 @@ export class AppController {
     saveAppearance(next);
     this.ui.setState({ appearance: next });
     applyAppearance(next);
-    this.canvas.requestRender();
+    this.canvas.invalidate();
   }
 
   openExport(format: ExportFormat = 'svg', dpi?: number): void {

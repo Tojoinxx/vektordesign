@@ -1,4 +1,4 @@
-import { parse, type Font } from 'opentype.js';
+import type { Font } from 'opentype.js';
 import type { Contour, ShapeNode, TextEntity, Vec2 } from '../model/types';
 import { isTauri } from './files';
 import plex400 from '@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff?url';
@@ -31,17 +31,20 @@ export function loadFont(family: string, weight: number, italic: boolean): Promi
   return p;
 }
 
+/** opentype.js erst laden, wenn Umrisse gebraucht werden (rund 170 KB weniger beim Start). */
+const parse = async (buf: ArrayBuffer): Promise<Font> => (await import('opentype.js')).parse(buf);
+
 async function loadUncached(family: string, weight: number, italic: boolean): Promise<LoadedFont> {
   if (family.toLowerCase() !== 'ibm plex sans') {
     try {
       const bytes = isTauri() ? await fromDesktop(family, weight, italic) : await fromLocalFonts(family, weight, italic);
-      if (bytes) return { font: parse(bytes), substitute: false };
+      if (bytes) return { font: await parse(bytes), substitute: false };
     } catch {
       // weiter mit Ersatzschrift
     }
   }
   const url = weight >= 600 ? (italic ? plex700i : plex700) : italic ? plex400i : plex400;
-  return { font: parse(await fetchBytes(url)), substitute: family.toLowerCase() !== 'ibm plex sans' };
+  return { font: await parse(await fetchBytes(url)), substitute: family.toLowerCase() !== 'ibm plex sans' };
 }
 
 async function fetchBytes(url: string): Promise<ArrayBuffer> {

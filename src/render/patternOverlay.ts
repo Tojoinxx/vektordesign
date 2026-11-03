@@ -8,16 +8,32 @@ import { toScreen, type Viewport } from './viewport';
  * Bildschirm-Anzeige der Schnittteile (wird nie exportiert): Nahtzugabe gestrichelt, Fadenlauf-Pfeil,
  * Beschriftung, Nähte farbig mit Nummer (grün = passt, violett = Bündchen gedehnt, rot = Längen passen nicht).
  */
+/** Geometrie, Nahtzugaben und Nahtprüfung je Zeichnung zwischenspeichern (Zoomen/Verschieben ändern sie nicht). */
+const memo = new WeakMap<SketchDoc, { geoms: Map<string, PieceGeom>; allowances: Map<string, Vec2[][]>; checks: ReturnType<typeof checkSeams> }>();
+function patternData(doc: SketchDoc) {
+  let m = memo.get(doc);
+  if (!m) {
+    const geoms = new Map<string, PieceGeom>();
+    const allowances = new Map<string, Vec2[][]>();
+    for (const p of doc.pattern?.pieces ?? []) {
+      if (isHidden(doc, p.outline)) continue;
+      const g = pieceGeom(doc, p);
+      if (g) {
+        geoms.set(p.id, g);
+        allowances.set(p.id, seamAllowanceOutline(g));
+      }
+    }
+    m = { geoms, allowances, checks: geoms.size ? checkSeams(doc) : [] };
+    memo.set(doc, m);
+  }
+  return m;
+}
+
 export function drawPatternOverlay(ctx: CanvasRenderingContext2D, vp: Viewport, doc: SketchDoc): void {
   const pat = doc.pattern;
   if (!pat?.pieces.length) return;
   const T = (p: Vec2) => toScreen(vp, p);
-  const geoms = new Map<string, PieceGeom>();
-  for (const p of pat.pieces) {
-    if (isHidden(doc, p.outline)) continue;
-    const g = pieceGeom(doc, p);
-    if (g) geoms.set(p.id, g);
-  }
+  const { geoms, allowances, checks } = patternData(doc);
   if (!geoms.size) return;
   ctx.save();
   const poly = (pts: Vec2[], closed: boolean) => {
@@ -31,11 +47,11 @@ export function drawPatternOverlay(ctx: CanvasRenderingContext2D, vp: Viewport, 
   };
 
   // Nahtzugabe und Fadenlauf
-  for (const g of geoms.values()) {
+  for (const [pid, g] of geoms) {
     ctx.setLineDash([6, 4]);
     ctx.strokeStyle = THEME.pattern;
     ctx.lineWidth = 1;
-    for (const sa of seamAllowanceOutline(g)) {
+    for (const sa of allowances.get(pid) ?? []) {
       poly(sa, true);
       ctx.stroke();
     }
@@ -65,7 +81,6 @@ export function drawPatternOverlay(ctx: CanvasRenderingContext2D, vp: Viewport, 
   }
 
   // Nähte
-  const checks = checkSeams(doc);
   const tags = new Map<string, { at: Vec2; dir: Vec2; labels: string[]; color: string }>();
   checks.forEach((c, i) => {
     const color = !c.ok ? THEME.conflict : c.ribbed && Math.abs(c.diff) > 2 ? THEME.seamRib : THEME.seamOk;

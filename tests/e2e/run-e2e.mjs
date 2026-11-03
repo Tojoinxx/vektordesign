@@ -2029,10 +2029,13 @@ await step('Größentabelle eines Shops einfügen: Polo XS–XXL, jede Größe e
   await page.click('[data-testid="spec-chart"]');
   await page.waitForSelector('[data-testid="sizechart"]');
   await page.click('[data-testid="sizechart-text"]');
-  await page.keyboard.type('SIZE GUIDE Polo Shirt\nCM XS S M L XL XXL\nA TOTAL LENGTH 65 67 69 71 73 75\nB CHEST WIDTH 56 58 60 62 64 66\nINCH XS S M L XL XXL\nA TOTAL LENGTH 25.6 26.4 27.2 28 28.8 29.5');
+  await page.keyboard.type(
+    'SIZE GUIDE Polo Shirt\nCM XS S M L XL XXL\nA TOTAL LENGTH 65 67 69 71 73 75\nB CHEST WIDTH 56 58 60 62 64 66\nINCH XS S M L XL XXL\nA TOTAL LENGTH 25.6 26.4 27.2 28 28.8 29.5',
+  );
   await page.click('[data-testid="sizechart-read"]');
   const note = await page.$eval('[data-testid="sizechart-note"]', (e) => e.textContent);
   assert(/Gesamtlänge/.test(note) && /Brustweite/.test(note) && /6 Größen/.test(note) && /cm/.test(note), `Erkannt: ${note}`);
+  await page.waitForFunction(() => document.querySelector('[data-testid="sc-H-XL-chest"]')?.value === '64', { timeout: 3000 }).catch(() => {});
   const xl = await page.$eval('[data-testid="sc-H-XL-chest"]', (e) => e.value);
   assert(xl === '64', `XL Brust im Raster: ${xl}`);
   await shot('21-groessentabelle');

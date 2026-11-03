@@ -3,7 +3,8 @@ import { garmentOf } from '../model/garments';
 import { productionOf } from '../model/production';
 import { docBBox } from '../model/bounds';
 import type { Vec2 } from '../model/types';
-import { renderScene, type SceneLayout } from '../render/renderer';
+import { createSceneCache, renderScene, type SceneLayout } from '../render/renderer';
+import { onImageLoaded } from '../model/image';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
 import type { PreflightResult } from '../model/preflight';
 import { computeSnap } from '../tools/snap';
@@ -119,18 +120,23 @@ export function CanvasView() {
     return { ...v, width: size.current.w, height: size.current.h };
   }, [app]);
 
+  const cache = useRef(createSceneCache());
+  /** Wird erhöht, wenn sich etwas außerhalb des Zustands ändert (Design, Bild geladen, Schrift). */
+  const version = useRef(0);
+
   const draw = useCallback(() => {
     frame.current = 0;
     const c = canvasRef.current;
     if (!c) return;
     const ctx = c.getContext('2d');
     if (!ctx) return;
-    const { dpr } = size.current;
+    const { dpr, w, h } = size.current;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const s = app.store.getState();
     const ui = app.ui.getState();
     const skip = ui.textEdit?.id ? new Set([ui.textEdit.id]) : undefined;
     textEdit.current = ui.textEdit?.id ?? null;
+    const key = [s.doc, s.analysis, s.selection, s.settings, s.view, w, h, dpr, ui.textEdit?.id, ui.printArea, ui.preflight, version.current];
     layoutRef.current = renderScene(
       ctx,
       {
@@ -144,7 +150,6 @@ export function CanvasView() {
         cursor: ui.cursorWorld,
       },
       (cx, v) => {
-        drawPrintArea(cx, v, s.doc, ui.printArea);
         app.current.drawOverlay?.(cx, v);
         const sym = s.symmetry;
         if (sym !== 'off') {
@@ -188,7 +193,15 @@ export function CanvasView() {
             }
           }
         }
-        drawPreflightMarks(cx, v, ui.preflight?.result ?? null);
+      },
+      {
+        cache: cache.current,
+        key,
+        dpr,
+        staticExtra: (cx, v) => {
+          drawPrintArea(cx, v, s.doc, ui.printArea);
+          drawPreflightMarks(cx, v, ui.preflight?.result ?? null);
+        },
       },
     );
   }, [app, vp]);
@@ -196,23 +209,32 @@ export function CanvasView() {
   const requestRender = useCallback(() => {
     if (!frame.current) frame.current = requestAnimationFrame(draw);
   }, [draw]);
+  /** Ruhende Ebene verwerfen und neu zeichnen. */
+  const invalidate = useCallback(() => {
+    version.current++;
+    requestRender();
+  }, [requestRender]);
 
   // Brücke für Werkzeuge und Controller
   useEffect(() => {
-    app.canvas = { vp, layout: () => layoutRef.current, requestRender };
+    app.canvas = { vp, layout: () => layoutRef.current, requestRender, invalidate };
     // Für Leistungsmessungen in Tests: sofort zeichnen
     (window as unknown as { __vdRenderNow?: () => void }).__vdRenderNow = draw;
     const u1 = app.store.subscribe(requestRender);
     const u2 = app.ui.subscribe((s, p) => {
       if (s.cursorWorld !== p.cursorWorld || s.dynValues !== p.dynValues || s.textEdit !== p.textEdit || s.preflight !== p.preflight || s.printArea !== p.printArea) requestRender();
     });
-    // Schriften geladen → neu zeichnen
-    void document.fonts?.ready.then(requestRender);
+    // Schriften oder Bilder geladen → neu zeichnen
+    void document.fonts?.ready.then(invalidate);
+    document.fonts?.addEventListener?.('loadingdone', invalidate);
+    const u3 = onImageLoaded(invalidate);
     return () => {
       u1();
       u2();
+      u3();
+      document.fonts?.removeEventListener?.('loadingdone', invalidate);
     };
-  }, [app, vp, requestRender, draw]);
+  }, [app, vp, requestRender, invalidate, draw]);
 
   // Größe
   useEffect(() => {
