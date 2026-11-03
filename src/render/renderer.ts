@@ -15,6 +15,7 @@ import { RULER, THEME } from './theme';
 import { gridStep, toScreen, toWorld, visibleWorld, type Viewport } from './viewport';
 import { formatNumber } from '../params/expr';
 import { drawPatternOverlay } from './patternOverlay';
+import { spritesAvailable, stamp } from './sprites';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -50,6 +51,50 @@ function labelWidth(ctx: Ctx, label: string): number {
 }
 
 export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp: Viewport) => void): SceneLayout {
+  const layout = renderBase(ctx, s);
+  renderTop(ctx, s.vp, s.cursor ?? null, toolOverlay);
+  return layout;
+}
+
+/**
+ * Oberste Schicht: Werkzeug-Vorschau und Lineale mit Mausmarke. Ändert sich bei jeder Mausbewegung; der Rest
+ * (renderBase) kann zwischengespeichert werden.
+ */
+export function renderTop(ctx: Ctx, vp: Viewport, cursor: Vec2 | null, toolOverlay?: (ctx: Ctx, vp: Viewport) => void): void {
+  ctx.save();
+  if (toolOverlay) {
+    ctx.save();
+    toolOverlay(ctx, vp);
+    ctx.restore();
+  }
+  drawRulers(ctx, vp, cursor);
+  ctx.restore();
+}
+
+/**
+ * Hervorhebung des Objekts unter der Maus – über der zwischengespeicherten unteren Schicht, damit beim
+ * Überfahren nicht alles neu gezeichnet werden muss.
+ */
+export function renderHover(ctx: Ctx, s: SceneState, layout: SceneLayout): void {
+  const id = s.hover;
+  if (!id) return;
+  const { doc, settings } = s;
+  const problems = problemSet(doc, s.analysis);
+  ctx.save();
+  if (id === ORIGIN_ID) drawOrigin(ctx, s.vp, true);
+  else if (doc.dims[id]) {
+    if (settings.showDims) drawDimensions(ctx, s, problems.items, id);
+  } else if (doc.constraints[id]) {
+    const g = layout.glyphs.filter((x) => x.constraintId === id);
+    if (g.length) drawGlyphs(ctx, g, { hover: id, selection: s.selection, problems: problems.items });
+  } else if (settings.showOverlay && (doc.entities[id] || doc.points[id])) {
+    drawSketchOverlay(ctx, s, problems.entities, (x) => x === id || (doc.entities[x]?.kind === 'line' && pathIdOfLine(doc, x) === id));
+  }
+  ctx.restore();
+}
+
+/** Alles außer Werkzeug-Vorschau und Linealen: Raster, Design, Skizze, Bemaßungen, Symbole, Ursprung. */
+export function renderBase(ctx: Ctx, s: SceneState, staticOverlay?: (ctx: Ctx, vp: Viewport) => void): SceneLayout {
   const { vp, doc, settings } = s;
   ctx.save();
   ctx.fillStyle = THEME.paper;
@@ -74,13 +119,11 @@ export function renderScene(ctx: Ctx, s: SceneState, toolOverlay?: (ctx: Ctx, vp
     drawGlyphs(ctx, layout.glyphs, { hover: s.hover, selection: s.selection, problems: problems.items });
   }
   drawOrigin(ctx, vp, s.hover === ORIGIN_ID || s.selection.has(ORIGIN_ID));
-
-  if (toolOverlay) {
+  if (staticOverlay) {
     ctx.save();
-    toolOverlay(ctx, vp);
+    staticOverlay(ctx, vp);
     ctx.restore();
   }
-  drawRulers(ctx, vp, s.cursor ?? null);
   ctx.restore();
   return layout;
 }
@@ -232,14 +275,14 @@ function isFree(s: SceneState, e: Entity): boolean {
   }
 }
 
-function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
+function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>, only?: (id: Id) => boolean): void {
   const { doc, vp } = s;
   const T = (p: Vec2) => toScreen(vp, p);
   ctx.save();
   ctx.lineCap = 'round';
   // Pfadinneres hervorheben, wenn ausgewählt/überfahren
   for (const e of Object.values(doc.entities)) {
-    if (e.kind !== 'path' || isHidden(doc, e.id)) continue;
+    if (e.kind !== 'path' || isHidden(doc, e.id) || (only && !only(e.id))) continue;
     if (!(s.selection.has(e.id) || s.hover === e.id)) continue;
     ctx.beginPath();
     traceContour(ctx, T, { ...pathContour(doc, e), closed: true });
@@ -259,7 +302,7 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     return b.path;
   };
   for (const e of Object.values(doc.entities)) {
-    if (e.kind === 'path' || isHidden(doc, e.id)) continue;
+    if (e.kind === 'path' || isHidden(doc, e.id) || (only && !only(e.id))) continue;
     if (e.kind === 'text') {
       const sel = s.selection.has(e.id) || s.hover === e.id;
       if (!sel) continue;
@@ -344,13 +387,24 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
     }
     return p;
   };
-  for (const p of Object.values(doc.points)) {
-    if (p.id === ORIGIN_ID || isHidden(doc, p.id)) continue;
+  // Sehr viele sichtbare Punkte (weit herausgezoomt): nur ausgewählte, überfahrene und fehlerhafte zeigen –
+  // ein Teppich aus Tausenden Quadraten hilft niemandem und kostet die halbe Zeichenzeit
+  const allPts = only ? Object.values(doc.points).filter((p) => only(p.id)) : Object.values(doc.points);
+  let visible = 0;
+  for (const p of allPts) {
+    const sp = T(p);
+    if (sp.x >= 0 && sp.y >= 0 && sp.x <= vp.width && sp.y <= vp.height && ++visible > DENSE_POINTS) break;
+  }
+  const dense = visible > DENSE_POINTS;
+  for (const p of allPts) {
+    if (p.id === ORIGIN_ID) continue;
+    const sel = s.selection.has(p.id);
+    const hov = s.hover === p.id;
+    if (dense && !sel && !hov && !problems.has(p.id)) continue;
+    if (isHidden(doc, p.id)) continue;
     const sp = T(p);
     if (sp.x < -10 || sp.y < -10 || sp.x > vp.width + 10 || sp.y > vp.height + 10) continue;
     const key = Math.round(sp.x) * 100003 + Math.round(sp.y);
-    const sel = s.selection.has(p.id);
-    const hov = s.hover === p.id;
     if (drawn.has(key) && !sel && !hov) continue;
     drawn.add(key);
     const owner = p.owner ? doc.entities[p.owner] : undefined;
@@ -392,6 +446,9 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>): void {
   ctx.restore();
 }
 
+/** Ab so vielen sichtbaren Punkten werden nur noch wichtige Punkte gezeichnet. */
+const DENSE_POINTS = 900;
+
 function arrowPath(path: Path2D, tip: Vec2, dir: Vec2, size = 9): void {
   // dir zeigt in Bildschirmkoordinaten zur Spitze
   const l = Math.hypot(dir.x, dir.y) || 1;
@@ -405,7 +462,7 @@ function arrowPath(path: Path2D, tip: Vec2, dir: Vec2, size = 9): void {
   path.closePath();
 }
 
-function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>): SceneLayout['dims'] {
+function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>, only?: Id): SceneLayout['dims'] {
   const { doc, vp } = s;
   const px = 1 / vp.zoom;
   const out: SceneLayout['dims'] = [];
@@ -414,7 +471,7 @@ function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>): SceneLayout
   const labels: { x: number; y: number; text: string; color: string; box: { x: number; y: number; w: number; h: number }; sel: boolean; hov: boolean }[] = [];
   ctx.save();
   ctx.font = DIM_FONT;
-  for (const d of Object.values(doc.dims) as Dimension[]) {
+  for (const d of (only ? [doc.dims[only]].filter(Boolean) : Object.values(doc.dims)) as Dimension[]) {
     if (d.refs.some((r) => isHidden(doc, r))) continue;
     const g = dimGeometry(doc, d, px, s.settings.dimDisplay);
     if (!g) continue;
@@ -458,7 +515,31 @@ function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>): SceneLayout
     ctx.stroke(grp.lines);
     ctx.fill(grp.arrows);
   }
-  // Textfelder (Hintergrund) in einem Zug, dann Texte
+  // Textfelder als fertige Vorlagen stempeln (Text + Hintergrund), sonst einzeln zeichnen
+  if (spritesAvailable(ctx)) {
+    const halo = THEME.dimHalo;
+    const selBg = THEME.dimSelectedBg;
+    for (const l of labels) {
+      const w = l.box.w;
+      const h = l.box.h;
+      stamp(ctx, `d|${l.text}|${l.color}|${l.sel ? 1 : 0}${l.hov ? 1 : 0}|${halo}|${selBg}`, l.x, l.y, w + 2, h + 2, w / 2 + 1, h / 2 + 1, (c) => {
+        c.fillStyle = l.sel ? selBg : halo;
+        c.fillRect(-w / 2, -h / 2, w, h);
+        if (l.sel || l.hov) {
+          c.strokeStyle = l.color;
+          c.lineWidth = 1;
+          c.strokeRect(-w / 2 + 0.5, -h / 2 + 0.5, w - 1, h - 1);
+        }
+        c.font = DIM_FONT;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillStyle = l.color;
+        c.fillText(l.text, 0, 0.5);
+      });
+    }
+    ctx.restore();
+    return out;
+  }
   const halo = new Path2D();
   for (const l of labels) if (!l.sel) halo.rect(l.box.x, l.box.y, l.box.w, l.box.h);
   ctx.fillStyle = THEME.dimHalo;

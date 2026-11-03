@@ -134,10 +134,14 @@ export function dimGeometry(doc: SketchDoc, d: Dimension, px: number, display: S
         if (!c) return null;
         const C = pt(doc, c.center);
         const ar = arcOf(doc, d.refs[0]);
-        const ang = d.angle ?? (ar ? (() => {
-          const g = arcGeom(doc, ar);
-          return g.a0 + g.sweep / 2;
-        })() : Math.PI / 4);
+        const ang =
+          d.angle ??
+          (ar
+            ? (() => {
+                const g = arcGeom(doc, ar);
+                return g.a0 + g.sweep / 2;
+              })()
+            : Math.PI / 4);
         const dir = { x: Math.cos(ang), y: Math.sin(ang) };
         const rim = add(C, mul(dir, c.r));
         const textDist = Math.max(d.offset, 0) + 14 * px;

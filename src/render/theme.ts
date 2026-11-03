@@ -163,9 +163,12 @@ export const THEME: CanvasPalette & { uiFont: string } = {
 };
 
 let mode: CanvasMode = 'light';
+/** Zählt jeden Wechsel der Farben (für zwischengespeicherte Bilder der Zeichenfläche) */
+export let themeVersion = 0;
 
 export function setCanvasMode(next: CanvasMode): void {
   mode = next;
+  themeVersion++;
   Object.assign(THEME, next === 'dark' ? DARK_CANVAS : LIGHT_CANVAS);
 }
 

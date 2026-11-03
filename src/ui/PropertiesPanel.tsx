@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bold, CircleDot, Italic, Repeat, Trash2 } from 'lucide-react';
 import type { Gradient, GradientStop, Id, ImageEntity, ShapeEntity, Style, TextEntity } from '../model/types';
 import { contoursBBox, shapeWorldContours } from '../model/shape';
@@ -240,7 +240,12 @@ function GradientEditor({ gradient, onChange, onPreview }: { gradient: Gradient;
           <ColorButton
             label="Farbe der Stufe"
             value={sel.color}
-            onPreview={(c) => setStops(stops.map((s, k) => (k === selIdx ? { ...s, color: c } : s)), false)}
+            onPreview={(c) =>
+              setStops(
+                stops.map((s, k) => (k === selIdx ? { ...s, color: c } : s)),
+                false,
+              )
+            }
             onChange={(c) => {
               const next = stops.map((s, k) => (k === selIdx ? { ...s, color: c } : s));
               if (app.editor.dragging) {
@@ -256,7 +261,12 @@ function GradientEditor({ gradient, onChange, onPreview }: { gradient: Gradient;
               min={0}
               max={100}
               value={Math.round(sel.opacity * 100)}
-              onChange={(e) => setStops(stops.map((s, k) => (k === selIdx ? { ...s, opacity: Number(e.target.value) / 100 } : s)), false)}
+              onChange={(e) =>
+                setStops(
+                  stops.map((s, k) => (k === selIdx ? { ...s, opacity: Number(e.target.value) / 100 } : s)),
+                  false,
+                )
+              }
               onPointerUp={() => app.editor.dragging && app.editor.endDrag()}
               onKeyUp={() => app.editor.dragging && app.editor.endDrag()}
             />
@@ -303,7 +313,13 @@ function GradientEditor({ gradient, onChange, onPreview }: { gradient: Gradient;
           data-testid="fade-btn"
           onClick={() => {
             const firstStop = stops[0];
-            onChange({ ...gradient, stops: [{ ...firstStop, offset: 0, opacity: 1 }, { offset: 1, color: firstStop.color, opacity: 0 }] });
+            onChange({
+              ...gradient,
+              stops: [
+                { ...firstStop, offset: 0, opacity: 1 },
+                { offset: 1, color: firstStop.color, opacity: 0 },
+              ],
+            });
           }}
         >
           Verblassen
@@ -335,7 +351,7 @@ function StrokeEditor({ targets, style }: { targets: Id[]; style: Style }) {
             { value: 'off', label: 'Keine' },
             { value: 'on', label: 'Farbe' },
           ]}
-          onChange={(v) => apply.commit({ stroke: v === 'on' ? style.stroke ?? DEFAULT_STYLE.stroke : null })}
+          onChange={(v) => apply.commit({ stroke: v === 'on' ? (style.stroke ?? DEFAULT_STYLE.stroke) : null })}
         />
         {on && <ColorButton label="Konturfarbe" value={style.stroke!} onPreview={(c) => apply.preview({ stroke: c })} onChange={(c) => apply.commit({ stroke: c })} />}
       </div>
@@ -456,7 +472,7 @@ function ImageProps({ image }: { image: ImageEntity }) {
         Nur Vorlage zum Nachzeichnen (wird nicht exportiert)
       </label>
       <div className="stack">
- <button className="btn accent" onClick={() => app.vectorizeImageDialog(image.id)} data-testid="image-vectorize" title="Aus dem Bild saubere Vektorformen machen (je Farbe eine Form)">
+        <button className="btn accent" onClick={() => app.vectorizeImageDialog(image.id)} data-testid="image-vectorize" title="Aus dem Bild saubere Vektorformen machen (je Farbe eine Form)">
           Vektorisieren …
         </button>
         <button className="btn" onClick={() => app.calibrateImage(image.id)} data-testid="image-calibrate" title="Zwei Punkte einer bekannten Strecke anklicken und das echte Maß eingeben">
@@ -523,7 +539,9 @@ function ShapeProps({ shape }: { shape: ShapeEntity }) {
         {field('height', 'Höhe', hv, setHv)}
       </div>
       <p className="muted small">
-        {driving ? `Festgelegt durch ${driving.name} (${driving.kind === 'width' ? 'Breite' : 'Höhe'}) – Seitenverhältnis bleibt erhalten.` : 'Wert eingeben – die Form wird proportional skaliert. Ausdrücke wie 100/2 sind erlaubt.'}
+        {driving
+          ? `Festgelegt durch ${driving.name} (${driving.kind === 'width' ? 'Breite' : 'Höhe'}) – Seitenverhältnis bleibt erhalten.`
+          : 'Wert eingeben – die Form wird proportional skaliert. Ausdrücke wie 100/2 sind erlaubt.'}
       </p>
     </section>
   );
@@ -673,11 +691,24 @@ function DimensionProps({ id }: { id: Id }) {
   );
 }
 
-function SketchInfo() {
+/** Ab so vielen Bemaßungen wird die Tabelle gekürzt (lange Listen machen das Panel träge und unübersichtlich). */
+const DIM_ROWS = 25;
+
+const SketchInfo = memo(function SketchInfo() {
   const app = useApp();
-  const doc = useAppState((s) => s.doc);
+  const dimIds = useAppState((s) => s.doc.dims);
+  const counts = useAppState((s) => `${Object.keys(s.doc.entities).length}|${Object.keys(s.doc.constraints).length}`);
   const analysis = useAppState((s) => s.analysis);
-  const dims = Object.values(doc.dims);
+  const selection = useAppState((s) => s.selection);
+  const [all, setAll] = useState(false);
+  const [filter, setFilter] = useState('');
+  const dimsAll = Object.values(dimIds);
+  const f = filter.trim().toLowerCase();
+  const matching = f ? dimsAll.filter((d) => d.name.toLowerCase().includes(f) || d.expr.toLowerCase().includes(f)) : dimsAll;
+  // ausgewählte Bemaßungen immer zeigen, auch wenn die Liste gekürzt ist
+  const shown = all || matching.length <= DIM_ROWS ? matching : [...matching.slice(0, DIM_ROWS), ...matching.slice(DIM_ROWS).filter((d) => selection.includes(d.id))];
+  const dims = shown;
+  const [nEnt, nCon] = counts.split('|');
   return (
     <section className="props-section">
       <h4>Skizze</h4>
@@ -685,6 +716,16 @@ function SketchInfo() {
         {analysis.label}
       </p>
       {analysis.detail && <p className="muted">{analysis.detail}</p>}
+      {dimsAll.length > DIM_ROWS && (
+        <input
+          className="dim-filter"
+          value={filter}
+          placeholder={`${dimsAll.length} Bemaßungen durchsuchen …`}
+          onChange={(e) => setFilter(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+          aria-label="Bemaßungen durchsuchen"
+        />
+      )}
       {dims.length > 0 && (
         <table className="dim-table" aria-label="Bemaßungen">
           <thead>
@@ -701,18 +742,23 @@ function SketchInfo() {
           </tbody>
         </table>
       )}
-      {!dims.length && <p className="muted">Noch keine Bemaßungen. Mit D bemaßen – Werte lassen sich hier später als Tabelle ändern.</p>}
+      {matching.length > dims.length && (
+        <button className="link small" onClick={() => setAll(true)} data-testid="dims-all">
+          Alle {matching.length} Bemaßungen zeigen
+        </button>
+      )}
+      {!dimsAll.length && <p className="muted">Noch keine Bemaßungen. Mit D bemaßen – Werte lassen sich hier später als Tabelle ändern.</p>}
       <p className="muted small">
-        {Object.keys(doc.entities).length} Objekte · {Object.keys(doc.constraints).length} Abhängigkeiten
+        {nEnt} Objekte · {nCon} Abhängigkeiten
       </p>
       <button className="link" onClick={() => app.ui.setState({ tutorialList: true })}>
         Tutorials ansehen
       </button>
     </section>
   );
-}
+});
 
-function DimRow({ id }: { id: Id }) {
+const DimRow = memo(function DimRow({ id }: { id: Id }) {
   const app = useApp();
   const d = useAppState((s) => s.doc.dims[id]);
   const selected = useAppState((s) => s.selection.includes(id));
@@ -756,4 +802,4 @@ function DimRow({ id }: { id: Id }) {
       <td className="num">{d.driven ? `(${formatNumber(d.value, 2)}${unit})` : `${formatNumber(d.value, 2)}${unit}`}</td>
     </tr>
   );
-}
+});

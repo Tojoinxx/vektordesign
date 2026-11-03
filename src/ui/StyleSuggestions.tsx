@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import type { Id, SketchDoc } from '../model/types';
 import { docBBox } from '../model/bounds';
 import { drawDesign } from '../render/drawDesign';
@@ -32,7 +32,14 @@ function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
     const ox = (W - w * s) / 2;
     const oy = (H - h * s) / 2;
     drawDesign(
-      { ctx, toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }), scale: s, minStrokePx: 0.75, design: true, contrast: { background: THEME.paper, hint: THEME.contrastHint } },
+      {
+        ctx,
+        toScreen: (p) => ({ x: ox + (p.x - box.minX) * s, y: oy + (box.maxY - p.y) * s }),
+        scale: s,
+        minStrokePx: 0.75,
+        design: true,
+        contrast: { background: THEME.paper, hint: THEME.contrastHint },
+      },
       doc,
       { only },
     );
@@ -41,7 +48,41 @@ function Thumb({ doc, only }: { doc: SketchDoc; only: Set<Id> }) {
 }
 
 /** Stilvorschläge für Auswahl oder ganzes Motiv. */
-export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; whole?: boolean }) {
+const OPEN_KEY = 'vd.suggestions.open';
+function loadOpen(): boolean {
+  try {
+    return localStorage.getItem(OPEN_KEY) === '1';
+  } catch {
+    return true;
+  }
+}
+
+/** Stilvorschläge – einklappbar; eingeklappt wird nichts berechnet. */
+export function StyleSuggestions(p: { targets: Id[]; whole?: boolean }) {
+  const [open, setOpen] = useState(loadOpen);
+  const toggle = () => {
+    setOpen((o) => {
+      try {
+        localStorage.setItem(OPEN_KEY, o ? '0' : '1');
+      } catch {
+        /* egal */
+      }
+      return !o;
+    });
+  };
+  if (!p.targets.length) return null;
+  return (
+    <section className="props-section" id="stilvorschlaege">
+      <button className="section-toggle" onClick={toggle} aria-expanded={open} data-testid="suggestions-toggle">
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <h4>Stilvorschläge</h4>
+      </button>
+      {open && <SuggestionsBody targets={p.targets} whole={p.whole} />}
+    </section>
+  );
+}
+
+function SuggestionsBody({ targets, whole = false }: { targets: Id[]; whole?: boolean }) {
   const app = useApp();
   const doc = useAppState((s) => s.doc);
   const [ai, setAi] = useState<StyleSuggestion[]>([]);
@@ -57,8 +98,9 @@ export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; wh
     setAi([]);
     setErr(null);
   }, [key]);
-
-  if (!targets.length) return null;
+  // Vorschau-Dokumente nur neu bauen, wenn sich Ziele, Stile oder Vorschläge ändern
+  const localPreviews = useMemo(() => local.map((s) => previewDoc(doc, s)), [local, doc]);
+  const aiPreviews = useMemo(() => ai.map((s) => previewDoc(doc, s)), [ai, doc]);
 
   const apply = (s: StyleSuggestion) => {
     const out = app.editor.setStyles(s.styles, `Stilvorschlag „${s.name}“`);
@@ -83,11 +125,11 @@ export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; wh
     }
   };
 
-  const grid = (list: StyleSuggestion[]) => (
+  const grid = (list: StyleSuggestion[], previews: SketchDoc[]) => (
     <div className="sugg-grid">
-      {list.map((s) => (
+      {list.map((s, i) => (
         <button key={s.id} className="sugg" onClick={() => apply(s)} title={`Übernehmen: ${s.name}`} data-testid="suggestion">
-          <Thumb doc={previewDoc(doc, s)} only={only} />
+          <Thumb doc={previews[i]} only={only} />
           <span>{s.name}</span>
         </button>
       ))}
@@ -95,21 +137,20 @@ export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; wh
   );
 
   return (
-    <section className="props-section" id="stilvorschlaege">
-      <h4>Stilvorschläge</h4>
+    <>
       <p className="muted small">
-        {whole ? `Für das ganze Motiv (${targets.length} Objekt${targets.length === 1 ? '' : 'e'})` : targets.length === 1 ? 'Für die Auswahl' : `Für ${targets.length} ausgewählte Objekte`} · Klick übernimmt, Strg+Z nimmt
-        zurück
+        {whole ? `Für das ganze Motiv (${targets.length} Objekt${targets.length === 1 ? '' : 'e'})` : targets.length === 1 ? 'Für die Auswahl' : `Für ${targets.length} ausgewählte Objekte`} · Klick
+        übernimmt, Strg+Z nimmt zurück
       </p>
       {ai.length > 0 && (
         <>
           <p className="sugg-label">
             <Sparkles size={13} /> Von Claude
           </p>
-          {grid(ai)}
+          {grid(ai, aiPreviews)}
         </>
       )}
-      {grid(local)}
+      {grid(local, localPreviews)}
       <div className="sugg-ai">
         <input
           value={keyword}
@@ -126,6 +167,6 @@ export function StyleSuggestions({ targets, whole = false }: { targets: Id[]; wh
         </button>
       </div>
       {err && <p className="error-text">{err}</p>}
-    </section>
+    </>
   );
 }

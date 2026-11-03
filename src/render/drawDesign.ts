@@ -94,9 +94,9 @@ export function traceContour(ctx: Ctx, toScreen: (p: Vec2) => Vec2, c: Contour):
   if (c.closed) ctx.closePath();
 }
 
-function buildPath(t: DesignTarget, doc: SketchDoc, e: Entity): boolean {
+function buildPath(t: DesignTarget, doc: SketchDoc, e: Entity, begin = true): boolean {
   const ctx = t.ctx;
-  ctx.beginPath();
+  if (begin) ctx.beginPath();
   switch (e.kind) {
     case 'path': {
       if (pathVertices(doc, e).length < 2) return false;
@@ -117,6 +117,8 @@ function buildPath(t: DesignTarget, doc: SketchDoc, e: Entity): boolean {
     }
     case 'circle': {
       const c = t.toScreen(pt(doc, e.center));
+      // eigener Teilpfad (sonst verbindet ein gebündelter Strich den Kreis mit dem vorigen Objekt)
+      ctx.moveTo(c.x + e.r * t.scale, c.y);
       ctx.arc(c.x, c.y, e.r * t.scale, 0, Math.PI * 2);
       return true;
     }
@@ -250,13 +252,58 @@ export function drawEntity(t: DesignTarget, doc: SketchDoc, e: Entity): void {
   ctx.restore();
 }
 
-/** Zeichnet alle sichtbaren Objekte in Zeichenreihenfolge (ohne Konstruktionsgeometrie). */
+/**
+ * Schlüssel für Objekte, die sich mit ihren Nachbarn in einem Strich zeichnen lassen: nur Kontur, deckend,
+ * einfarbig, ohne Hilfsumriss. Sonst null (einzeln zeichnen).
+ */
+function strokeBatchKey(t: DesignTarget, doc: SketchDoc, e: Entity): string | null {
+  if (e.construction || e.kind === 'text' || e.kind === 'image') return null;
+  const s = e.style;
+  if ((s.opacity ?? 1) < 1 || !s.stroke || s.strokeWidth <= 0 || typeof s.stroke !== 'string' || !/^#[0-9a-f]{6}$/i.test(s.stroke)) return null;
+  const closed = e.kind === 'circle' || e.kind === 'shape' || (e.kind === 'path' && e.closed);
+  if (closed && s.fill) return null;
+  if (needsHint(t, e)) return null;
+  if (e.kind === 'path' && pathVertices(doc, e).length < 2) return null;
+  return `${s.stroke}|${s.strokeWidth}|${s.lineCap ?? 'butt'}|${s.dash ?? ''}`;
+}
+
+/**
+ * Zeichnet alle sichtbaren Objekte in Zeichenreihenfolge (ohne Konstruktionsgeometrie). Aufeinanderfolgende
+ * Objekte mit gleicher reiner Kontur werden in einem Strich gezeichnet – sieht gleich aus, ist bei vielen
+ * Linien aber um ein Vielfaches schneller.
+ */
 export function drawDesign(t: DesignTarget, doc: SketchDoc, opts: DesignOptions = {}): void {
+  const ctx = t.ctx;
+  let runKey: string | null = null;
+  let runStyle: Style | null = null;
+  const flush = () => {
+    if (runKey === null || !runStyle) return;
+    ctx.save();
+    ctx.globalAlpha = 1;
+    applyStroke(t, runStyle);
+    ctx.stroke();
+    ctx.restore();
+    runKey = null;
+    runStyle = null;
+  };
   for (const id of visibleOrder(doc)) {
     const e = doc.entities[id];
     if (!e) continue;
     if (opts.only && !opts.only.has(id)) continue;
     if (opts.skip?.has(id)) continue;
-    drawEntity(t, doc, e);
+    const key = strokeBatchKey(t, doc, e);
+    if (key === null) {
+      flush();
+      drawEntity(t, doc, e);
+      continue;
+    }
+    if (key !== runKey) {
+      flush();
+      runKey = key;
+      runStyle = e.style;
+      ctx.beginPath();
+    }
+    buildPath(t, doc, e, false);
   }
+  flush();
 }

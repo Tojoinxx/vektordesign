@@ -3,7 +3,8 @@ import { garmentOf } from '../model/garments';
 import { productionOf } from '../model/production';
 import { docBBox } from '../model/bounds';
 import type { Vec2 } from '../model/types';
-import { renderScene, type SceneLayout } from '../render/renderer';
+import { renderBase, renderHover, renderTop, type SceneLayout } from '../render/renderer';
+import { THEME, themeVersion } from '../render/theme';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
 import type { PreflightResult } from '../model/preflight';
 import { computeSnap } from '../tools/snap';
@@ -119,6 +120,15 @@ export function CanvasView() {
     return { ...v, width: size.current.w, height: size.current.h };
   }, [app]);
 
+  // Zwischengespeicherte untere Schicht (alles außer Werkzeug-Vorschau und Linealen)
+  const base = useRef<{ canvas: OffscreenCanvas | HTMLCanvasElement | null; key: unknown[]; ms: number; view: { cx: number; cy: number; zoom: number } | null }>({
+    canvas: null,
+    key: [],
+    ms: 0,
+    view: null,
+  });
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const draw = useCallback(() => {
     frame.current = 0;
     const c = canvasRef.current;
@@ -126,31 +136,54 @@ export function CanvasView() {
     const ctx = c.getContext('2d');
     if (!ctx) return;
     const { dpr } = size.current;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const s = app.store.getState();
     const ui = app.ui.getState();
     const skip = ui.textEdit?.id ? new Set([ui.textEdit.id]) : undefined;
     textEdit.current = ui.textEdit?.id ?? null;
-    layoutRef.current = renderScene(
-      ctx,
-      {
-        doc: s.doc,
-        analysis: s.analysis,
-        selection: new Set(s.selection),
-        hover: s.hover,
-        settings: s.settings,
-        vp: vp(),
-        skip,
-        cursor: ui.cursorWorld,
-      },
-      (cx, v) => {
-        drawPrintArea(cx, v, s.doc, ui.printArea);
-        app.current.drawOverlay?.(cx, v);
-        const sym = s.symmetry;
+    const v = vp();
+    const sym = s.symmetry;
+    // Überfahren (hover) gehört nicht zur unteren Schicht: wird oben drüber gezeichnet
+    const key = [s.doc, s.analysis, s.selection, s.settings, v.cx, v.cy, v.zoom, c.width, c.height, dpr, ui.textEdit?.id, ui.preflight, ui.printArea, sym, themeVersion];
+    const b = base.current;
+    const changed = !b.canvas || b.key.length !== key.length ? null : key.map((k, i) => k !== b.key[i]);
+    const fresh = !changed || changed.some(Boolean);
+    // Nur die Ansicht hat sich geändert (Zoomen/Verschieben) und volles Zeichnen ist teuer: das letzte Bild
+    // verschoben/skaliert zeigen und kurz nach der Bewegung scharf neu zeichnen
+    const viewOnly = !!changed && changed.every((d, i) => !d || i === 5 || i === 6 || i === 7);
+    if (fresh && viewOnly && b.ms > 6 && b.view && b.canvas) {
+      const k = v.zoom / b.view.zoom;
+      const tx = (v.width / 2) * (1 - k) + (b.view.cx - v.cx) * v.zoom;
+      const ty = (v.height / 2) * (1 - k) - (b.view.cy - v.cy) * v.zoom;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = THEME.paper;
+      ctx.fillRect(0, 0, v.width, v.height);
+      ctx.setTransform(k, 0, 0, k, tx * dpr, ty * dpr);
+      ctx.drawImage(b.canvas as CanvasImageSource, 0, 0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      renderTop(ctx, v, ui.cursorWorld ?? null, (cx, vv) => app.current.drawOverlay?.(cx, vv));
+      if (settle.current) clearTimeout(settle.current);
+      settle.current = setTimeout(() => {
+        settle.current = null;
+        b.ms = 0;
+        requestRenderRef.current();
+      }, 110);
+      return;
+    }
+    if (fresh) {
+      const t0 = performance.now();
+      if (!b.canvas || b.canvas.width !== c.width || b.canvas.height !== c.height) {
+        // normale Canvas (nicht OffscreenCanvas): wird im selben Modus wie die Zeichenfläche gerastert und
+        // lässt sich ohne Umweg kopieren
+        b.canvas = Object.assign(document.createElement('canvas'), { width: c.width, height: c.height });
+      }
+      const bctx = b.canvas.getContext('2d') as CanvasRenderingContext2D | null;
+      if (!bctx) return;
+      bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      layoutRef.current = renderBase(bctx, { doc: s.doc, analysis: s.analysis, selection: new Set(s.selection), hover: null, settings: s.settings, vp: v, skip, cursor: null }, (cx, vv) => {
+        drawPrintArea(cx, vv, s.doc, ui.printArea);
         if (sym !== 'off') {
-          // Achsen und gespiegelte Vorschau des laufenden Werkzeugs
-          const o = toScreen(v, { x: 0, y: 0 });
-          cx.save();
+          // Symmetrie-Achsen
+          const o = toScreen(vv, { x: 0, y: 0 });
           cx.strokeStyle = '#e8590c';
           cx.globalAlpha = 0.7;
           cx.setLineDash([8, 5]);
@@ -158,50 +191,71 @@ export function CanvasView() {
           cx.beginPath();
           if (sym === 'v' || sym === 'vh') {
             cx.moveTo(o.x, 0);
-            cx.lineTo(o.x, v.height);
+            cx.lineTo(o.x, vv.height);
           }
           if (sym === 'h' || sym === 'vh') {
             cx.moveTo(0, o.y);
-            cx.lineTo(v.width, o.y);
+            cx.lineTo(vv.width, o.y);
           }
           cx.stroke();
-          cx.restore();
-          if (DRAW_TOOLS.has(app.current.id)) {
-            const flips: [number, number][] =
-              sym === 'v'
-                ? [[-1, 1]]
-                : sym === 'h'
-                  ? [[1, -1]]
-                  : [
-                      [-1, 1],
-                      [1, -1],
-                      [-1, -1],
-                    ];
-            for (const [fx, fy] of flips) {
-              cx.save();
-              cx.globalAlpha = 0.45;
-              cx.translate(o.x, o.y);
-              cx.scale(fx, fy);
-              cx.translate(-o.x, -o.y);
-              app.current.drawOverlay?.(cx, v);
-              cx.restore();
-            }
-          }
+          cx.setLineDash([]);
+          cx.globalAlpha = 1;
         }
-        drawPreflightMarks(cx, v, ui.preflight?.result ?? null);
-      },
-    );
+        drawPreflightMarks(cx, vv, ui.preflight?.result ?? null);
+      });
+      b.key = key;
+      b.view = { cx: v.cx, cy: v.cy, zoom: v.zoom };
+      b.ms = performance.now() - t0;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(b.canvas as CanvasImageSource, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (s.hover && layoutRef.current) {
+      renderHover(ctx, { doc: s.doc, analysis: s.analysis, selection: new Set(s.selection), hover: s.hover, settings: s.settings, vp: v, skip }, layoutRef.current);
+    }
+    renderTop(ctx, v, ui.cursorWorld ?? null, (cx, vv) => {
+      app.current.drawOverlay?.(cx, vv);
+      if (sym !== 'off' && DRAW_TOOLS.has(app.current.id)) {
+        // gespiegelte Vorschau des laufenden Werkzeugs
+        const o = toScreen(vv, { x: 0, y: 0 });
+        const flips: [number, number][] =
+          sym === 'v'
+            ? [[-1, 1]]
+            : sym === 'h'
+              ? [[1, -1]]
+              : [
+                  [-1, 1],
+                  [1, -1],
+                  [-1, -1],
+                ];
+        for (const [fx, fy] of flips) {
+          cx.save();
+          cx.globalAlpha = 0.45;
+          cx.translate(o.x, o.y);
+          cx.scale(fx, fy);
+          cx.translate(-o.x, -o.y);
+          app.current.drawOverlay?.(cx, vv);
+          cx.restore();
+        }
+      }
+    });
   }, [app, vp]);
 
   const requestRender = useCallback(() => {
     if (!frame.current) frame.current = requestAnimationFrame(draw);
   }, [draw]);
+  const requestRenderRef = useRef(requestRender);
+  requestRenderRef.current = requestRender;
 
   // Brücke für Werkzeuge und Controller
   useEffect(() => {
     app.canvas = { vp, layout: () => layoutRef.current, requestRender };
     // Für Leistungsmessungen in Tests: sofort zeichnen
     (window as unknown as { __vdRenderNow?: () => void }).__vdRenderNow = draw;
+    (window as unknown as { __vdRenderFull?: () => void }).__vdRenderFull = () => {
+      base.current.key = [];
+      draw();
+    };
     const u1 = app.store.subscribe(requestRender);
     const u2 = app.ui.subscribe((s, p) => {
       if (s.cursorWorld !== p.cursorWorld || s.dynValues !== p.dynValues || s.textEdit !== p.textEdit || s.preflight !== p.preflight || s.printArea !== p.printArea) requestRender();
