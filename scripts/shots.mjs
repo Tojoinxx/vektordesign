@@ -16,11 +16,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'], headless: true });
 const only = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
-async function session(name, { width = 1440, height = 900, theme = 'light', scale = 1 } = {}, fn) {
+async function session(name, { width = 1440, height = 900, theme = 'light', scale = 1, touch = false } = {}, fn) {
   if (only && !only.test(name)) return;
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
-  await page.setViewport({ width, height, deviceScaleFactor: scale });
+  await page.setViewport({ width, height, deviceScaleFactor: scale, hasTouch: touch, isMobile: touch });
   await page.evaluateOnNewDocument((t) => {
     try {
       localStorage.setItem('vd.appearance', JSON.stringify({ theme: t }));
@@ -104,7 +104,7 @@ await session('dialoge', {}, async (page, shot) => {
     await page.evaluate((f) => window.vektordesign.ui.setState({ [f]: f === 'placement' ? null : false }), flag);
   }
 });
-await session('ipad', { width: 1180, height: 820, scale: 1 }, async (page, shot) => {
+await session('ipad', { width: 1180, height: 820, scale: 1, touch: true }, async (page, shot) => {
   await page.evaluate(demo);
   await shot('zeichnung');
 });

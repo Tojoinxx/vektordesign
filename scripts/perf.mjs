@@ -113,7 +113,7 @@ await page.keyboard.press('Escape');
 await sleep(300);
 
 async function profile(label, fn) {
-  if (!process.env.PROFILE) return;
+  if (!process.env.PROFILE) return fn();
   const cdp = await page.createCDPSession();
   await cdp.send('Profiler.enable');
   await cdp.send('Profiler.setSamplingInterval', { interval: 100 });
@@ -217,7 +217,6 @@ async function scenario(name, build) {
   await profile('Zoomen', async () => {
     fps = await zoomFps();
   });
-  if (!process.env.PROFILE) fps = await zoomFps();
   console.log(`  Zoomen: ${fps} Bilder/s`);
 
   let st;
