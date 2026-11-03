@@ -1,3 +1,4 @@
+import { spritesAvailable, stamp } from './sprites';
 import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
 import { arcGeom, arcMidpoint, arcOf, roundOf } from '../model/arc';
 import { circleOf, lineOf, pt } from '../model/doc';
@@ -231,34 +232,51 @@ export function drawGlyphIcon(ctx: Ctx, kind: ConstraintKind, cx: number, cy: nu
 }
 
 export function drawGlyphs(ctx: Ctx, items: GlyphItem[], opts: { hover: Id | null; selection: Set<Id>; problems: Set<Id> }): void {
+  const sprites = spritesAvailable(ctx);
   for (const g of items) {
     const sel = opts.selection.has(g.constraintId);
     const hov = opts.hover === g.constraintId;
     const bad = opts.problems.has(g.constraintId);
     const ink = bad ? THEME.conflict : sel ? THEME.selected : hov ? THEME.hover : THEME.glyphInk;
     if (g.small) {
-      ctx.save();
-      ctx.fillStyle = sel || hov || bad ? ink : THEME.glyphDot;
-      ctx.strokeStyle = sel || hov || bad ? ink : THEME.glyphDotEdge;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.rect(g.pos.x - 3, g.pos.y - 3, 6, 6);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      const fill = sel || hov || bad ? ink : THEME.glyphDot;
+      const edge = sel || hov || bad ? ink : THEME.glyphDotEdge;
+      const draw = (c: Ctx) => {
+        c.fillStyle = fill;
+        c.strokeStyle = edge;
+        c.lineWidth = 1.2;
+        c.beginPath();
+        c.rect(-3, -3, 6, 6);
+        c.fill();
+        c.stroke();
+      };
+      if (sprites) stamp(ctx, `gs|${fill}|${edge}`, g.pos.x, g.pos.y, 10, 10, 5, 5, draw);
+      else {
+        ctx.save();
+        ctx.translate(g.pos.x, g.pos.y);
+        draw(ctx);
+        ctx.restore();
+      }
       continue;
     }
-    const x = g.pos.x - GLYPH / 2;
-    const y = g.pos.y - GLYPH / 2;
-    ctx.save();
-    roundRect(ctx, x, y, GLYPH, GLYPH, 3);
-    ctx.fillStyle = sel ? THEME.glyphSelectedBg : hov ? THEME.glyphHoverBg : THEME.glyphBg;
-    ctx.fill();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = sel || hov || bad ? ink : THEME.glyphBorder;
-    ctx.stroke();
-    ctx.restore();
-    drawGlyphIcon(ctx, g.kind, g.pos.x, g.pos.y, ink);
+    const bg = sel ? THEME.glyphSelectedBg : hov ? THEME.glyphHoverBg : THEME.glyphBg;
+    const border = sel || hov || bad ? ink : THEME.glyphBorder;
+    const draw = (c: Ctx) => {
+      roundRect(c, -GLYPH / 2, -GLYPH / 2, GLYPH, GLYPH, 3);
+      c.fillStyle = bg;
+      c.fill();
+      c.lineWidth = 1;
+      c.strokeStyle = border;
+      c.stroke();
+      drawGlyphIcon(c, g.kind, 0, 0, ink);
+    };
+    if (sprites) stamp(ctx, `g|${g.kind}|${bg}|${border}|${ink}`, g.pos.x, g.pos.y, GLYPH + 4, GLYPH + 4, GLYPH / 2 + 2, GLYPH / 2 + 2, draw);
+    else {
+      ctx.save();
+      ctx.translate(g.pos.x, g.pos.y);
+      draw(ctx);
+      ctx.restore();
+    }
   }
 }
 

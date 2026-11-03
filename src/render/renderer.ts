@@ -15,6 +15,7 @@ import { RULER, THEME } from './theme';
 import { gridStep, toScreen, toWorld, visibleWorld, type Viewport } from './viewport';
 import { formatNumber } from '../params/expr';
 import { drawPatternOverlay } from './patternOverlay';
+import { spritesAvailable, stamp } from './sprites';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -60,9 +61,20 @@ export interface SceneCache {
   layout: SceneLayout | null;
   /** Schlüssel des letzten Bildes (auch ohne Zwischenspeicher gezeichnet) */
   last: readonly unknown[] | null;
+  /** Ansicht, in der die gespeicherte Ebene gezeichnet wurde */
+  view?: { cx: number; cy: number; zoom: number } | null;
+  /** Dauer des letzten vollen Zeichnens der ruhenden Ebene (ms, nur JavaScript) */
+  ms?: number;
+  /** Letztes Bild war nur die verschobene/skalierte gespeicherte Ebene (scharf nachzeichnen) */
+  fast?: boolean;
+  /** Nächstes Bild auf jeden Fall voll zeichnen */
+  forceFull?: boolean;
 }
 
-export const createSceneCache = (): SceneCache => ({ canvas: null, key: null, layout: null, last: null });
+export const createSceneCache = (): SceneCache => ({ canvas: null, key: null, layout: null, last: null, view: null, ms: 0, fast: false, forceFull: false });
+
+/** Ab dieser Zeichendauer (ms) zeigt Zoomen/Verschieben erst das skalierte letzte Bild. */
+const FAST_VIEW_MS = 6;
 
 const sameKey = (a: readonly unknown[] | null, b: readonly unknown[]) => !!a && a.length === b.length && a.every((v, i) => v === b[i]);
 
@@ -75,11 +87,40 @@ export function renderScene(
   ctx: Ctx,
   s: SceneState,
   toolOverlay?: (ctx: Ctx, vp: Viewport) => void,
-  opts: { staticExtra?: (ctx: Ctx, vp: Viewport) => void; cache?: SceneCache; key?: readonly unknown[]; dpr?: number } = {},
+  opts: { staticExtra?: (ctx: Ctx, vp: Viewport) => void; cache?: SceneCache; key?: readonly unknown[]; dpr?: number; viewIndex?: number } = {},
 ): SceneLayout {
   const { vp } = s;
   const { cache, key } = opts;
   let layout: SceneLayout;
+  // Zoomen/Verschieben bei teurer Zeichnung: gespeicherte Ebene verschoben und skaliert zeigen (60 Bilder/s);
+  // kurz nach der Bewegung zeichnet CanvasView scharf nach (forceFull)
+  const vi = opts.viewIndex;
+  if (cache) cache.fast = false;
+  if (cache && key && vi !== undefined && cache.canvas && cache.key && cache.view && cache.layout && !cache.forceFull && (cache.ms ?? 0) > FAST_VIEW_MS) {
+    const ck = cache.key;
+    const onlyView = ck.length === key.length && key[vi] !== ck[vi] && key.every((v, i) => i === vi || v === ck[i]);
+    if (onlyView) {
+      const dpr = opts.dpr ?? 1;
+      const k = vp.zoom / cache.view.zoom;
+      const tx = (vp.width / 2) * (1 - k) + (cache.view.cx - vp.cx) * vp.zoom;
+      const ty = (vp.height / 2) * (1 - k) - (cache.view.cy - vp.cy) * vp.zoom;
+      ctx.save();
+      ctx.fillStyle = THEME.paper;
+      ctx.fillRect(0, 0, vp.width, vp.height);
+      ctx.setTransform(k, 0, 0, k, tx * dpr, ty * dpr);
+      ctx.drawImage(cache.canvas as CanvasImageSource, 0, 0);
+      ctx.restore();
+      cache.last = key;
+      cache.fast = true;
+      if (toolOverlay) {
+        ctx.save();
+        toolOverlay(ctx, vp);
+        ctx.restore();
+      }
+      drawRulers(ctx, vp, s.cursor ?? null);
+      return cache.layout;
+    }
+  }
   // Ändert sich die ruhende Ebene gerade jedes Bild (Zoomen, Ziehen), direkt zeichnen –
   // der Zwischenspeicher lohnt erst, wenn sie zwei Bilder lang gleich bleibt.
   const steady = !!cache && !!key && sameKey(cache.last, key);
@@ -97,8 +138,12 @@ export function renderScene(
       if (!cctx) return renderScene(ctx, s, toolOverlay, { staticExtra: opts.staticExtra });
       cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // Überfahren wird darübergelegt, damit Mausbewegungen die ruhende Ebene nicht verwerfen
+      const t0 = performance.now();
       cache.layout = renderStatic(cctx, { ...s, hover: null }, opts.staticExtra);
+      cache.ms = performance.now() - t0;
       cache.key = key;
+      cache.view = { cx: vp.cx, cy: vp.cy, zoom: vp.zoom };
+      cache.forceFull = false;
     }
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -106,7 +151,11 @@ export function renderScene(
     ctx.restore();
     layout = cache.layout;
     if (s.hover) drawHover(ctx, s, layout);
-  } else layout = renderStatic(ctx, s, opts.staticExtra);
+  } else {
+    const t0 = performance.now();
+    layout = renderStatic(ctx, s, opts.staticExtra);
+    if (cache) cache.ms = performance.now() - t0;
+  }
 
   if (toolOverlay) {
     ctx.save();
@@ -434,14 +483,25 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>, only?: Se
     }
     return p;
   };
-  for (const p of Object.values(doc.points)) {
-    if (only && !only.has(p.id)) continue;
-    if (p.id === ORIGIN_ID || isHidden(doc, p.id)) continue;
+  // Sehr viele sichtbare Punkte (weit herausgezoomt): nur ausgewählte, überfahrene und fehlerhafte zeigen –
+  // ein Teppich aus Tausenden Quadraten hilft niemandem und kostet die halbe Zeichenzeit
+  const allPts = only ? Object.values(doc.points).filter((p) => only.has(p.id)) : Object.values(doc.points);
+  let visible = 0;
+  if (!only)
+    for (const p of allPts) {
+      const sp = T(p);
+      if (sp.x >= 0 && sp.y >= 0 && sp.x <= vp.width && sp.y <= vp.height && ++visible > DENSE_POINTS) break;
+    }
+  const dense = visible > DENSE_POINTS;
+  for (const p of allPts) {
+    if (p.id === ORIGIN_ID) continue;
+    const sel = s.selection.has(p.id);
+    const hov = s.hover === p.id;
+    if (dense && !sel && !hov && !problems.has(p.id)) continue;
+    if (isHidden(doc, p.id)) continue;
     const sp = T(p);
     if (sp.x < -10 || sp.y < -10 || sp.x > vp.width + 10 || sp.y > vp.height + 10) continue;
     const key = Math.round(sp.x) * 100003 + Math.round(sp.y);
-    const sel = s.selection.has(p.id);
-    const hov = s.hover === p.id;
     if (drawn.has(key) && !sel && !hov) continue;
     drawn.add(key);
     const owner = p.owner ? doc.entities[p.owner] : undefined;
@@ -482,6 +542,9 @@ function drawSketchOverlay(ctx: Ctx, s: SceneState, problems: Set<Id>, only?: Se
   }
   ctx.restore();
 }
+
+/** Ab so vielen sichtbaren Punkten werden nur noch wichtige Punkte gezeichnet. */
+const DENSE_POINTS = 900;
 
 function arrowPath(path: Path2D, tip: Vec2, dir: Vec2, size = 9): void {
   // dir zeigt in Bildschirmkoordinaten zur Spitze
@@ -549,7 +612,31 @@ function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>, only?: Id): 
     ctx.stroke(grp.lines);
     ctx.fill(grp.arrows);
   }
-  // Textfelder (Hintergrund) in einem Zug, dann Texte
+  // Textfelder als fertige Vorlagen stempeln (Text + Hintergrund), sonst einzeln zeichnen
+  if (spritesAvailable(ctx)) {
+    const halo = THEME.dimHalo;
+    const selBg = THEME.dimSelectedBg;
+    for (const l of labels) {
+      const w = l.box.w;
+      const h = l.box.h;
+      stamp(ctx, `d|${l.text}|${l.color}|${l.sel ? 1 : 0}${l.hov ? 1 : 0}|${halo}|${selBg}`, l.x, l.y, w + 2, h + 2, w / 2 + 1, h / 2 + 1, (c) => {
+        c.fillStyle = l.sel ? selBg : halo;
+        c.fillRect(-w / 2, -h / 2, w, h);
+        if (l.sel || l.hov) {
+          c.strokeStyle = l.color;
+          c.lineWidth = 1;
+          c.strokeRect(-w / 2 + 0.5, -h / 2 + 0.5, w - 1, h - 1);
+        }
+        c.font = DIM_FONT;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillStyle = l.color;
+        c.fillText(l.text, 0, 0.5);
+      });
+    }
+    ctx.restore();
+    return out;
+  }
   const halo = new Path2D();
   for (const l of labels) if (!l.sel) halo.rect(l.box.x, l.box.y, l.box.w, l.box.h);
   ctx.fillStyle = THEME.dimHalo;

@@ -121,6 +121,9 @@ export function CanvasView() {
   }, [app]);
 
   const cache = useRef(createSceneCache());
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drawRef = useRef<() => void>(() => {});
   /** Wird erhöht, wenn sich etwas außerhalb des Zustands ändert (Design, Bild geladen, Schrift). */
   const version = useRef(0);
 
@@ -198,14 +201,34 @@ export function CanvasView() {
         cache: cache.current,
         key,
         dpr,
+        viewIndex: 4,
         staticExtra: (cx, v) => {
           drawPrintArea(cx, v, s.doc, ui.printArea);
           drawPreflightMarks(cx, v, ui.preflight?.result ?? null);
         },
       },
     );
+    // Direkt gezeichnet (Änderung): kurz danach im Leerlauf die ruhende Ebene speichern, damit Mausbewegung
+    // und Zoomen sofort den schnellen Weg nehmen
+    if (!cache.current.fast && cache.current.key !== key) {
+      if (idle.current) clearTimeout(idle.current);
+      idle.current = setTimeout(() => {
+        idle.current = null;
+        if (!frame.current) frame.current = requestAnimationFrame(() => drawRef.current());
+      }, 150);
+    }
+    // Nach Zoomen/Verschieben mit skaliertem Bild: kurz danach scharf neu zeichnen
+    if (cache.current.fast) {
+      if (settle.current) clearTimeout(settle.current);
+      settle.current = setTimeout(() => {
+        settle.current = null;
+        cache.current.forceFull = true;
+        if (!frame.current) frame.current = requestAnimationFrame(() => drawRef.current());
+      }, 110);
+    }
   }, [app, vp]);
 
+  drawRef.current = draw;
   const requestRender = useCallback(() => {
     if (!frame.current) frame.current = requestAnimationFrame(draw);
   }, [draw]);
@@ -220,6 +243,12 @@ export function CanvasView() {
     app.canvas = { vp, layout: () => layoutRef.current, requestRender, invalidate };
     // Für Leistungsmessungen in Tests: sofort zeichnen
     (window as unknown as { __vdRenderNow?: () => void }).__vdRenderNow = draw;
+    // volles Neuzeichnen ohne Zwischenspeicher (Messungen)
+    (window as unknown as { __vdRenderFull?: () => void }).__vdRenderFull = () => {
+      cache.current.key = null;
+      cache.current.last = null;
+      draw();
+    };
     const u1 = app.store.subscribe(requestRender);
     const u2 = app.ui.subscribe((s, p) => {
       if (s.cursorWorld !== p.cursorWorld || s.dynValues !== p.dynValues || s.textEdit !== p.textEdit || s.preflight !== p.preflight || s.printArea !== p.printArea) requestRender();
