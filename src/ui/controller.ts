@@ -149,7 +149,7 @@ export interface UiState {
   measure: MeasureResult | null;
   /** Eingabedialog für Bearbeiten-Befehle */
   paramDialog: ParamDialogSpec | null;
-  ribbonTab: 'sketch' | 'edit';
+  ribbonTab: 'sketch' | 'edit' | 'design' | 'output';
   /** Werkzeugband eingeklappt (nur Registerkarten sichtbar) */
   ribbonCollapsed: boolean;
   /** Platzierungsansicht für ein Motiv (Id) */

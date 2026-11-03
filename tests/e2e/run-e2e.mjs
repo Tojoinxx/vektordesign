@@ -80,6 +80,19 @@ const assert = (cond, msg) => {
 
 const browser = await puppeteer.launch({ executablePath: chromePath, args: extraArgs, headless: true, defaultViewport: { width: 1440, height: 900 } });
 const page = await browser.newPage();
+// Knöpfe im Werkzeugband liegen auf vier Registerkarten: fehlt einer, die Karten der Reihe nach öffnen
+const clickDirect = page.click.bind(page);
+page.click = async (sel, opts) => {
+  if (/^\[data-testid="[^"]+"\]$/.test(sel) && !sel.includes('ribbon-') && !(await page.$(sel))) {
+    for (const t of ['sketch', 'edit', 'design', 'output']) {
+      const tab = `[data-testid="ribbon-${t}"]`;
+      if (!(await page.$(tab))) continue;
+      await clickDirect(tab);
+      if (await page.$(sel)) break;
+    }
+  }
+  return clickDirect(sel, opts);
+};
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => {

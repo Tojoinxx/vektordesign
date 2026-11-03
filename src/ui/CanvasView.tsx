@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { garmentOf } from '../model/garments';
 import { productionOf } from '../model/production';
 import { docBBox } from '../model/bounds';
@@ -621,18 +621,26 @@ export function CanvasView() {
     }
   };
 
+  const [dropping, setDropping] = useState(false);
   const cursor = tool === 'select' ? 'default' : DRAW_TOOLS.has(tool) ? 'crosshair' : tool === 'gradient' ? 'crosshair' : 'pointer';
 
   return (
     <div
-      className="canvas-wrap"
+      className={`canvas-wrap ${dropping ? 'dropping' : ''}`}
       ref={wrapRef}
       tabIndex={-1}
       data-testid="canvas-wrap"
       onDragOver={(e) => {
-        if ([...e.dataTransfer.items].some((i) => i.kind === 'file')) e.preventDefault();
+        if ([...e.dataTransfer.items].some((i) => i.kind === 'file')) {
+          e.preventDefault();
+          if (!dropping) setDropping(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
       }}
       onDrop={(e) => {
+        setDropping(false);
         const vec = [...e.dataTransfer.files].find((x) => /\.(svg|dxf)$/i.test(x.name));
         if (vec) {
           e.preventDefault();
@@ -667,10 +675,42 @@ export function CanvasView() {
         }}
         onContextMenu={(e) => e.preventDefault()}
       />
+      <EmptyHint />
+      {dropping && <div className="drop-hint">Loslassen zum Einfügen – Bilder als Vorlage, SVG und DXF als bearbeitbare Vektoren</div>}
       <DynamicInput />
       <DimensionEditor layout={() => layoutRef.current} vp={vp} />
       <TextEditor vp={vp} />
       <MarkingMenu />
+    </div>
+  );
+}
+
+/** Hinweis auf der leeren Zeichenfläche: wie man anfängt. Verschwindet mit dem ersten Objekt. */
+function EmptyHint() {
+  const empty = useAppState((s) => {
+    for (const _ in s.doc.entities) return false;
+    return true;
+  });
+  const tool = useAppState((s) => s.tool);
+  if (!empty || tool !== 'select') return null;
+  const keys: [string, string][] = [
+    ['L', 'Linie'],
+    ['R', 'Rechteck'],
+    ['C', 'Kreis'],
+    ['T', 'Text'],
+    ['D', 'Bemaßung'],
+  ];
+  return (
+    <div className="empty-hint" data-testid="empty-hint">
+      <p className="eh-title">Erst grob zeichnen, dann exakt bemaßen</p>
+      <ul>
+        {keys.map(([k, l]) => (
+          <li key={k}>
+            <kbd>{k}</kbd> {l}
+          </li>
+        ))}
+      </ul>
+      <p className="eh-foot">Bild, SVG oder DXF hierher ziehen · Strg+K findet jeden Befehl</p>
     </div>
   );
 }

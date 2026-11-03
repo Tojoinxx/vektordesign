@@ -22,7 +22,12 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  Magnet,
+  Shirt,
+  Package,
+  ClipboardList,
+  SwatchBook,
+  LayoutGrid,
+  Calculator,
 } from 'lucide-react';
 import type { ConstraintKind } from '../model/types';
 import { CONSTRAINT_LABELS } from '../solver/analysis';
@@ -105,6 +110,19 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** Kleine Knöpfe in zwei Reihen, spaltenweise aufgefüllt. */
+function Stack({ children }: { children: ReactNode }) {
+  return <div className="rb-stack">{children}</div>;
+}
+
+type RibbonTab = 'sketch' | 'edit' | 'design' | 'output';
+const TABS: [RibbonTab, string][] = [
+  ['sketch', 'Skizze'],
+  ['edit', 'Bearbeiten'],
+  ['design', 'Gestalten'],
+  ['output', 'Ausgabe'],
+];
+
 export function Ribbon() {
   const app = useApp();
   const tab = useUi((s) => s.ribbonTab);
@@ -117,19 +135,18 @@ export function Ribbon() {
       /* kein Speicher */
     }
   };
-  const pick = (t: 'sketch' | 'edit') => {
+  const pick = (t: RibbonTab) => {
     app.ui.setState({ ribbonTab: t });
     if (collapsed) setCollapsed(false);
   };
   return (
     <div className="ribbon-wrap">
       <div className="ribbon-tabs" role="tablist" aria-label="Werkzeugleisten">
-        <button role="tab" aria-selected={tab === 'sketch'} className={tab === 'sketch' ? 'on' : ''} onClick={() => pick('sketch')} data-testid="ribbon-sketch">
-          Skizze
-        </button>
-        <button role="tab" aria-selected={tab === 'edit'} className={tab === 'edit' ? 'on' : ''} onClick={() => pick('edit')} data-testid="ribbon-edit">
-          Bearbeiten
-        </button>
+        {TABS.map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => pick(id)} data-testid={`ribbon-${id}`}>
+            {label}
+          </button>
+        ))}
         <span className="spacer" />
         <button
           className="ribbon-collapse"
@@ -141,14 +158,184 @@ export function Ribbon() {
           {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
         </button>
       </div>
-      {collapsed ? null : tab === 'sketch' ? <SketchRibbon /> : <EditRibbon />}
+      {collapsed ? null : tab === 'edit' ? <EditRibbon /> : tab === 'design' ? <DesignRibbon /> : tab === 'output' ? <OutputRibbon /> : <SketchRibbon />}
     </div>
   );
 }
 
+const SYM_LABELS = { off: 'aus', v: 'senkrechte Achse', h: 'waagrechte Achse', vh: 'beide Achsen (4-fach)' } as const;
+const SYM_NEXT = { off: 'v', v: 'h', h: 'vh', vh: 'off' } as const;
+
+/** Skizze: zeichnen, bemaßen, Abhängigkeiten – der Kern wie im Inventor-Skizzenmodus. */
+function SketchRibbon() {
+  const app = useApp();
+  const tool = useAppState((s) => s.tool);
+  const rectMode = useAppState((s) => s.rectMode);
+  const arcMode = useAppState((s) => s.arcMode);
+  const symmetry = useAppState((s) => s.symmetry);
+  const polygonMode = useAppState((s) => s.polygonMode);
+  const construction = useAppState((s) => s.constructionMode);
+  const settings = useAppState((s) => s.settings);
+  const set = (id: ToolId) => app.setTool(id);
+  const toggleSetting = (k: keyof typeof settings) => app.store.setState({ settings: { ...settings, [k]: !settings[k] } });
+
+  return (
+    <nav className="ribbon" aria-label="Skizze">
+      <Group title="Zeichnen">
+        <Big icon={<IconSelect />} label="Auswahl" kbd="Esc" active={tool === 'select'} onClick={() => set('select')} testId="tool-select" />
+        <Big icon={<IconLine />} label="Linie" kbd="L" active={tool === 'line'} onClick={() => set('line')} testId="tool-line" />
+        <div className="rb-split">
+          <Big icon={rectMode === 'center' ? <IconRectCenter /> : <IconRect />} label="Rechteck" kbd="R" active={tool === 'rect'} onClick={() => set('rect')} testId="tool-rect" />
+          <div className="rb-split-modes">
+            <Small
+              icon={<IconRect size={15} />}
+              label="Rechteck über 2 Punkte"
+              active={rectMode === 'corner'}
+              onClick={() => {
+                app.store.setState({ rectMode: 'corner' });
+                set('rect');
+              }}
+              testId="rect-mode-corner"
+            />
+            <Small
+              icon={<IconRectCenter size={15} />}
+              label="Rechteck vom Mittelpunkt"
+              active={rectMode === 'center'}
+              onClick={() => {
+                app.store.setState({ rectMode: 'center' });
+                set('rect');
+              }}
+              testId="rect-mode-center"
+            />
+          </div>
+        </div>
+        <Big icon={<IconCircle />} label="Kreis" kbd="C" active={tool === 'circle'} onClick={() => set('circle')} testId="tool-circle" />
+        <div className="rb-split">
+          <Big icon={arcMode === 'center' ? <IconArcCenter /> : <IconArc3 />} label="Bogen" kbd="A" active={tool === 'arc'} onClick={() => set('arc')} testId="tool-arc" />
+          <div className="rb-split-modes">
+            <Small
+              icon={<IconArc3 size={15} />}
+              label="Bogen durch 3 Punkte"
+              active={arcMode === '3p'}
+              onClick={() => {
+                app.store.setState({ arcMode: '3p' });
+                set('arc');
+              }}
+              testId="arc-mode-3p"
+            />
+            <Small
+              icon={<IconArcCenter size={15} />}
+              label="Bogen vom Mittelpunkt"
+              active={arcMode === 'center'}
+              onClick={() => {
+                app.store.setState({ arcMode: 'center' });
+                set('arc');
+              }}
+              testId="arc-mode-center"
+            />
+          </div>
+        </div>
+        <Big icon={<IconText />} label="Text" kbd="T" active={tool === 'text'} onClick={() => set('text')} testId="tool-text" />
+        <Stack>
+          <Small icon={<IconEllipse size={18} />} label="Ellipse" active={tool === 'ellipse'} onClick={() => set('ellipse')} testId="tool-ellipse" />
+          <Small
+            icon={<IconPolygon size={18} />}
+            label={`Vieleck (${polygonMode === 'inscribed' ? 'Inkreis' : 'Umkreis'}) – erneut klicken wechselt`}
+            kbd="N"
+            active={tool === 'polygon'}
+            onClick={() => {
+              if (tool === 'polygon') app.store.setState({ polygonMode: polygonMode === 'inscribed' ? 'circumscribed' : 'inscribed' });
+              set('polygon');
+            }}
+            testId="tool-polygon"
+          />
+          <Small icon={<IconStar size={18} />} label="Stern" active={tool === 'star'} onClick={() => set('star')} testId="tool-star" />
+          <Small icon={<IconPen size={18} />} label="Zeichenstift (Bézierpfad)" kbd="B" active={tool === 'pen'} onClick={() => set('pen')} testId="tool-pen" />
+          <Small icon={<IconSketch size={18} />} label="Freihand mit Formerkennung" kbd="S" active={tool === 'sketch'} onClick={() => set('sketch')} testId="tool-sketch" />
+          <Small icon={<IconPoint size={18} />} label="Punkt" kbd="P" active={tool === 'point'} onClick={() => set('point')} />
+        </Stack>
+      </Group>
+
+      <Group title="Hilfen">
+        <Stack>
+          <Small
+            icon={<IconConstruction size={18} />}
+            label="Neue Geometrie als Konstruktion (gestrichelt, nicht exportiert)"
+            active={construction}
+            onClick={() => app.store.setState({ constructionMode: !construction })}
+          />
+          <Small
+            icon={<IconSymmetry size={18} mode={symmetry} />}
+            label={`Symmetrie: ${SYM_LABELS[symmetry]} – klicken wechselt (aus → senkrecht → waagrecht → beide)`}
+            active={symmetry !== 'off'}
+            onClick={() => app.store.setState({ symmetry: SYM_NEXT[symmetry] })}
+            testId="symmetry"
+          />
+          <Small
+            icon={<IconProfile size={18} />}
+            label="Geschlossene Fläche aus gewählten Linien und Bögen"
+            onClick={() => {
+              const out = app.editor.createProfile(app.editor.s.selection);
+              if (!out.ok) app.editor.toast(out.message, 'error', 6000);
+              else if (out.pathId) app.editor.select([out.pathId]);
+            }}
+            testId="draw-profile"
+          />
+          <Small icon={<Grid3x3 size={17} />} label="Raster anzeigen" active={settings.grid} onClick={() => toggleSetting('grid')} />
+        </Stack>
+      </Group>
+
+      <Group title="Bemaßung">
+        <Big icon={<IconDimension />} label="Bemaßung" kbd="D" active={tool === 'dimension'} onClick={() => set('dimension')} testId="tool-dimension" />
+        <Stack>
+          <Small icon={<Ruler size={17} />} label="Bemaßungen anzeigen" active={settings.showDims} onClick={() => toggleSetting('showDims')} />
+          <Small icon={<IconLine size={17} />} label="Skizzenlinien anzeigen (aus = reine Designvorschau)" active={settings.showOverlay} onClick={() => toggleSetting('showOverlay')} />
+        </Stack>
+      </Group>
+
+      <Group title="Abhängigkeiten">
+        <div className="rb-grid">
+          {CONSTRAINT_ORDER.map((k) => (
+            <Small
+              key={k}
+              icon={<ConstraintIcon kind={k as ConstraintKind} size={18} />}
+              label={CONSTRAINT_LABELS[k]}
+              active={tool === `constraint:${k}`}
+              onClick={() => app.constraintCommand(k as ConstraintKind)}
+              testId={`constraint-${k}`}
+            />
+          ))}
+        </div>
+        <Stack>
+          <Small
+            icon={<Eye size={17} />}
+            label="Alle Abhängigkeiten anzeigen"
+            kbd="F8"
+            active={settings.showGlyphs}
+            onClick={() => app.store.setState({ settings: { ...settings, showGlyphs: true } })}
+          />
+          <Small
+            icon={<EyeOff size={17} />}
+            label="Abhängigkeiten ausblenden (nur bei Auswahl zeigen)"
+            kbd="F9"
+            active={!settings.showGlyphs}
+            onClick={() => app.store.setState({ settings: { ...settings, showGlyphs: false } })}
+          />
+        </Stack>
+      </Group>
+
+      <Group title="Ansicht">
+        <Big icon={<Maximize size={22} strokeWidth={1.75} />} label="Alles" kbd="F" onClick={() => app.editor.zoomToFit()} testId="view-fit" />
+      </Group>
+    </nav>
+  );
+}
+
+/** Bearbeiten: vorhandene Geometrie ändern, kombinieren, anordnen und messen. */
 function EditRibbon() {
   const app = useApp();
   const tool = useAppState((s) => s.tool);
+  const hasSel = useAppState((s) => s.selection.length > 0);
   const cmd = (c: EditCommand) => () => app.editCommand(c);
   return (
     <nav className="ribbon" aria-label="Bearbeiten">
@@ -157,56 +344,135 @@ function EditRibbon() {
         <Big icon={<IconRotate />} label="Drehen" onClick={cmd('rotate')} testId="edit-rotate" />
         <Big icon={<IconScale />} label="Skalieren" onClick={cmd('scale')} testId="edit-scale" />
         <Big icon={<IconMirror />} label="Spiegeln" onClick={cmd('mirror')} testId="edit-mirror" />
-        <div className="rb-col">
+        <Stack>
           <Small icon={<IconPatternRect size={18} />} label="Rechteckiges Muster" onClick={cmd('pattern-rect')} testId="edit-pattern-rect" />
           <Small icon={<IconPatternCirc size={18} />} label="Kreisförmiges Muster" onClick={cmd('pattern-circ')} testId="edit-pattern-circ" />
-        </div>
+        </Stack>
       </Group>
       <Group title="Skizze">
         <Big icon={<IconTrim />} label="Stutzen" kbd="X" active={tool === 'trim'} onClick={() => app.setTool('trim')} testId="tool-trim" />
         <Big icon={<IconExtend />} label="Dehnen" kbd="E" active={tool === 'extend'} onClick={() => app.setTool('extend')} testId="tool-extend" />
-      </Group>
-      <Group title="Form">
-        <Big icon={<IconTextToPaths />} label="Text in Pfade" onClick={cmd('text-to-paths')} testId="edit-text-to-paths" />
-        <Big icon={<IconOffset />} label="Versatz" kbd="O" onClick={cmd('offset')} testId="edit-offset" />
-        <div className="rb-col">
+        <Stack>
           <Small icon={<IconFillet size={18} />} label="Abrunden" onClick={cmd('fillet')} testId="edit-fillet" />
           <Small icon={<IconChamfer size={18} />} label="Fase" onClick={cmd('chamfer')} testId="edit-chamfer" />
-        </div>
-        <div className="rb-col">
+        </Stack>
+      </Group>
+      <Group title="Form">
+        <Big icon={<IconOffset />} label="Versatz" kbd="O" onClick={cmd('offset')} testId="edit-offset" />
+        <Big icon={<IconTextToPaths />} label="Text → Pfade" onClick={cmd('text-to-paths')} testId="edit-text-to-paths" />
+        <Stack>
           <Small icon={<IconToShape size={18} />} label="In Form umwandeln (Skizze → freie Form)" onClick={cmd('to-shape')} testId="edit-to-shape" />
-        </div>
+        </Stack>
       </Group>
       <Group title="Kombinieren">
         <Big icon={<IconUnion />} label="Vereinigen" onClick={cmd('union')} testId="bool-union" />
-        <Big icon={<IconSubtract />} label="Subtrahieren" onClick={cmd('subtract')} testId="bool-subtract" />
-        <div className="rb-col">
+        <Big icon={<IconSubtract />} label="Abziehen" onClick={cmd('subtract')} testId="bool-subtract" />
+        <Stack>
           <Small icon={<IconIntersect size={18} />} label="Schnittmenge" onClick={cmd('intersect')} testId="bool-intersect" />
           <Small icon={<IconExclude size={18} />} label="Ausschließen" onClick={cmd('exclude')} testId="bool-exclude" />
-        </div>
+        </Stack>
+      </Group>
+      <Group title="Anordnen">
+        <Stack>
+          <Small icon={<ArrowUpToLine size={17} />} label="Ganz nach vorne" kbd="Strg+Umschalt+]" onClick={() => app.editor.arrange(app.editor.s.selection, 'front')} />
+          <Small icon={<ArrowDownToLine size={17} />} label="Ganz nach hinten" kbd="Strg+Umschalt+[" onClick={() => app.editor.arrange(app.editor.s.selection, 'back')} />
+          <Small icon={<ChevronUp size={17} />} label="Nach vorne" kbd="Strg+]" onClick={() => app.editor.arrange(app.editor.s.selection, 'forward')} />
+          <Small icon={<ChevronDown size={17} />} label="Nach hinten" kbd="Strg+[" onClick={() => app.editor.arrange(app.editor.s.selection, 'backward')} />
+          <Small icon={<Copy size={17} />} label="Duplizieren" kbd="Strg+D" onClick={() => app.editor.duplicate()} />
+          <Small
+            icon={<Trash2 size={17} />}
+            label="Löschen"
+            kbd="Entf"
+            onClick={() => {
+              if (hasSel) app.editor.deleteSelection();
+            }}
+          />
+        </Stack>
+      </Group>
+      <Group title="Messen">
+        <Big icon={<IconMeasure />} label="Messen" kbd="M" active={tool === 'measure'} onClick={() => app.setTool('measure')} testId="tool-measure" />
+      </Group>
+    </nav>
+  );
+}
+
+/** Gestalten: Farbe, Effekte für Textildruck, Vorlagen und Bilder. */
+function DesignRibbon() {
+  const app = useApp();
+  const tool = useAppState((s) => s.tool);
+  const cmd = (c: EditCommand) => () => app.editCommand(c);
+  return (
+    <nav className="ribbon" aria-label="Gestalten">
+      <Group title="Farbe">
+        <Big icon={<IconGradient />} label="Verlauf" kbd="G" active={tool === 'gradient'} onClick={() => app.setTool('gradient')} testId="tool-gradient" />
+        <Big
+          icon={<Palette size={22} strokeWidth={1.75} />}
+          label="Vorschläge"
+          onClick={() => {
+            app.ui.setState({ side: 'props', sideOpen: true });
+            app.showTutorialFor('suggestions');
+            setTimeout(() => document.getElementById('stilvorschlaege')?.scrollIntoView({ behavior: 'smooth' }), 50);
+          }}
+        />
+        <Big icon={<Paintbrush size={22} strokeWidth={1.75} />} label="Format übertragen" active={tool === 'format'} onClick={() => app.setTool('format')} testId="tool-format" />
+        <Stack>
+          <Small icon={<IconReduce size={18} />} label="Farben reduzieren" onClick={cmd('reduce-colors')} testId="edit-reduce" />
+          <Small icon={<IconShadow size={18} />} label="Schatten" onClick={cmd('shadow')} testId="edit-shadow" />
+        </Stack>
       </Group>
       <Group title="Textil">
         <Big icon={<IconHalftone />} label="Halbton" onClick={cmd('halftone')} testId="edit-halftone" />
         <Big icon={<IconGrunge />} label="Used-Look" onClick={cmd('grunge')} testId="edit-grunge" />
         <Big icon={<IconRapport />} label="Rapport" onClick={cmd('rapport')} testId="edit-rapport" />
         <Big icon={<IconTextCircle />} label="Text auf Kreis" onClick={cmd('text-circle')} testId="edit-text-circle" />
-        <div className="rb-col">
-          <Small icon={<IconShadow size={18} />} label="Schatten" onClick={cmd('shadow')} testId="edit-shadow" />
-          <Small icon={<IconReduce size={18} />} label="Farben reduzieren" onClick={cmd('reduce-colors')} testId="edit-reduce" />
-        </div>
       </Group>
-      <Group title="Messen und Prüfen">
-        <Big icon={<IconMeasure />} label="Messen" kbd="M" active={tool === 'measure'} onClick={() => app.setTool('measure')} testId="tool-measure" />
-        <Big icon={<ShieldCheck size={24} strokeWidth={1.75} />} label="Prüfen" onClick={() => void app.preflight()} testId="preflight-open" />
+      <Group title="Einfügen">
+        <Big icon={<IconBadge />} label="Vorlagen" onClick={() => app.ui.setState({ generator: true })} testId="insert-generator" />
+        <Big icon={<ImagePlus size={22} strokeWidth={1.75} />} label="Bild" onClick={() => void app.insertImage()} testId="insert-image" />
+      </Group>
+      <Group title="Arbeitsfläche">
+        <PrintAreaSelect />
+      </Group>
+      <Group title="KI">
+        <Big
+          icon={<Sparkles size={22} strokeWidth={1.75} />}
+          label="Claude"
+          kbd="Strg+I"
+          onClick={() => {
+            app.ui.setState({ side: 'claude', sideOpen: true });
+            app.showTutorialFor('claude');
+          }}
+          testId="open-claude"
+        />
+      </Group>
+    </nav>
+  );
+}
+
+/** Ausgabe: prüfen, exportieren, Produktion vorbereiten. */
+function OutputRibbon() {
+  const app = useApp();
+  return (
+    <nav className="ribbon" aria-label="Ausgabe">
+      <Group title="Prüfen">
+        <Big icon={<ShieldCheck size={22} strokeWidth={1.75} />} label="Prüfen" onClick={() => void app.preflight()} testId="preflight-open" />
+        <Big icon={<Shirt size={22} strokeWidth={1.75} />} label="Mockup" onClick={() => app.ui.setState({ mockup: true })} testId="open-mockup" />
       </Group>
       <Group title="Export">
-        <Big icon={<FileCode2 size={24} strokeWidth={1.75} />} label="SVG" onClick={() => app.openExport('svg')} />
-        <Big icon={<FileText size={24} strokeWidth={1.75} />} label="PDF" onClick={() => app.openExport('pdf')} testId="export-pdf" />
-        <div className="rb-col">
-          <Small icon={<FileDown size={17} />} label="EPS" onClick={() => app.openExport('eps')} />
-          <Small icon={<FileDown size={17} />} label="DXF" onClick={() => app.openExport('dxf')} />
-        </div>
-        <Big icon={<FileImage size={24} strokeWidth={1.75} />} label="PNG" onClick={() => app.openExport('png', 300)} />
+        <Big icon={<FileCode2 size={22} strokeWidth={1.75} />} label="SVG" onClick={() => app.openExport('svg')} testId="export-svg" />
+        <Big icon={<FileText size={22} strokeWidth={1.75} />} label="PDF" onClick={() => app.openExport('pdf')} testId="export-pdf" />
+        <Big icon={<FileImage size={22} strokeWidth={1.75} />} label="PNG" onClick={() => app.openExport('png', 300)} testId="export-png" />
+        <Stack>
+          <Small icon={<FileDown size={17} />} label="EPS (ältere Programme)" onClick={() => app.openExport('eps')} />
+          <Small icon={<FileDown size={17} />} label="DXF (Plotter, CAD)" onClick={() => app.openExport('dxf')} />
+        </Stack>
+      </Group>
+      <Group title="Produktion">
+        <Big icon={<Package size={22} strokeWidth={1.75} />} label="ZIP-Paket" onClick={() => void app.exportPackage()} testId="open-package" />
+        <Big icon={<ClipboardList size={22} strokeWidth={1.75} />} label="Artwork-Blatt" onClick={() => void app.exportArtworkSheet()} />
+        <Big icon={<SwatchBook size={22} strokeWidth={1.75} />} label="Siebdruck" onClick={() => app.ui.setState({ screenPrint: true })} />
+        <Big icon={<LayoutGrid size={22} strokeWidth={1.75} />} label="DTF-Bogen" onClick={() => app.ui.setState({ gangSheet: true })} />
+        <Big icon={<Calculator size={22} strokeWidth={1.75} />} label="Kosten" onClick={() => app.ui.setState({ costs: true })} />
       </Group>
     </nav>
   );
@@ -230,230 +496,5 @@ function PrintAreaSelect() {
         ))}
       </select>
     </label>
-  );
-}
-
-const SYM_LABELS = { off: 'aus', v: 'senkrechte Achse', h: 'waagrechte Achse', vh: 'beide Achsen (4-fach)' } as const;
-const SYM_NEXT = { off: 'v', v: 'h', h: 'vh', vh: 'off' } as const;
-
-function SketchRibbon() {
-  const app = useApp();
-  const tool = useAppState((s) => s.tool);
-  const rectMode = useAppState((s) => s.rectMode);
-  const arcMode = useAppState((s) => s.arcMode);
-  const symmetry = useAppState((s) => s.symmetry);
-  const polygonMode = useAppState((s) => s.polygonMode);
-  const construction = useAppState((s) => s.constructionMode);
-  const settings = useAppState((s) => s.settings);
-  const hasSel = useAppState((s) => s.selection.length > 0);
-  const set = (id: ToolId) => app.setTool(id);
-  const toggleSetting = (k: keyof typeof settings) => app.store.setState({ settings: { ...settings, [k]: !settings[k] } });
-
-  return (
-    <nav className="ribbon" aria-label="Werkzeuge">
-      <Group title="Zeichnen">
-        <Big icon={<IconSelect />} label="Auswahl" kbd="Esc" active={tool === 'select'} onClick={() => set('select')} testId="tool-select" />
-        <Big icon={<IconLine />} label="Linie" kbd="L" active={tool === 'line'} onClick={() => set('line')} testId="tool-line" />
-        <div className="rb-split">
-          <Big icon={rectMode === 'center' ? <IconRectCenter /> : <IconRect />} label="Rechteck" kbd="R" active={tool === 'rect'} onClick={() => set('rect')} testId="tool-rect" />
-          <div className="rb-split-modes">
-            <Small
-              icon={<IconRect size={16} />}
-              label="Rechteck über 2 Punkte"
-              active={rectMode === 'corner'}
-              onClick={() => {
-                app.store.setState({ rectMode: 'corner' });
-                set('rect');
-              }}
-              testId="rect-mode-corner"
-            />
-            <Small
-              icon={<IconRectCenter size={16} />}
-              label="Rechteck vom Mittelpunkt"
-              active={rectMode === 'center'}
-              onClick={() => {
-                app.store.setState({ rectMode: 'center' });
-                set('rect');
-              }}
-              testId="rect-mode-center"
-            />
-          </div>
-        </div>
-        <Big icon={<IconCircle />} label="Kreis" kbd="C" active={tool === 'circle'} onClick={() => set('circle')} testId="tool-circle" />
-        <div className="rb-split">
-          <Big icon={arcMode === 'center' ? <IconArcCenter /> : <IconArc3 />} label="Bogen" kbd="A" active={tool === 'arc'} onClick={() => set('arc')} testId="tool-arc" />
-          <div className="rb-split-modes">
-            <Small
-              icon={<IconArc3 size={16} />}
-              label="Bogen durch 3 Punkte"
-              active={arcMode === '3p'}
-              onClick={() => {
-                app.store.setState({ arcMode: '3p' });
-                set('arc');
-              }}
-              testId="arc-mode-3p"
-            />
-            <Small
-              icon={<IconArcCenter size={16} />}
-              label="Bogen vom Mittelpunkt"
-              active={arcMode === 'center'}
-              onClick={() => {
-                app.store.setState({ arcMode: 'center' });
-                set('arc');
-              }}
-              testId="arc-mode-center"
-            />
-          </div>
-        </div>
-        <div className="rb-col">
-          <Small icon={<IconEllipse size={18} />} label="Ellipse" active={tool === 'ellipse'} onClick={() => set('ellipse')} testId="tool-ellipse" />
-          <Small
-            icon={<IconPolygon size={18} />}
-            label={`Vieleck (${polygonMode === 'inscribed' ? 'Inkreis' : 'Umkreis'}) – erneut klicken wechselt`}
-            kbd="N"
-            active={tool === 'polygon'}
-            onClick={() => {
-              if (tool === 'polygon') app.store.setState({ polygonMode: polygonMode === 'inscribed' ? 'circumscribed' : 'inscribed' });
-              set('polygon');
-            }}
-            testId="tool-polygon"
-          />
-        </div>
-        <div className="rb-col">
-          <Small icon={<IconStar size={18} />} label="Stern" active={tool === 'star'} onClick={() => set('star')} testId="tool-star" />
-          <Small icon={<IconPen size={18} />} label="Zeichenstift (Bézierpfad)" kbd="B" active={tool === 'pen'} onClick={() => set('pen')} testId="tool-pen" />
-        </div>
-        <Big icon={<IconText />} label="Text" kbd="T" active={tool === 'text'} onClick={() => set('text')} testId="tool-text" />
-        <Big icon={<IconSketch />} label="Freihand" kbd="S" active={tool === 'sketch'} onClick={() => set('sketch')} testId="tool-sketch" />
-        <Big icon={<ImagePlus size={24} strokeWidth={1.75} />} label="Bild" onClick={() => void app.insertImage()} testId="insert-image" />
-        <Big icon={<IconBadge />} label="Vorlagen" onClick={() => app.ui.setState({ generator: true })} testId="insert-generator" />
-        <div className="rb-col">
-          <Small icon={<IconPoint size={18} />} label="Punkt" kbd="P" active={tool === 'point'} onClick={() => set('point')} />
-          <Small
-            icon={<IconProfile size={18} />}
-            label="Geschlossene Fläche aus gewählten Linien und Bögen"
-            onClick={() => {
-              const out = app.editor.createProfile(app.editor.s.selection);
-              if (!out.ok) app.editor.toast(out.message, 'error', 6000);
-              else if (out.pathId) app.editor.select([out.pathId]);
-            }}
-            testId="draw-profile"
-          />
-          <Small
-            icon={<IconConstruction size={18} />}
-            label="Neue Geometrie als Konstruktion (gestrichelt, nicht exportiert)"
-            active={construction}
-            onClick={() => app.store.setState({ constructionMode: !construction })}
-          />
-          <Small
-            icon={<IconSymmetry size={18} mode={symmetry} />}
-            label={`Symmetrie: ${SYM_LABELS[symmetry]} – klicken wechselt (aus → senkrecht → waagrecht → beide)`}
-            active={symmetry !== 'off'}
-            onClick={() => app.store.setState({ symmetry: SYM_NEXT[symmetry] })}
-            testId="symmetry"
-          />
-        </div>
-      </Group>
-
-      <Group title="Bemaßung">
-        <Big icon={<IconDimension />} label="Bemaßung" kbd="D" active={tool === 'dimension'} onClick={() => set('dimension')} testId="tool-dimension" />
-      </Group>
-
-      <Group title="Abhängigkeiten">
-        <div className="rb-grid">
-          {CONSTRAINT_ORDER.map((k) => (
-            <Small
-              key={k}
-              icon={<ConstraintIcon kind={k as ConstraintKind} size={18} />}
-              label={CONSTRAINT_LABELS[k]}
-              active={tool === `constraint:${k}`}
-              onClick={() => app.constraintCommand(k as ConstraintKind)}
-              testId={`constraint-${k}`}
-            />
-          ))}
-        </div>
-        <div className="rb-col">
-          <Small
-            icon={<Eye size={17} />}
-            label="Alle Abhängigkeiten anzeigen"
-            kbd="F8"
-            active={settings.showGlyphs}
-            onClick={() => app.store.setState({ settings: { ...settings, showGlyphs: true } })}
-          />
-          <Small
-            icon={<EyeOff size={17} />}
-            label="Abhängigkeiten ausblenden"
-            kbd="F9"
-            active={!settings.showGlyphs}
-            onClick={() => app.store.setState({ settings: { ...settings, showGlyphs: false } })}
-          />
-        </div>
-      </Group>
-
-      <Group title="Gestalten">
-        <Big icon={<IconGradient />} label="Verlauf" kbd="G" active={tool === 'gradient'} onClick={() => set('gradient')} testId="tool-gradient" />
-        <Big
-          icon={<Palette size={24} strokeWidth={1.75} />}
-          label="Vorschläge"
-          onClick={() => {
-            app.ui.setState({ side: 'props', sideOpen: true });
-            app.showTutorialFor('suggestions');
-            setTimeout(() => document.getElementById('stilvorschlaege')?.scrollIntoView({ behavior: 'smooth' }), 50);
-          }}
-        />
-        <Big icon={<Paintbrush size={24} strokeWidth={1.75} />} label="Format übertragen" active={tool === 'format'} onClick={() => set('format')} testId="tool-format" />
-        <div className="rb-col">
-          <Small icon={<ArrowUpToLine size={17} />} label="Ganz nach vorne" kbd="Strg+Umschalt+]" onClick={() => app.editor.arrange(app.editor.s.selection, 'front')} />
-          <Small icon={<ArrowDownToLine size={17} />} label="Ganz nach hinten" kbd="Strg+Umschalt+[" onClick={() => app.editor.arrange(app.editor.s.selection, 'back')} />
-        </div>
-        <div className="rb-col">
-          <Small icon={<ChevronUp size={17} />} label="Nach vorne" kbd="Strg+]" onClick={() => app.editor.arrange(app.editor.s.selection, 'forward')} />
-          <Small icon={<ChevronDown size={17} />} label="Nach hinten" kbd="Strg+[" onClick={() => app.editor.arrange(app.editor.s.selection, 'backward')} />
-        </div>
-        <div className="rb-col">
-          <Small icon={<Copy size={17} />} label="Duplizieren" kbd="Strg+D" onClick={() => app.editor.duplicate()} />
-          <Small
-            icon={<Trash2 size={17} />}
-            label="Löschen"
-            kbd="Entf"
-            onClick={() => {
-              if (hasSel) app.editor.deleteSelection();
-            }}
-          />
-        </div>
-      </Group>
-
-      <Group title="Ansicht">
-        <Big icon={<Maximize size={24} strokeWidth={1.75} />} label="Alles" kbd="F" onClick={() => app.editor.zoomToFit()} testId="view-fit" />
-        <div className="rb-col">
-          <Small icon={<Grid3x3 size={17} />} label="Raster" active={settings.grid} onClick={() => toggleSetting('grid')} />
-          <Small icon={<Magnet size={17} />} label="Am Raster fangen" active={settings.gridSnap} onClick={() => toggleSetting('gridSnap')} />
-        </div>
-        <div className="rb-col">
-          <Small icon={<Ruler size={17} />} label="Bemaßungen anzeigen" active={settings.showDims} onClick={() => toggleSetting('showDims')} />
-          <Small icon={<IconLine size={17} />} label="Skizzenlinien anzeigen (aus = reine Designvorschau)" active={settings.showOverlay} onClick={() => toggleSetting('showOverlay')} />
-        </div>
-        <PrintAreaSelect />
-      </Group>
-
-      <Group title="Export">
-        <Big icon={<FileCode2 size={24} strokeWidth={1.75} />} label="SVG" onClick={() => app.openExport('svg')} testId="export-svg" />
-        <Big icon={<FileText size={24} strokeWidth={1.75} />} label="PDF" onClick={() => app.openExport('pdf')} />
-        <Big icon={<FileImage size={24} strokeWidth={1.75} />} label="PNG" onClick={() => app.openExport('png', 300)} testId="export-png" />
-      </Group>
-
-      <Group title="KI">
-        <Big
-          icon={<Sparkles size={24} strokeWidth={1.75} />}
-          label="Claude"
-          kbd="Strg+I"
-          onClick={() => {
-            app.ui.setState({ side: 'claude', sideOpen: true });
-            app.showTutorialFor('claude');
-          }}
-          testId="open-claude"
-        />
-      </Group>
-    </nav>
   );
 }

@@ -24,6 +24,7 @@ import {
   Undo2,
   X,
   Download,
+  ImageIcon,
 } from 'lucide-react';
 import { formatNumber } from '../params/expr';
 import { describeItem } from '../solver/analysis';
@@ -196,32 +197,53 @@ function FileMenu() {
     window.addEventListener('pointerdown', close, true);
     return () => window.removeEventListener('pointerdown', close, true);
   }, [app]);
-  const item = (label: string, kbd: string, icon: React.ReactNode, run: () => void) => (
-    <button
-      role="menuitem"
-      onClick={() => {
-        app.ui.setState({ fileMenu: false });
-        run();
-      }}
-    >
-      {icon}
-      <span>{label}</span>
-      <kbd>{kbd}</kbd>
-    </button>
-  );
+  // Einträge kommen aus der Befehlsliste: gleiche Namen und Kürzel wie in der Befehlssuche
+  const cmds = useMemo(() => new Map(buildCommands().map((c) => [c.id, c])), []);
+  const item = (id: string, icon: React.ReactNode, label?: string) => {
+    const c = cmds.get(id);
+    if (!c) return null;
+    return (
+      <button
+        role="menuitem"
+        onClick={() => {
+          app.ui.setState({ fileMenu: false });
+          c.run(app);
+        }}
+      >
+        {icon}
+        <span>{label ?? c.label}</span>
+        {c.shortcut && <kbd>{c.shortcut}</kbd>}
+      </button>
+    );
+  };
   return (
-    <div className="dropdown" role="menu" ref={ref}>
-      {item('Neues Projekt …', 'Strg+N', <FilePlus2 size={15} />, () => app.newDocument())}
-      {item('Öffnen …', 'Strg+O', <FolderOpen size={15} />, () => void app.openDocument())}
-      {item('Speichern', 'Strg+S', <Save size={15} />, () => void app.saveDocument())}
-      {item('Speichern unter …', 'Strg+Umschalt+S', <Save size={15} />, () => void app.saveDocument(true))}
+    <div className="dropdown file-dropdown" role="menu" ref={ref}>
+      {item('file.new', <FilePlus2 size={15} />, 'Neues Projekt …')}
+      {item('file.open', <FolderOpen size={15} />)}
+      {item('file.save', <Save size={15} />)}
+      {item('file.saveAs', <Save size={15} />)}
       <hr />
-      {item('Importieren (SVG, DXF) …', '', <FileInput size={15} />, () => void app.importVector())}
-      {item('Als SVG exportieren …', 'Strg+E', <Download size={15} />, () => app.openExport('svg'))}
-      {item('Als PNG exportieren …', '', <Download size={15} />, () => app.openExport('png', 300))}
+      {item('file.import', <FileInput size={15} />)}
+      {item('insert.image', <ImageIcon size={15} />, 'Bild einfügen …')}
+      {item('prod.template', <FileInput size={15} />)}
       <hr />
-      {item('Tutorials', '', <CircleHelp size={15} />, () => app.ui.setState({ tutorialList: true }))}
-      {item('Über Vektordesign', '', <CommandIcon size={15} />, () => app.ui.setState({ about: true }))}
+      {item('file.export', <Download size={15} />)}
+      {item('prod.package', <Download size={15} />, 'ZIP-Paket für LabwearOS …')}
+      {item('prod.sheet', <Download size={15} />, 'Artwork-Blatt (PDF) …')}
+      <hr />
+      <button
+        role="menuitem"
+        onClick={() => {
+          app.ui.setState({ fileMenu: false, tutorialList: true });
+        }}
+      >
+        <CircleHelp size={15} />
+        <span>Tutorials</span>
+      </button>
+      <button role="menuitem" onClick={() => app.ui.setState({ fileMenu: false, about: true })}>
+        <CommandIcon size={15} />
+        <span>Über Vektordesign</span>
+      </button>
     </div>
   );
 }

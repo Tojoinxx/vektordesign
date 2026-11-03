@@ -270,10 +270,6 @@ export function buildCommands(): Command[] {
     { id: 'draw.symmetry.h', label: 'Symmetrie: waagrechte Achse', group: 'Zeichnen', keywords: 'spiegeln symmetrisch live achse', run: (a) => a.store.setState({ symmetry: 'h' }) },
     { id: 'draw.symmetry.vh', label: 'Symmetrie: beide Achsen (4-fach)', group: 'Zeichnen', keywords: 'spiegeln symmetrisch live vierfach', run: (a) => a.store.setState({ symmetry: 'vh' }) },
     { id: 'draw.symmetry.off', label: 'Symmetrie aus', group: 'Zeichnen', keywords: 'spiegeln symmetrisch', run: (a) => a.store.setState({ symmetry: 'off' }) },
-    { id: 'draw.symmetry.v', label: 'Symmetrie: senkrechte Achse', group: 'Zeichnen', keywords: 'spiegeln symmetrisch live achse', run: (a) => a.store.setState({ symmetry: 'v' }) },
-    { id: 'draw.symmetry.h', label: 'Symmetrie: waagrechte Achse', group: 'Zeichnen', keywords: 'spiegeln symmetrisch live achse', run: (a) => a.store.setState({ symmetry: 'h' }) },
-    { id: 'draw.symmetry.vh', label: 'Symmetrie: beide Achsen (4-fach)', group: 'Zeichnen', keywords: 'spiegeln symmetrisch live vierfach', run: (a) => a.store.setState({ symmetry: 'vh' }) },
-    { id: 'draw.symmetry.off', label: 'Symmetrie aus', group: 'Zeichnen', keywords: 'spiegeln symmetrisch', run: (a) => a.store.setState({ symmetry: 'off' }) },
     { id: 'design.format', label: 'Format übertragen', group: 'Gestalten', keywords: 'pinsel stil kopieren farbe kontur übernehmen format painter', run: (a) => a.setTool('format') },
     {
       id: 'insert.generator',

@@ -285,7 +285,7 @@ await scenario('300 Rechtecke mit Bemaßungen + 40 Texte + 60 Kreise', () =>
         const y = Math.floor(i / 20) * 30;
         a.editor.createRectangle({ pos: { x, y } }, { pos: { x: x + 20, y: y + 12 } }, 'corner', { width: '20', height: '12' });
       }
-      for (let i = 0; i < 60; i++) a.editor.createCircle({ pos: { x: (i % 20) * 30 + 10, y: -40 - Math.floor(i / 20) * 30 } }, { pos: { x: (i % 20) * 30 + 18, y: -40 - Math.floor(i / 20) * 30 } });
+      for (let i = 0; i < 60; i++) a.editor.createCircle({ pos: { x: (i % 20) * 30 + 10, y: -40 - Math.floor(i / 20) * 30 } }, 8);
       for (let i = 0; i < 40; i++) a.editor.createText({ pos: { x: (i % 10) * 60, y: 480 + Math.floor(i / 10) * 20 } }, `Text ${i}`);
     });
   }),

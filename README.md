@@ -48,7 +48,7 @@ npm run desktop:build  # Installer unter src-tauri/target/release/bundle/
 1. **Grob zeichnen** – Linie (`L`), Rechteck (`R`), Kreis (`C`), Bogen (`A`), Vieleck (`N`), Zeichenstift (`B`), Ellipse, Stern, Text (`T`). Beim Zeichnen entstehen automatisch Abhängigkeiten (z. B. horizontal, vertikal, koinzident), erkennbar an kleinen Symbolen (Glyphen).
 2. **Bemaßen** – `D`, dann eine Linie, zwei Punkte, einen Kreis oder zwei Linien (Winkel) anklicken, das Maß platzieren und den Wert eintippen. Erlaubt sind Ausdrücke wie `20+5`, `d0/2`, `12,5`, `(d0-10)/2`, `max(d1; 20)` und Einheiten (`cm`, `in`, `°`). Doppelklick auf eine Bemaßung ändert sie.
 3. **Abhängigkeiten setzen** – Koinzident, horizontal, vertikal, parallel, rechtwinklig, kollinear, tangential, konzentrisch, gleich, symmetrisch, Mittelpunkt, fixiert. Objekte vorher auswählen oder das Werkzeug wählen und nacheinander anklicken.
-4. **Status prüfen** – unten rechts: blau *Unterbestimmt – noch X Bemaßungen nötig*, grün *Vollständig bestimmt*, rot *Überbestimmt* mit verständlicher Meldung. Ein Klick auf den Status zeigt, was noch frei ist. Würde ein Maß die Skizze überbestimmen, bietet die App an, es als getriebene Bemaßung (Referenz, in Klammern) anzulegen.
+4. **Status prüfen** – unten rechts: blau _Unterbestimmt – noch X Bemaßungen nötig_, grün _Vollständig bestimmt_, rot _Überbestimmt_ mit verständlicher Meldung. Ein Klick auf den Status zeigt, was noch frei ist. Würde ein Maß die Skizze überbestimmen, bietet die App an, es als getriebene Bemaßung (Referenz, in Klammern) anzulegen.
 
 Während des Zeichnens lassen sich Länge, Winkel, Breite, Höhe oder Durchmesser direkt eintippen: einfach Zahlen tippen, `Tab` wechselt das Feld, `Enter` übernimmt.
 
@@ -63,42 +63,55 @@ Während des Zeichnens lassen sich Länge, Winkel, Breite, Höhe oder Durchmesse
 
 Inventor-Weg: Rechteck irgendwo grob aufziehen, mit `D` die Breite (80) und Höhe (`d0/2`) bemaßen, Abhängigkeit „Koinzident“ zwischen Rechteckmitte und Ursprung, Kreis grob zeichnen, „Konzentrisch“ zur Rechteckmitte, Durchmesser mit `D` auf 10.
 
+### Werkzeugband
+
+Vier Registerkarten mit gleicher Höhe, damit die Zeichenfläche beim Wechsel nicht springt:
+
+| Karte          | Inhalt                                                                                                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Skizze**     | Zeichnen, Hilfen (Konstruktion, Symmetrie, Fläche aus Linien, Raster), Bemaßung, Abhängigkeiten, Alles anzeigen                  |
+| **Bearbeiten** | Verschieben/Drehen/Skalieren/Spiegeln/Muster, Stutzen/Dehnen/Abrunden/Fase, Versatz, Text → Pfade, Kombinieren, Anordnen, Messen |
+| **Gestalten**  | Verlauf, Stilvorschläge, Format übertragen, Farben reduzieren, Schatten, Textil-Effekte, Vorlagen, Bild, Druckbereich, Claude    |
+| **Ausgabe**    | Prüfen, Mockup, Export (SVG, PDF, PNG, EPS, DXF), ZIP-Paket, Artwork-Blatt, Siebdruck, DTF-Bogen, Kosten                         |
+
+Auf einer leeren Zeichenfläche steht ein kurzer Einstieg mit den wichtigsten Kürzeln. Bilder, SVG und DXF lassen sich direkt auf die Fläche ziehen.
+
 ### Gestalten
 
-- **Füllung und Kontur** im Bereich *Eigenschaften*: Farbwähler mit HEX, RGB, HSV und CMYK, Pipette, zuletzt benutzte Farben; Konturstärke in mm, Linienenden und Linientyp; Deckkraft pro Objekt.
+- **Füllung und Kontur** im Bereich _Eigenschaften_: Farbwähler mit HEX, RGB, HSV und CMYK, Pipette, zuletzt benutzte Farben; Konturstärke in mm, Linienenden und Linientyp; Deckkraft pro Objekt.
 - **Farbverlauf**: Füllung „Verlauf“ wählen oder mit `G` einen Strich durch die Form ziehen (`Umschalt` rastet auf 45°). Richtungen links→rechts, rechts→links, oben→unten, unten→oben und kreisförmig; „Verblassen“ lässt den Verlauf in Transparenz auslaufen.
-- **Stilvorschläge**: Objekt auswählen – im Bereich *Stilvorschläge* erscheinen zehn Varianten als Vorschau, ein Klick übernimmt (`Strg+Z` nimmt zurück). Mit Claude-Schlüssel gibt es zusätzlich KI-Vorschläge zu einem Stichwort („Vintage“, „Neon“, „Vereinsfarben Blau-Weiß“).
+- **Stilvorschläge**: Objekt auswählen – im Bereich _Stilvorschläge_ erscheinen zehn Varianten als Vorschau, ein Klick übernimmt (`Strg+Z` nimmt zurück). Mit Claude-Schlüssel gibt es zusätzlich KI-Vorschläge zu einem Stichwort („Vintage“, „Neon“, „Vereinsfarben Blau-Weiß“).
 - **Konstruktionslinien** (`Q`) sind gestrichelt und werden nie exportiert; Bemaßungen und Glyphen ebenso nicht.
 
 ### Bild als Vorlage nachzeichnen
 
-1. **Bild** im Band (Gruppe *Zeichnen*) oder ein Foto/Logo einfach auf die Zeichenfläche ziehen bzw. mit `Strg+V` aus der Zwischenablage einfügen (PNG, JPG, WebP).
+1. **Bild** (Registerkarte _Gestalten_, Gruppe _Einfügen_) oder ein Foto/Logo einfach auf die Zeichenfläche ziehen bzw. mit `Strg+V` aus der Zwischenablage einfügen (PNG, JPG, WebP).
 2. Das Bild landet auf einer eigenen Ebene **„Vorlage“** ganz unten, halbtransparent, und wird **nicht exportiert**.
-3. Unter *Eigenschaften* die Breite in mm eintragen – oder **„Maßstab über bekannte Strecke festlegen“**: zwei Punkte im Bild anklicken (z. B. linke und rechte Kante eines Logos) und das echte Maß eingeben.
+3. Unter _Eigenschaften_ die Breite in mm eintragen – oder **„Maßstab über bekannte Strecke festlegen“**: zwei Punkte im Bild anklicken (z. B. linke und rechte Kante eines Logos) und das echte Maß eingeben.
 4. **Fixieren** sperrt die Ebene „Vorlage“, damit das Bild beim Nachzeichnen nicht verrutscht.
 5. Mit Linie, Kreis, Freihand oder Bemaßung darüber zeichnen. Deckkraft nach Geschmack anpassen.
 
-**Vektorisieren:** Bild auswählen → *Eigenschaften* → **Vektorisieren …** → Anzahl Farben und Detailgrad wählen. Daraus entsteht je Farbe eine Form in genau der Größe und Lage des Bildes (Hintergrund wird weggelassen). Ideal für Logos mit klaren Flächen; danach mit Bearbeiten-Werkzeugen und Bemaßungen nacharbeiten.
+**Vektorisieren:** Bild auswählen → _Eigenschaften_ → **Vektorisieren …** → Anzahl Farben und Detailgrad wählen. Daraus entsteht je Farbe eine Form in genau der Größe und Lage des Bildes (Hintergrund wird weggelassen). Ideal für Logos mit klaren Flächen; danach mit Bearbeiten-Werkzeugen und Bemaßungen nacharbeiten.
 
 Soll das Bild selbst ins Motiv (z. B. für DTF), das Häkchen „Nur Vorlage“ entfernen: Dann ist es in PNG, SVG und PDF enthalten (EPS und DXF enthalten keine Pixelbilder).
 
 ### Ebenen, Bearbeiten und Messen
 
-- **Ebenen** (Tab *Ebenen*): anlegen, umbenennen, ein-/ausblenden, sperren, Reihenfolge ändern; neue Objekte landen auf der aktiven Ebene. Ebenennamen gehen als benannte Ebenen in SVG, PDF, EPS und DXF.
-- **Gruppieren** (`Strg+G`, aufheben `Strg+Umschalt+G`), **Anordnen** und **Ausrichten/Verteilen** im Bereich *Eigenschaften*.
-- Registerkarte **Bearbeiten** über dem Band:
-  - *Ändern*: Verschieben, Drehen, Skalieren (Faktor oder Zielbreite), Spiegeln, rechteckiges und kreisförmiges Muster – jeweils mit Eingabedialog (Ausdrücke wie `20+5` erlaubt, optional als Kopie).
-  - *Skizze*: **Stutzen** (`X`) entfernt das angeklickte Linienstück bis zu den nächsten Schnittpunkten, **Dehnen** (`E`) verlängert eine Linie bis zur nächsten Geometrie.
-  - *Form*: **Text in Pfade**, **Versatz** (`O`, Rand außen/innen), **Abrunden**, **Fase**, *In Form umwandeln*.
-  - *Kombinieren*: **Vereinigen**, **Subtrahieren** (hinterstes minus die übrigen), **Schnittmenge**, **Ausschließen**. Text wird dabei automatisch in Pfade umgewandelt.
-- **Freie Formen** (Ergebnis von Text in Pfade und booleschen Operationen) lassen sich über *Größe* (Breite oder Höhe in mm) oder mit dem Bemaßungswerkzeug `D` proportional auf ein Maß bringen; das Maß bleibt als Bemaßung erhalten.
+- **Ebenen** (Tab _Ebenen_): anlegen, umbenennen, ein-/ausblenden, sperren, Reihenfolge ändern; neue Objekte landen auf der aktiven Ebene. Ebenennamen gehen als benannte Ebenen in SVG, PDF, EPS und DXF.
+- **Gruppieren** (`Strg+G`, aufheben `Strg+Umschalt+G`), **Anordnen** und **Ausrichten/Verteilen** im Bereich _Eigenschaften_.
+- Registerkarte **Bearbeiten**:
+  - _Ändern_: Verschieben, Drehen, Skalieren (Faktor oder Zielbreite), Spiegeln, rechteckiges und kreisförmiges Muster – jeweils mit Eingabedialog (Ausdrücke wie `20+5` erlaubt, optional als Kopie).
+  - _Skizze_: **Stutzen** (`X`) entfernt das angeklickte Linienstück bis zu den nächsten Schnittpunkten, **Dehnen** (`E`) verlängert eine Linie bis zur nächsten Geometrie.
+  - _Form_: **Text in Pfade**, **Versatz** (`O`, Rand außen/innen), **Abrunden**, **Fase**, _In Form umwandeln_.
+  - _Kombinieren_: **Vereinigen**, **Abziehen** (hinterstes minus die übrigen), **Schnittmenge**, **Ausschließen**. Text wird dabei automatisch in Pfade umgewandelt.
+- **Freie Formen** (Ergebnis von Text in Pfade und booleschen Operationen) lassen sich über _Größe_ (Breite oder Höhe in mm) oder mit dem Bemaßungswerkzeug `D` proportional auf ein Maß bringen; das Maß bleibt als Bemaßung erhalten.
 - **Messen** (`M`): zwei Punkte → Abstand, Δx, Δy und Winkel; zwei Linien → Winkel; Klick in eine Fläche → Fläche, Umfang, Breite und Höhe. Die Zeichnung bleibt unverändert.
 
 ### Abnahmetest Meilenstein 2
 
-1. Text `T` setzen (z. B. „TEAM“), auswählen, *Bearbeiten → Text in Pfade*.
-2. Ein Rechteck als Unterstrich zeichnen, beide auswählen, *Vereinigen*.
-3. Die neue Form auswählen, unter *Größe* die Breite `100` eintragen.
+1. Text `T` setzen (z. B. „TEAM“), auswählen, _Bearbeiten → Text in Pfade_.
+2. Ein Rechteck als Unterstrich zeichnen, beide auswählen, _Vereinigen_.
+3. Die neue Form auswählen, unter _Größe_ die Breite `100` eintragen.
 4. Füllung gelb setzen, einen Kreis dahinter mit Füllung blau.
 5. Export SVG, PDF und PNG (300 dpi): Breite jeweils exakt 100 mm, PNG mit transparentem Hintergrund.
 
@@ -126,14 +139,14 @@ Die Tech-Packs entstehen in LabwearOS. Vektordesign liefert die passenden Artwor
 - **Bogen** (`A`): Start, Ende, Wölbung – oder vom Mittelpunkt. Bögen bemaßt man wie Kreise (Radius), legt sie tangential an Linien und macht aus Linien und Bögen mit **Geschlossene Fläche** (Rechtsklick oder Leiste) eine füllbare Kontur – z. B. ein vollständig bemaßtes Langloch.
 - **Vieleck** (`N`) und **Stern**: Mittelpunkt, Ecke bzw. Spitze; Eckenzahl und Durchmesser direkt eintippen. Die Geometrie bleibt parametrisch (Konstruktionskreise mit Durchmesserbemaßung).
 - **Ellipse** und **Zeichenstift** (`B`): erzeugen Formen; beim Zeichenstift setzt Klicken eine Ecke, Ziehen eine Kurve, Klick auf den Start schließt.
-- **Symmetrie-Modus** (Knopf in der Zeichnen-Gruppe): Gezeichnetes erscheint gespiegelt an der senkrechten, waagrechten oder an beiden Achsen durch den Ursprung – mit Vorschau, im selben Rückgängig-Schritt.
-- **Vorlagen** (Zeichnen-Gruppe): Generatoren für Badge (Text im Ring), Wappen, Banner, Rahmen, QR-Code und Nackendruck – mit Vorschau, eingefügt als Gruppe.
+- **Symmetrie-Modus** (Skizze → Gruppe _Hilfen_): Gezeichnetes erscheint gespiegelt an der senkrechten, waagrechten oder an beiden Achsen durch den Ursprung – mit Vorschau, im selben Rückgängig-Schritt.
+- **Vorlagen** (Gestalten → _Einfügen_): Generatoren für Badge (Text im Ring), Wappen, Banner, Rahmen, QR-Code und Nackendruck – mit Vorschau, eingefügt als Gruppe.
 - **Import** (Datei-Menü oder Datei aufs Fenster ziehen): SVG aus Illustrator, Inkscape oder Cricut sowie DXF aus CAD-/Schnittmuster-Programmen. Linien, Kreise und Bögen aus DXF lassen sich danach bemaßen.
-- **Druckbereich** (Ansicht-Gruppe): blendet den Druckbereich des Kleidungsstücks (z. B. Brust links 100 × 100 mm, Front A4/A3) in echten Maßen ein; rot, wenn das Motiv zu groß ist.
+- **Druckbereich** (Gestalten → _Arbeitsfläche_): blendet den Druckbereich des Kleidungsstücks (z. B. Brust links 100 × 100 mm, Front A4/A3) in echten Maßen ein; rot, wenn das Motiv zu groß ist.
 
 ### Textil-Funktionen
 
-Bearbeiten-Leiste, Gruppe **Textil**:
+Registerkarte _Gestalten_, Gruppe **Textil**:
 
 - **Halbton**: Verläufe und Transparenz werden zu druckbaren Punkten (Rasterweite in lpi, Winkel, kleinster Punkt) – je Farbe ein Raster.
 - **Used-Look**: zufällige Sprenkel, Ausbrüche und Kratzer werden aus den Flächen entfernt (echte Vektorlöcher).
@@ -154,7 +167,7 @@ Export-Dialog: **Je Farbe eine Datei** (für mehrfarbiges Plotten und Siebe, all
 
 ### Schnittmuster (Tab „Schnitt“)
 
-Grundlage für die 3D-Passform in **Vektordesign 3D**. Über **Datei → Neues Projekt** (`Strg+N`) wählst du die Projektart: *2D-Motiv*, *Schnittmuster* oder *3D-Modell*.
+Grundlage für die 3D-Passform in **Vektordesign 3D**. Über **Datei → Neues Projekt** (`Strg+N`) wählst du die Projektart: _2D-Motiv_, _Schnittmuster_ oder _3D-Modell_.
 
 - **Grundschnitt aus Maßen:** T-Shirt, Polo (Kragensteg, umgeschlagener Kragen, zwei Knopfleisten, Ärmelbündchen), Longsleeve, Sweatshirt oder Hoodie aus der Maßtabelle (Herren/Unisex XS–3XL, Damen XS–XL) oder eigenen Körpermaßen, Passform schmal/normal/weit, Länge und Ärmel einstellbar. Erzeugt alle Teile mit fertig verbundenen Nähten; die Ärmelkugel passt exakt ins Armloch. „Aktualisieren“ ersetzt nur die erzeugten Teile.
 - **Maße eines vorhandenen Teils nachbauen:** unter „Maße eines vorhandenen Teils“ die Fertigmaße aus der Größentabelle eintragen oder flach liegend nachmessen (cm): Gesamtlänge, ½ Brust, ½ Saum, Schulterbreite, Schulternaht, Armloch, Ärmellänge, ½ Oberarm, ½ Ärmelöffnung, Halsweite, Halsausschnitt, Bündchenhöhe, Kapuzenhöhe und -breite. Eingetragene Werte bestimmen den Schnitt genau, leere kommen aus Körpermaßen und Passform (Vorschlag grau im Feld). Die Größenstaffel im Tech-Pack stuft mit denselben Sprüngen; passt ein Maß geometrisch nicht zu den übrigen, steht es als Hinweis darunter.
@@ -196,19 +209,19 @@ Der Knopf **3D** oben (`Strg+3`) oder „In 3D ansehen“ im Tab „Schnitt“ �
 
 ### Bibliothek
 
-Im Bereich **Bibliothek** der Seitenleiste: Auswahl als Element oder Logo speichern und in jedem Projekt per Klick einfügen; Farbpaletten aus der Zeichnung, aus einem Bild oder als Farbharmonie anlegen; ein Farbfeld färbt die Auswahl (Alt oder Rechtsklick: Kontur). **Format übertragen** (Gestalten-Gruppe) überträgt Füllung, Kontur und Linienart per Klick. Die Bibliothek lässt sich als `.vdlib`-Datei sichern und auf anderen Geräten laden.
+Im Bereich **Bibliothek** der Seitenleiste: Auswahl als Element oder Logo speichern und in jedem Projekt per Klick einfügen; Farbpaletten aus der Zeichnung, aus einem Bild oder als Farbharmonie anlegen; ein Farbfeld färbt die Auswahl (Alt oder Rechtsklick: Kontur). **Format übertragen** (Registerkarte _Gestalten_) überträgt Füllung, Kontur und Linienart per Klick. Die Bibliothek lässt sich als `.vdlib`-Datei sichern und auf anderen Geräten laden.
 
 ### iPad, Apple Pencil und Sync
 
-| Geste | Wirkung |
-| --- | --- |
-| Apple Pencil | zeichnet und wählt aus (präzise, mit Fang) |
-| ein Finger | zeichnet, solange kein Stift benutzt wurde; danach verschiebt er nur (Handballen werden ignoriert) |
-| Tipp mit dem Finger (bei Stiftbedienung) | Markierungsmenü zum schnellen Werkzeugwechsel |
-| zwei Finger auseinander/zusammen | Zoom und Verschieben |
-| Zwei-Finger-Tipp / Drei-Finger-Tipp | Rückgängig / Wiederholen |
-| langes Drücken | Kontextmenü |
-| Doppeltipp | wie Doppelklick (z. B. Bemaßung ändern) |
+| Geste                                    | Wirkung                                                                                            |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Apple Pencil                             | zeichnet und wählt aus (präzise, mit Fang)                                                         |
+| ein Finger                               | zeichnet, solange kein Stift benutzt wurde; danach verschiebt er nur (Handballen werden ignoriert) |
+| Tipp mit dem Finger (bei Stiftbedienung) | Markierungsmenü zum schnellen Werkzeugwechsel                                                      |
+| zwei Finger auseinander/zusammen         | Zoom und Verschieben                                                                               |
+| Zwei-Finger-Tipp / Drei-Finger-Tipp      | Rückgängig / Wiederholen                                                                           |
+| langes Drücken                           | Kontextmenü                                                                                        |
+| Doppeltipp                               | wie Doppelklick (z. B. Bemaßung ändern)                                                            |
 
 - **Freihand** (`S`, auch im Markierungsmenü): grob zeichnen, beim Absetzen entsteht saubere Geometrie – Linie (fast waagrecht/senkrecht wird exakt), Kreis, Rechteck, Dreieck/Vieleck oder Linienzug. Danach wie gewohnt bemaßen.
 - **Ziffernblock:** Auf Touch-Geräten erscheint beim Bemaßen ein großer Ziffernblock statt der Bildschirmtastatur (Ausdrücke wie `30+5` gehen auch).
@@ -219,11 +232,11 @@ Im Bereich **Bibliothek** der Seitenleiste: Auswahl als Element oder Logo speich
 **Sync zwischen PC und iPad** über einen Ordner in iCloud Drive oder OneDrive:
 
 1. Am PC das Projekt in den Cloud-Ordner speichern (iCloud für Windows bzw. OneDrive). Desktop-App und Chrome/Edge bleiben mit der Datei verbunden – unten in der Statusleiste steht dann der Dateiname mit Wolke.
-2. Auf dem iPad **Datei → Öffnen** und die Datei in *Dateien* (iCloud Drive/OneDrive) wählen, weiterzeichnen.
+2. Auf dem iPad **Datei → Öffnen** und die Datei in _Dateien_ (iCloud Drive/OneDrive) wählen, weiterzeichnen.
 3. Auf dem iPad **Speichern** → Teilen-Menü → **In Dateien sichern** → denselben Ordner wählen → **Ersetzen**.
 4. Der PC merkt die Änderung innerhalb weniger Sekunden und übernimmt sie („Änderungen von iPad übernommen“).
 
-Jede Speicherung erhöht eine Revisionsnummer in der Datei und vermerkt das Gerät. Hat der PC gleichzeitig eigene ungespeicherte Änderungen, fragt er nach: Version vom iPad laden, eigene Version behalten (überschreibt beim Speichern) oder beide behalten (eigene als Kopie sichern). Safari erlaubt Web-Apps keinen dauerhaften Zugriff auf einen Ordner – deshalb öffnet und sichert das iPad über *Dateien*.
+Jede Speicherung erhöht eine Revisionsnummer in der Datei und vermerkt das Gerät. Hat der PC gleichzeitig eigene ungespeicherte Änderungen, fragt er nach: Version vom iPad laden, eigene Version behalten (überschreibt beim Speichern) oder beide behalten (eigene als Kopie sichern). Safari erlaubt Web-Apps keinen dauerhaften Zugriff auf einen Ordner – deshalb öffnet und sichert das iPad über _Dateien_.
 
 ### Darstellung
 
@@ -241,57 +254,58 @@ Im Tab **Claude** (`Strg+I`) beschreibst du, was entstehen soll – Claude zeich
 
 ### Export
 
-| Format | Eigenschaften |
-| --- | --- |
-| SVG | Maße in mm (`width`/`height` in mm, `viewBox` in mm), benannte Ebenen, Text wahlweise als Pfade (Standard), ohne Bemaßungen, Glyphen und Konstruktionslinien – passt für Illustrator, Inkscape, Cricut Design Space und Silhouette Studio |
-| PDF | Vektor-PDF in Originalgröße (Seite = Motiv), Ebenen als PDF-Ebenen (in Illustrator/Acrobat sichtbar), Verläufe und Verblassen, Deckkraft, RGB oder CMYK, Text als Pfade |
-| EPS | PostScript Level 3 für ältere Programme, RGB oder CMYK, Verläufe; ohne Transparenz (wird beim Export angezeigt) |
-| DXF | R12, Einheit mm, Ebenen als Layer, Linien, Kreise und Bögen als echte Objekte, Kurven fein angenähert – für Plotter und Schnittmuster-Software; ohne Farben |
-| PNG | 300, 360, 600, 720 oder 1200 dpi, transparenter Hintergrund, Auflösung im Dateikopf (pHYs) |
-| Projekt (`.vdp`) | Geometrie, Bemaßungen, Abhängigkeiten und Stile; wird zusätzlich automatisch zwischengespeichert |
+| Format           | Eigenschaften                                                                                                                                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SVG              | Maße in mm (`width`/`height` in mm, `viewBox` in mm), benannte Ebenen, Text wahlweise als Pfade (Standard), ohne Bemaßungen, Glyphen und Konstruktionslinien – passt für Illustrator, Inkscape, Cricut Design Space und Silhouette Studio |
+| PDF              | Vektor-PDF in Originalgröße (Seite = Motiv), Ebenen als PDF-Ebenen (in Illustrator/Acrobat sichtbar), Verläufe und Verblassen, Deckkraft, RGB oder CMYK, Text als Pfade                                                                   |
+| EPS              | PostScript Level 3 für ältere Programme, RGB oder CMYK, Verläufe; ohne Transparenz (wird beim Export angezeigt)                                                                                                                           |
+| DXF              | R12, Einheit mm, Ebenen als Layer, Linien, Kreise und Bögen als echte Objekte, Kurven fein angenähert – für Plotter und Schnittmuster-Software; ohne Farben                                                                               |
+| PNG              | 300, 360, 600, 720 oder 1200 dpi, transparenter Hintergrund, Auflösung im Dateikopf (pHYs)                                                                                                                                                |
+| Projekt (`.vdp`) | Geometrie, Bemaßungen, Abhängigkeiten und Stile; wird zusätzlich automatisch zwischengespeichert                                                                                                                                          |
 
 Optional beim Export: Rand inklusive Konturstärke und horizontal spiegeln (Flexfolie).
 
 ## Tastenkürzel
 
-| Taste | Befehl | | Taste | Befehl |
-| --- | --- | --- | --- | --- |
-| `L` | Linie (Kettenmodus) | | `Strg+Z` / `Strg+Y` | Rückgängig / Wiederholen |
-| `R` | Rechteck | | `Strg+C` / `Strg+V` | Kopieren / Einfügen |
-| `C` | Kreis | | `Strg+D` | Duplizieren |
-| `T` | Text | | `Entf` | Löschen |
-| `P` | Punkt | | `Strg+A` | Alles auswählen |
-| `D` | Bemaßung | | `Strg+N` / `Strg+O` | Neu / Öffnen |
-| `G` | Farbverlauf ziehen | | `Strg+S` / `Strg+Umschalt+S` | Speichern / Speichern unter |
-| `Q` | Konstruktionsgeometrie ein/aus | | `Strg+E` | Exportieren |
-| `F` | Alles anzeigen | | `Strg+K` | Befehlssuche |
-| `+` / `−` | Vergrößern / Verkleinern | | `Strg+I` | Claude-Assistent |
-| `F8` / `F9` | Abhängigkeiten ein-/ausblenden | | `Strg+]` / `Strg+[` | Nach vorne / nach hinten |
-| `X` | Stutzen | | `Strg+Umschalt+]` / `[` | Ganz nach vorne / hinten |
-| `E` | Dehnen | | `Strg+G` | Gruppieren |
-| `O` | Versatz | | `Strg+Umschalt+G` | Gruppierung aufheben |
-| `M` | Messen | | `J` | Naht verbinden (Schnitt) |
-| | | | `Strg+3` | 3D-Vorschau ein/aus |
-| `S` | Freihandskizze mit Formerkennung | | | |
-| `A` | Bogen (3 Punkte; Mittelpunktbogen im Werkzeugmenü) | | | |
-| `N` | Vieleck (erneuter Klick: Umkreis/Inkreis) | | | |
-| `B` | Zeichenstift für Bézierpfade | | | |
-| `Esc` | Abbrechen, zurück zur Auswahl | | | |
+| Taste       | Befehl                                             |     | Taste                        | Befehl                      |
+| ----------- | -------------------------------------------------- | --- | ---------------------------- | --------------------------- |
+| `L`         | Linie (Kettenmodus)                                |     | `Strg+Z` / `Strg+Y`          | Rückgängig / Wiederholen    |
+| `R`         | Rechteck                                           |     | `Strg+C` / `Strg+V`          | Kopieren / Einfügen         |
+| `C`         | Kreis                                              |     | `Strg+D`                     | Duplizieren                 |
+| `T`         | Text                                               |     | `Entf`                       | Löschen                     |
+| `P`         | Punkt                                              |     | `Strg+A`                     | Alles auswählen             |
+| `D`         | Bemaßung                                           |     | `Strg+N` / `Strg+O`          | Neu / Öffnen                |
+| `G`         | Farbverlauf ziehen                                 |     | `Strg+S` / `Strg+Umschalt+S` | Speichern / Speichern unter |
+| `Q`         | Konstruktionsgeometrie ein/aus                     |     | `Strg+E`                     | Exportieren                 |
+| `F`         | Alles anzeigen                                     |     | `Strg+K`                     | Befehlssuche                |
+| `+` / `−`   | Vergrößern / Verkleinern                           |     | `Strg+I`                     | Claude-Assistent            |
+| `F8` / `F9` | Abhängigkeiten ein-/ausblenden                     |     | `Strg+]` / `Strg+[`          | Nach vorne / nach hinten    |
+| `X`         | Stutzen                                            |     | `Strg+Umschalt+]` / `[`      | Ganz nach vorne / hinten    |
+| `E`         | Dehnen                                             |     | `Strg+G`                     | Gruppieren                  |
+| `O`         | Versatz                                            |     | `Strg+Umschalt+G`            | Gruppierung aufheben        |
+| `M`         | Messen                                             |     | `J`                          | Naht verbinden (Schnitt)    |
+|             |                                                    |     | `Strg+3`                     | 3D-Vorschau ein/aus         |
+| `S`         | Freihandskizze mit Formerkennung                   |     |                              |                             |
+| `A`         | Bogen (3 Punkte; Mittelpunktbogen im Werkzeugmenü) |     |                              |                             |
+| `N`         | Vieleck (erneuter Klick: Umkreis/Inkreis)          |     |                              |                             |
+| `B`         | Zeichenstift für Bézierpfade                       |     |                              |                             |
+| `Esc`       | Abbrechen, zurück zur Auswahl                      |     |                              |                             |
 
 Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Ziehen verschiebt die Ansicht, Rechtsklick öffnet das Markierungsmenü (wie in Inventor; Rechtsklick gedrückt halten und in eine Richtung ziehen startet den Befehl direkt). Fang an Endpunkt, Mitte, Schnittpunkt, Kreismittelpunkt, Kurve und Raster lässt sich unten in der Statusleiste umschalten.
 
 ## Entwicklung
 
-| Befehl | Zweck |
-| --- | --- |
-| `npm run dev` | Entwicklungsserver (Browser) |
-| `npm run build` | Typprüfung und Produktionsbuild nach `dist/` |
-| `npm run build:single` | Ganze App als eine HTML-Datei: `dist-single/Vektordesign.html` |
-| `npm test` | Unit-Tests: Ausdrücke, Solver, Abnahme M1, Export, Claude-Werkzeuge |
-| `npm run test:e2e` | Bedienung im echten Browser inkl. Abnahme M1–M4 (iPad-Emulation mit Touch und Stift, offline, Sync) (`CHROME_PATH` setzen) |
-| `npm run test:desktop` | Startet die Desktop-App und prüft Solver, Export und Dateibefehle im echten Fenster |
-| `npm run desktop:build` | Windows-Installer (NSIS-Setup und MSI) |
-| `npm run version:set -- 0.2.0` | Versionsnummer überall gleich setzen |
+| Befehl                         | Zweck                                                                                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run dev`                  | Entwicklungsserver (Browser)                                                                                                                           |
+| `npm run build`                | Typprüfung und Produktionsbuild nach `dist/`                                                                                                           |
+| `npm run build:single`         | Ganze App als eine HTML-Datei: `dist-single/Vektordesign.html`                                                                                         |
+| `npm test`                     | Unit-Tests: Ausdrücke, Solver, Abnahme M1, Export, Claude-Werkzeuge                                                                                    |
+| `npm run test:e2e`             | Bedienung im echten Browser inkl. Abnahme M1–M4 (iPad-Emulation mit Touch und Stift, offline, Sync) (`CHROME_PATH` setzen)                             |
+| `npm run perf`                 | Leistungsmessung im Browser: Startzeit, Bildaufbau, Mausbewegung, Zoom, Ziehen und React-Neuzeichnungen (`CHROME_PATH` setzen, vorher `npm run build`) |
+| `npm run test:desktop`         | Startet die Desktop-App und prüft Solver, Export und Dateibefehle im echten Fenster                                                                    |
+| `npm run desktop:build`        | Windows-Installer (NSIS-Setup und MSI)                                                                                                                 |
+| `npm run version:set -- 0.2.0` | Versionsnummer überall gleich setzen                                                                                                                   |
 
 ### Aufbau
 
