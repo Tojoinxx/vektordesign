@@ -3802,3 +3802,21 @@ body {
   display: flex;
   width: 100%;
 }
+/* 3D: Schalter unten rechts nebeneinander */
+.v3-toggles {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--glass);
+}
+.v3-toggles .check {
+  align-items: center;
+  white-space: nowrap;
+}
+.v3-toggles .check input {
+  margin-top: 0;
+}

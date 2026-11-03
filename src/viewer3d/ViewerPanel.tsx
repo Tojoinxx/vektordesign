@@ -188,14 +188,16 @@ export default function ViewerPanel(p: ViewerPanelProps) {
           </select>
         )}
         {avatarOpen && <AvatarControls doc={p.doc} onAvatar={p.onAvatar} onClose={() => setAvatarOpen(false)} />}
-        {pattern?.pieces.some((x) => x.role === 'hood') && (
-          <label className="v3-quality check small" title="Kapuze aufsetzen oder auf dem Rücken ablegen">
-            <input type="checkbox" checked={hoodUp} onChange={(e) => setHoodUp(e.target.checked)} data-testid="v3-hood-up" /> Kapuze auf
+        <div className="v3-toggles">
+          {pattern?.pieces.some((x) => x.role === 'hood') && (
+            <label className="check small" title="Kapuze aufsetzen oder auf dem Rücken ablegen">
+              <input type="checkbox" checked={hoodUp} onChange={(e) => setHoodUp(e.target.checked)} data-testid="v3-hood-up" /> Kapuze auf
+            </label>
+          )}
+          <label className="check small">
+            <input type="checkbox" checked={quality === 'high'} onChange={(e) => setQuality(e.target.checked ? 'high' : 'preview')} /> Fein
           </label>
-        )}
-        <label className="v3-quality check small">
-          <input type="checkbox" checked={quality === 'high'} onChange={(e) => setQuality(e.target.checked ? 'high' : 'preview')} /> Fein
-        </label>
+        </div>
       </div>
 
       {piece && pattern && (
