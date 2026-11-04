@@ -148,7 +148,18 @@ export function generatePattern(ed: Editor, body: BodyMeasures, bodySize: string
         const pid = newId(d, 'pc');
         keyToId.set(bp.key, pid);
         ids.push(shape.id);
-        p.pieces.push({ id: pid, name: bp.name, outline: shape.id, role: bp.role, cut: bp.cut, seamAllowance: bp.rib ? 7 : 10, grain: 0, material: m.id, block: true });
+        p.pieces.push({
+          id: pid,
+          name: bp.name,
+          outline: shape.id,
+          role: bp.role,
+          cut: bp.cut,
+          seamAllowance: bp.rib ? 7 : 10,
+          grain: 0,
+          material: m.id,
+          block: true,
+          ...(bp.stripeShift ? { stripeShift: Math.round(bp.stripeShift * 10) / 10 } : {}),
+        });
       }
       for (const s of res.seams) {
         p.seams.push({

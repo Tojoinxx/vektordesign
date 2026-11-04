@@ -50,6 +50,8 @@ export interface BlockPiece {
   contour: Contour;
   /** Bündchen/Rippe statt Hauptstoff */
   rib?: boolean;
+  /** Versatz des Streifenrapports (mm), damit Streifen an der Achsel auf die Seitennaht treffen */
+  stripeShift?: number;
 }
 
 export interface BlockSeam {
@@ -356,7 +358,8 @@ export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResul
   const pieces: BlockPiece[] = [
     { key: 'front', name: 'Vorderteil', role: 'front', cut: 1, contour: front.contour },
     { key: 'back', name: 'Rückenteil', role: 'back', cut: 1, contour: back.contour },
-    { key: 'sleeve', name: 'Ärmel', role: 'sleeve', cut: 2, contour: sleeve.contour },
+    // Streifen: Achselpunkt des Ärmels liegt im Rapport auf Höhe des Achselpunkts am Körper
+    { key: 'sleeve', name: 'Ärmel', role: 'sleeve', cut: 2, contour: sleeve.contour, stripeShift: sleeve.contour.nodes[2].y - front.contour.nodes[2].y },
   ];
   const seams: BlockSeam[] = [
     { a: ['front', F.sideR, 0], b: ['back', 8, 0], reversed: true, name: 'Seitennaht links' },

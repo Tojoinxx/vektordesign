@@ -1,3 +1,4 @@
+import { hasStripes, stripeBands, stripeText } from '../pattern/stripes';
 import type { Motif, SketchDoc, TechPack, Vec2 } from '../model/types';
 import { applyVariant, cmykOf, cmykText, motifColors, motifDoc, motifSize, productionOf, variantColor } from '../model/production';
 import { garmentOf, techniqueName } from '../model/garments';
@@ -258,6 +259,11 @@ function coverPage(ctx: Ctx, n: number, total: number) {
       swatch(page, rx, y - 2, m.color);
       page.text(rx + 16, y, `${m.name} – ${FABRICS.find((f) => f.id === m.fabric)?.name ?? m.fabric}, ${m.gsm} g/m²`, { size: 8.5 });
       y -= 14;
+      if (hasStripes(m)) {
+        swatch(page, rx + 4, y - 2, m.stripes.stripe, 7);
+        page.text(rx + 16, y, stripeText(m), { size: 7.5, color: MUTED });
+        y -= 12;
+      }
     }
     y -= 6;
   }
@@ -332,6 +338,20 @@ function drawPieces(ctx: Ctx, page: PdfPage, frame: { x: number; y: number; w: n
     page.opacity(0.22);
     page.fill(color).poly(g.polygon.map(P), true, 'f');
     page.restore();
+    if (!g.piece.color && hasStripes(m)) {
+      // Streifenlage im Schnittteil (Zuschnitt)
+      const top = g.box.maxY;
+      const shift = g.piece.stripeShift ?? 0;
+      page.save();
+      page.opacity(0.35);
+      page.poly(g.polygon.map(P), true, 'W n');
+      for (const [d0, d1] of stripeBands(m.stripes, shift, top - g.box.minY + shift)) {
+        const a = P({ x: g.box.minX, y: top - (d0 - shift) });
+        const b = P({ x: g.box.maxX, y: top - (d1 - shift) });
+        page.fill(m.stripes.stripe).poly([a, [b[0], a[1]], b, [a[0], b[1]]], true, 'f');
+      }
+      page.restore();
+    }
     page.save().stroke(MUTED, 0.4).dash(2, 1.5);
     for (const sa of seamAllowanceOutline(g)) page.poly(sa.map(P), true, 'S');
     page.restore();
@@ -411,12 +431,13 @@ function materialsPage(ctx: Ctx, n: number, total: number) {
     y -= 16;
     const rows = pat.materials.map((m) => {
       const used = pat.pieces.filter((p) => p.material === m.id).map((p) => p.name);
+      const st = hasStripes(m) ? m.stripes : null;
       return [
         '',
         m.name,
-        FABRICS.find((f) => f.id === m.fabric)?.name ?? m.fabric,
+        `${FABRICS.find((f) => f.id === m.fabric)?.name ?? m.fabric}${st ? ` · Ringel ${Math.round(st.width)}/${Math.round(st.stripeWidth)} mm` : ''}`,
         `${m.gsm} g/m²`,
-        m.color.toUpperCase(),
+        st ? `${m.color.toUpperCase()} / ${st.stripe.toUpperCase()}` : m.color.toUpperCase(),
         cmykText(cmykOf(m.color, productionOf(doc).colorSpecs[m.color.toLowerCase()])),
         productionOf(doc).colorSpecs[m.color.toLowerCase()]?.pantone ?? '',
         used.join(', ') || '–',
@@ -439,6 +460,12 @@ function materialsPage(ctx: Ctx, n: number, total: number) {
       rows,
       { size: 8, onRow: (i, ry) => swatch(page, M + 6, ry - 2, pat.materials[i].color, 9) },
     );
+    for (const m of pat.materials) {
+      if (!hasStripes(m)) continue;
+      y -= 4;
+      page.text(M, y, `${m.name}: ${stripeText(m)}. Streifen treffen sich an Seiten- und Armlochnaht.`, { size: 8, color: MUTED });
+      y -= 12;
+    }
     y -= 14;
   }
   sectionTitle(page, M, y, 'Zutaten und Etiketten');

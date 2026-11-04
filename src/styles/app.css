@@ -3701,3 +3701,23 @@ body {
 .v3-toggles .check input {
   margin-top: 0;
 }
+/* Streifenstoff im Schnitt-Tab */
+.stripe-editor {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 4px;
+}
+.stripe-grid {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 6px 10px;
+  align-items: end;
+  margin-top: 6px;
+}
+.stripe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}

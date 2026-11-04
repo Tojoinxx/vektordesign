@@ -305,4 +305,19 @@ describe('Aussehen aus der 3D-Ansicht', () => {
     expect(Math.max(...ys) - ref.y).toBeGreaterThan(60);
     expect(Math.max(...ys) - ref.y).toBeLessThan(120);
   });
+
+  it('Polo: Bezugspunkt ist die Kragennaht neben der Knopfleiste, nicht das Schlitzende', async () => {
+    const { makeEditor } = await import('./helpers');
+    const { generatePattern } = await import('../../src/store/patternOps');
+    const ed = await makeEditor();
+    const body = bodyForSize('H-M');
+    generatePattern(ed, body, 'H-M', defaultBlock('polo', body));
+    const front = patternExchange(ed.s.doc)!.pieces.find((p) => p.role === 'front')!;
+    const xs = front.polygon.map((p) => p[0]);
+    const ys = front.polygon.map((p) => p[1]);
+    const ref = necklineCenter(front.polygon, (Math.min(...xs) + Math.max(...xs)) / 2)!;
+    // Kragennaht vorne ca. 6–12 cm unter dem Halspunkt (Schlitzende läge über 20 cm tiefer)
+    expect(Math.max(...ys) - ref.y).toBeGreaterThan(60);
+    expect(Math.max(...ys) - ref.y).toBeLessThan(130);
+  });
 });

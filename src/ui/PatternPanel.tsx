@@ -766,6 +766,51 @@ function SeamSection() {
   );
 }
 
+/** Streifenstoff (Ringel): zweite Farbe, Breiten und Lage des ersten Streifens. */
+function StripeEditor({ m, onChange }: { m: PatternMaterial; onChange: (s: PatternMaterial['stripes']) => void }) {
+  const st = m.stripes;
+  const numIn = (label: string, value: number, key: 'width' | 'stripeWidth' | 'start', min: number) => (
+    <label className="stripe-field">
+      <span>{label}</span>
+      <Field
+        value={formatNumber(value, 1)}
+        numeric
+        width={52}
+        label={`${label} in mm`}
+        testId={`stripe-${key}`}
+        onCommit={(v) => {
+          const n = num(v);
+          if (n !== null && n >= min && st) onChange({ ...st, [key]: n });
+        }}
+      />
+    </label>
+  );
+  return (
+    <div className="stripe-editor">
+      <label className="check small">
+        <input
+          type="checkbox"
+          checked={!!st}
+          onChange={(e) => onChange(e.target.checked ? { stripe: '#1f4532', width: 90, stripeWidth: 90, start: 40 } : undefined)}
+          data-testid={`stripes-${m.name}`}
+        />{' '}
+        Streifen (Ringel)
+      </label>
+      {st && (
+        <div className="stripe-grid">
+          <label className="stripe-field">
+            <span>Streifenfarbe</span>
+            <ColorButton value={st.stripe} label="Streifenfarbe" onChange={(c) => onChange({ ...st, stripe: c })} />
+          </label>
+          {numIn('Grund mm', st.width, 'width', 1)}
+          {numIn('Streifen mm', st.stripeWidth, 'stripeWidth', 1)}
+          {numIn('Erster ab Halspunkt', st.start, 'start', -2000)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MaterialSection() {
   const app = useApp();
   const doc = useAppState((s) => s.doc);
@@ -813,10 +858,12 @@ function MaterialSection() {
             />
             <span className="muted small">g/m²</span>
           </span>
+          <StripeEditor m={m} onChange={(stripes) => upd(m.id, { stripes })} />
         </div>
       ))}
       <p className="muted small">
-        <Scissors size={13} /> Stoffart, Gewicht und Farbe nutzt die 3D-Ansicht: leichter Stoff fällt weich und liegt an, schwerer steht steifer ab und trägt dicker auf. Je Schnittteil wählbar.
+        <Scissors size={13} /> Stoffart, Gewicht, Farbe und Streifen nutzt die 3D-Ansicht (Streifen treffen sich an Seiten- und Armlochnaht): leichter Stoff fällt weich und liegt an, schwerer steht
+        steifer ab und trägt dicker auf. Je Schnittteil wählbar.
       </p>
     </section>
   );

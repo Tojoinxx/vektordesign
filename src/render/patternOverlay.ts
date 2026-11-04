@@ -2,6 +2,7 @@ import type { SketchDoc, Vec2 } from '../model/types';
 import { isHidden } from '../model/layers';
 import { checkSeams, grainLine, pieceGeom, seamAllowanceOutline, type PieceGeom } from '../pattern/geometry';
 import { THEME } from './theme';
+import { hasStripes, stripeBands } from '../pattern/stripes';
 import { toScreen, type Viewport } from './viewport';
 
 /**
@@ -45,6 +46,30 @@ export function drawPatternOverlay(ctx: CanvasRenderingContext2D, vp: Viewport, 
     });
     if (closed) ctx.closePath();
   };
+
+  // Streifenstoff: Streifen im Teil zeigen (Lage beim Zuschnitt)
+  for (const g of geoms.values()) {
+    const pc = g.piece;
+    const m = pat.materials.find((x) => x.id === pc.material);
+    if (pc.color || !hasStripes(m)) continue;
+    const top = g.box.maxY;
+    const shift = pc.stripeShift ?? 0;
+    const bands = stripeBands(m.stripes, shift, top - g.box.minY + shift);
+    if (!bands.length) continue;
+    ctx.save();
+    poly(g.polygon, true);
+    ctx.clip();
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = m.stripes.stripe;
+    const x0 = T({ x: g.box.minX, y: 0 }).x;
+    const x1 = T({ x: g.box.maxX, y: 0 }).x;
+    for (const [d0, d1] of bands) {
+      const y0 = T({ x: 0, y: top - (d0 - shift) }).y;
+      const y1 = T({ x: 0, y: top - (d1 - shift) }).y;
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    }
+    ctx.restore();
+  }
 
   // Nahtzugabe und Fadenlauf
   for (const [pid, g] of geoms) {

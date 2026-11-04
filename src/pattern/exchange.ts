@@ -35,6 +35,8 @@ export interface ExchangePiece {
   area: number;
   /** Umlaufsinn gegen den Uhrzeigersinn (Teile des Grundschnitts immer) */
   ccw: boolean;
+  /** Versatz des Streifenrapports (mm) */
+  stripeShift?: number;
 }
 
 export interface PatternExchange {
@@ -91,6 +93,7 @@ export function patternExchange(doc: SketchDoc): PatternExchange | null {
       center: [r2(g.center.x), r2(g.center.y)],
       area: r2(g.area),
       ccw: g.ccw,
+      ...(pc.stripeShift ? { stripeShift: pc.stripeShift } : {}),
     });
   }
   const ok = new Set(pieces.map((p) => p.id));

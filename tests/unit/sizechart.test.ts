@@ -129,3 +129,47 @@ describe('Polo aus der Größentabelle eines Shops', () => {
     expect(mean('Knopfleiste oben', 2)).toBeGreaterThan(mean('Knopfleiste unten', 2));
   }, 90000);
 });
+
+describe('Streifenstoff (Ringel)', () => {
+  it('Bänder, Farbe je Stelle und Text', async () => {
+    const { stripeBands, stripeColorAt, stripeText } = await import('../../src/pattern/stripes');
+    const m = { id: 'm', name: 'Oberstoff', fabric: 'jersey' as const, color: '#f3f2ec', gsm: 300, stripes: { stripe: '#234a35', width: 100, stripeWidth: 100, start: 35 } };
+    expect(stripeBands(m.stripes, 0, 400)).toEqual([
+      [35, 135],
+      [235, 335],
+    ]);
+    expect(stripeBands(m.stripes, 100, 250)).toEqual([
+      [100, 135],
+      [235, 250],
+    ]);
+    expect(stripeColorAt(m, 10)).toBe('#f3f2ec');
+    expect(stripeColorAt(m, 40)).toBe('#234a35');
+    expect(stripeColorAt(m, -70)).toBe('#234a35');
+    expect(stripeText(m)).toContain('#234A35 100 mm');
+  });
+
+  it('Polo: Streifen am Ärmel treffen an der Achsel auf die Seitennaht', async () => {
+    const { makeEditor } = await import('./helpers');
+    const { defaultBlock, generateBlock } = await import('../../src/pattern/blocks');
+    const { bodyForSize } = await import('../../src/pattern/body');
+    const { generatePattern } = await import('../../src/store/patternOps');
+    const { patternExchange } = await import('../../src/pattern/exchange');
+    const { stripeColorAt } = await import('../../src/pattern/stripes');
+    const body = bodyForSize('H-M');
+    const blk = { ...defaultBlock('polo', body, 'oversize', 'H-M'), spec: { len: 690, chest: 600 } };
+    const r = generateBlock(body, blk);
+    const front = r.pieces.find((p) => p.key === 'front')!;
+    const sleeve = r.pieces.find((p) => p.key === 'sleeve')!;
+    const m = { id: 'm', name: 'O', fabric: 'jersey' as const, color: '#ffffff', gsm: 300, stripes: { stripe: '#000000', width: 37, stripeWidth: 23, start: 11 } };
+    // Abstand von der Oberkante: Körper 0 = Halspunkt, Ärmel 0 = Kugelhöhe; dazu der Versatz
+    const dBody = -front.contour.nodes[2].y;
+    const dSleeve = -sleeve.contour.nodes[2].y + (sleeve.stripeShift ?? 0);
+    expect(dSleeve).toBeCloseTo(dBody, 6);
+    for (const dd of [-30, -5, 0, 5, 30]) expect(stripeColorAt(m, dSleeve + dd)).toBe(stripeColorAt(m, dBody + dd));
+    // im Projekt und im Austauschformat für 3D
+    const ed = await makeEditor();
+    generatePattern(ed, body, 'H-M', blk);
+    const ex = patternExchange(ed.s.doc)!;
+    expect(ex.pieces.find((p) => p.role === 'sleeve')!.stripeShift).toBeCloseTo(sleeve.stripeShift!, 0);
+  });
+});

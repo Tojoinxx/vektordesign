@@ -424,6 +424,8 @@ export interface PatternPiece {
   grain: number;
   /** Material-Id (aus `Pattern.materials`) */
   material?: Id;
+  /** Versatz des Streifenrapports (mm), damit Streifen an Nähten aufeinandertreffen (z. B. Ärmel zu Seitennaht) */
+  stripeShift?: number;
   /** Eigene Farbe für dieses Teil (sonst Farbe des Materials) */
   color?: string;
   /** Teil gehört zu einem Grundschnitt (wird beim Aktualisieren ersetzt) */
@@ -459,6 +461,12 @@ export interface PatternMaterial {
   color: string;
   /** Flächengewicht g/m² */
   gsm: number;
+  /**
+   * Streifenstoff (Ringel): abwechselnd Grundfarbe (`color`, Breite `width`) und Streifenfarbe (`stripe`, Breite
+   * `stripeWidth`), quer zum Fadenlauf. Der erste Streifen beginnt `start` mm unter der Oberkante des Teils
+   * (beim Grundschnitt: unter dem hohen Halspunkt).
+   */
+  stripes?: { stripe: string; width: number; stripeWidth: number; start: number };
 }
 
 /** Grundschnitt-Einstellungen, aus denen die Teile mit `block: true` erzeugt wurden. */

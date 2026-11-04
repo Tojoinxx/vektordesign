@@ -19,6 +19,7 @@ import { SimRunner } from '../sim3d/runner';
 import { avatarBody, genderOfSize } from '../sim3d/avatar';
 import { bodyForSize } from '../pattern/body';
 import { fabricLook, fabricNormalMap, fabricTileMm } from './textures';
+import { hasStripes, stripeBands } from '../pattern/stripes';
 
 /**
  * 3D-Ansicht: Puppe aus den Körpermaßen, simuliertes Kleidungsstück mit Stoffart, Farbe je Teil und
@@ -575,7 +576,7 @@ export class GarmentViewer {
       normal.needsUpdate = true;
       const tile = fabricTileMm(fabric);
       normal.repeat.set(b.w / tile, b.h / tile);
-      const motif = this.motifTexture(part, color, variant) ?? this.buttonTexture(part, color);
+      const motif = this.motifTexture(part, color, variant) ?? this.buttonTexture(part, color) ?? this.stripeTexture(part, color);
       const mat = new THREE.MeshPhysicalMaterial({
         vertexColors: true,
         color: new THREE.Color(motif ? '#ffffff' : color),
@@ -648,6 +649,37 @@ export class GarmentViewer {
     return tex;
   }
 
+  /** Grund eines Teils: Stofffarbe, bei Streifenstoff die Streifen (quer zum Fadenlauf, mit Versatz des Teils). */
+  private paintBase(ctx: CanvasRenderingContext2D, part: ViewPart, color: string, k: number): void {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const m = part.material;
+    if (part.piece.color || !hasStripes(m)) return;
+    const b = part.box;
+    const shift = part.piece.stripeShift ?? 0;
+    ctx.fillStyle = m.stripes.stripe;
+    // Leinwand-Zeile 0 = Oberkante des Teils; d = Abstand von oben + Versatz
+    for (const [d0, d1] of stripeBands(m.stripes, shift, b.h + shift)) ctx.fillRect(0, (d0 - shift) * k, ctx.canvas.width, (d1 - d0) * k);
+  }
+
+  /** Streifenstoff ohne Motiv: nur die Streifen als Textur. */
+  private stripeTexture(part: ViewPart, color: string): THREE.Texture | null {
+    if (part.piece.color || !hasStripes(part.material)) return null;
+    const b = part.box;
+    const k = Math.min(2, 1024 / Math.max(b.w, b.h));
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(2, Math.ceil(b.w * k));
+    cv.height = Math.max(2, Math.ceil(b.h * k));
+    const ctx = cv.getContext('2d');
+    if (!ctx) return null;
+    this.paintBase(ctx, part, color, k);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    this.motifTextures.push(tex);
+    return tex;
+  }
+
   /** Motive aus dem Tab „Produktion“ als Textur auf Vorder- und Rückenteil. */
   private motifTexture(part: ViewPart, color: string, variant: Variant | null): THREE.Texture | null {
     const doc = this.doc;
@@ -665,8 +697,7 @@ export class GarmentViewer {
     cv.height = Math.ceil(b.h * k);
     const ctx = cv.getContext('2d');
     if (!ctx) return null;
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, cv.width, cv.height);
+    this.paintBase(ctx, part, color, k);
     const v = variant ?? prod.variants[0];
     let drawn = false;
     for (const m of motifs) {
@@ -930,18 +961,30 @@ function uvBox(uv: Float64Array, count: number) {
   return { minX, minY, maxX, maxY, w: Math.max(1e-6, maxX - minX), h: Math.max(1e-6, maxY - minY), cx: (minX + maxX) / 2 };
 }
 
-/** Bezugspunkt „Kragennaht Mitte“: höchster Schnittpunkt der senkrechten Mittellinie mit dem Umriss. */
+/**
+ * Bezugspunkt „Kragennaht Mitte“: höchster Schnittpunkt der senkrechten Mittellinie mit dem Umriss.
+ * Hat das Teil in der Mitte einen Schlitz (Polo-Knopfleiste), liegt der Schnittpunkt tief unten am Schlitzende –
+ * dann gilt die Kragennaht neben dem Schlitz.
+ */
 export function necklineCenter(poly: [number, number][], cx: number): { x: number; y: number } | null {
-  let best: number | null = null;
-  for (let i = 0; i < poly.length; i++) {
-    const [ax, ay] = poly[i];
-    const [bx, by] = poly[(i + 1) % poly.length];
-    if ((ax <= cx && bx > cx) || (bx <= cx && ax > cx)) {
-      const y = ay + ((cx - ax) / (bx - ax)) * (by - ay);
-      if (best === null || y > best) best = y;
+  const crossing = (x: number): number | null => {
+    let best: number | null = null;
+    for (let i = 0; i < poly.length; i++) {
+      const [ax, ay] = poly[i];
+      const [bx, by] = poly[(i + 1) % poly.length];
+      if ((ax <= x && bx > x) || (bx <= x && ax > x)) {
+        const y = ay + ((x - ax) / (bx - ax)) * (by - ay);
+        if (best === null || y > best) best = y;
+      }
     }
-  }
-  return best === null ? null : { x: cx, y: best };
+    return best;
+  };
+  const mid = crossing(cx);
+  if (mid === null) return null;
+  const side = Math.min(...[crossing(cx - 22), crossing(cx + 22)].map((v) => v ?? -Infinity));
+  // Schlitz: neben der Mitte liegt die Kante deutlich höher als in der Mitte
+  if (Number.isFinite(side) && side - mid > 30) return { x: cx, y: side };
+  return { x: cx, y: mid };
 }
 
 /** Grobe Dreiecke eines Teils mit lokalen Indizes (zwischengespeichert). */
