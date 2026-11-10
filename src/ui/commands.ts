@@ -34,6 +34,22 @@ const report = (app: AppController, out: { ok: boolean; message?: string }) => {
   if (!out.ok && out.message) app.editor.toast(out.message, 'error');
 };
 
+/** Pfeiltasten-Schritt: Umschalt = 10 mm, Alt = 0,1 mm (aus dem letzten Tastendruck). */
+let lastMods = { shift: false, alt: false };
+if (typeof window !== 'undefined')
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key.startsWith('Arrow')) lastMods = { shift: e.shiftKey, alt: e.altKey };
+    },
+    true,
+  );
+function nudge(a: AppController, dx: number, dy: number) {
+  const k = lastMods.shift ? 10 : lastMods.alt ? 0.1 : 1;
+  if (!a.editor.s.selection.length) return;
+  report(a, a.editor.nudge(dx * k, dy * k));
+}
+
 export function buildCommands(): Command[] {
   const cmds: Command[] = [
     // Datei
@@ -76,6 +92,79 @@ export function buildCommands(): Command[] {
       run: (a) => {
         if (sel(a).length) report(a, a.editor.deleteSelection());
       },
+    },
+    {
+      id: 'edit.selectSameFill',
+      label: 'Gleiche Füllung auswählen',
+      group: 'Bearbeiten',
+      keywords: 'auswahl gleiche farbe ähnlich select same',
+      run: (a) => void a.editor.selectSame('fill'),
+    },
+    {
+      id: 'edit.selectSameStroke',
+      label: 'Gleiche Kontur auswählen',
+      group: 'Bearbeiten',
+      keywords: 'auswahl gleiche linie strich select same',
+      run: (a) => void a.editor.selectSame('stroke'),
+    },
+    {
+      id: 'edit.selectSameKind',
+      label: 'Gleiche Objektart auswählen',
+      group: 'Bearbeiten',
+      keywords: 'auswahl alle kreise texte bilder select same',
+      run: (a) => void a.editor.selectSame('kind'),
+    },
+    {
+      id: 'edit.nudge.links',
+      label: 'Auswahl nach links schieben (1 mm, Umschalt 10 mm, Alt 0,1 mm)',
+      group: 'Bearbeiten',
+      shortcut: '←',
+      keys: [
+        { key: 'ArrowLeft', shift: false },
+        { key: 'ArrowLeft', shift: true },
+        { key: 'ArrowLeft', alt: true, shift: false },
+      ],
+      keywords: 'pfeiltaste verschieben nudge',
+      run: (a) => nudge(a, -1, 0),
+    },
+    {
+      id: 'edit.nudge.rechts',
+      label: 'Auswahl nach rechts schieben (1 mm, Umschalt 10 mm, Alt 0,1 mm)',
+      group: 'Bearbeiten',
+      shortcut: '→',
+      keys: [
+        { key: 'ArrowRight', shift: false },
+        { key: 'ArrowRight', shift: true },
+        { key: 'ArrowRight', alt: true, shift: false },
+      ],
+      keywords: 'pfeiltaste verschieben nudge',
+      run: (a) => nudge(a, 1, 0),
+    },
+    {
+      id: 'edit.nudge.oben',
+      label: 'Auswahl nach oben schieben (1 mm, Umschalt 10 mm, Alt 0,1 mm)',
+      group: 'Bearbeiten',
+      shortcut: '↑',
+      keys: [
+        { key: 'ArrowUp', shift: false },
+        { key: 'ArrowUp', shift: true },
+        { key: 'ArrowUp', alt: true, shift: false },
+      ],
+      keywords: 'pfeiltaste verschieben nudge',
+      run: (a) => nudge(a, 0, 1),
+    },
+    {
+      id: 'edit.nudge.unten',
+      label: 'Auswahl nach unten schieben (1 mm, Umschalt 10 mm, Alt 0,1 mm)',
+      group: 'Bearbeiten',
+      shortcut: '↓',
+      keys: [
+        { key: 'ArrowDown', shift: false },
+        { key: 'ArrowDown', shift: true },
+        { key: 'ArrowDown', alt: true, shift: false },
+      ],
+      keywords: 'pfeiltaste verschieben nudge',
+      run: (a) => nudge(a, 0, -1),
     },
     { id: 'edit.selectAll', label: 'Alles auswählen', group: 'Bearbeiten', shortcut: 'Strg+A', keys: [{ key: 'a', ctrl: true }], run: (a) => a.editor.selectAll() },
     {
@@ -389,6 +478,15 @@ export function buildCommands(): Command[] {
     { id: 'pattern.dxf', label: 'Schnittteile als DXF exportieren', group: 'Schnitt', keywords: 'dxf schnittmuster plotter zuschnitt nahtzugabe export', run: (a) => void a.exportPatternDxf() },
 
     // Ansicht
+    {
+      id: 'view.fitSelection',
+      label: 'Auf Auswahl zoomen',
+      group: 'Ansicht',
+      shortcut: 'Umschalt+F',
+      keys: [{ key: 'f', shift: true }],
+      keywords: 'zoom auswahl heranzoomen fokus',
+      run: (a) => a.editor.zoomToSelection(),
+    },
     { id: 'view.fit', label: 'Alles anzeigen', group: 'Ansicht', shortcut: 'F', keys: [{ key: 'f' }], keywords: 'zoom', run: (a) => a.editor.zoomToFit() },
     { id: 'view.zoomIn', label: 'Vergrößern', group: 'Ansicht', shortcut: '+', keys: [{ key: '+' }, { key: '=' }], run: (a) => zoomBy(a, 1.25) },
     { id: 'view.zoomOut', label: 'Verkleinern', group: 'Ansicht', shortcut: '−', keys: [{ key: '-' }], run: (a) => zoomBy(a, 0.8) },

@@ -5,7 +5,7 @@ import type { Contour, ShapeNode, Constraint, ConstraintKind, Dimension, Dimensi
 import { addShapeFromWorld, shapeSize } from '../model/shape';
 import { productionOf } from '../model/production';
 import type { ImageEntity, Production } from '../model/types';
-import { DEFAULT_LAYER, groupMembers, isInert, layerIdOf, layersOf } from '../model/layers';
+import { DEFAULT_LAYER, groupMembers, isInert, layerIdOf, layersOf, visibleOrder } from '../model/layers';
 import { applyXf, cloneInto, type Xf, type XfReport } from './xform';
 import { extendLine, trimLine, type TrimResult } from './trimExtend';
 import { ORIGIN_ID } from '../model/types';
@@ -1941,6 +1941,92 @@ export class Editor {
 
   setView(v: Partial<ViewState>): void {
     this.set({ view: { ...this.s.view, ...v } });
+  }
+
+  /** Mit den Pfeiltasten verschieben; schnell aufeinanderfolgende Schritte ergeben einen Rückgängig-Schritt. */
+  private lastNudge = 0;
+  nudge(dx: number, dy: number, ids: Id[] = this.s.selection): CommitOutcome {
+    const doc = this.s.doc;
+    const pts = new Set<Id>();
+    for (const id of ids) {
+      if (doc.points[id]) {
+        if (!doc.points[id].locked) pts.add(id);
+        continue;
+      }
+      const target = drawableTargets(doc, [id])[0];
+      if (!target) continue;
+      for (const m of groupMembers(doc, target)) {
+        const e = doc.entities[m];
+        if (e) for (const pid of entityPointIds(doc, e)) if (pid !== ORIGIN_ID) pts.add(pid);
+      }
+    }
+    if (!pts.size) return { ok: false, reason: 'invalid', message: 'Zuerst Objekte auswählen.' };
+    const now = Date.now();
+    const amend = now - this.lastNudge < 1200 && this.s.past[this.s.past.length - 1]?.label === 'Verschieben (Pfeiltaste)';
+    this.lastNudge = now;
+    return this.commit(
+      'Verschieben (Pfeiltaste)',
+      (d) => {
+        for (const pid of pts) {
+          const p = d.points[pid];
+          if (!p) continue;
+          p.x += dx;
+          p.y += dy;
+        }
+        for (const c of Object.values(d.constraints))
+          if (c.kind === 'fix' && c.fixedAt && pts.has(c.refs[0])) {
+            c.fixedAt[0] += dx;
+            c.fixedAt[1] += dy;
+          }
+      },
+      { amend },
+    );
+  }
+
+  /** Objekte mit gleicher Füllung, Kontur oder Art wie die Auswahl auswählen (wie in Illustrator). */
+  selectSame(by: 'fill' | 'stroke' | 'kind'): number {
+    const doc = this.s.doc;
+    const src = drawableTargets(doc, this.s.selection)
+      .map((id) => doc.entities[id])
+      .filter(Boolean);
+    if (!src.length) {
+      this.toast('Zuerst ein Objekt als Vorbild auswählen.', 'info');
+      return 0;
+    }
+    const key = (e: (typeof src)[number]): string | null => {
+      if (by === 'kind') return e.kind;
+      if (by === 'fill') return e.style.fill ? JSON.stringify(e.style.fill).toLowerCase() : null;
+      return e.style.stroke && e.style.strokeWidth > 0 ? `${e.style.stroke.toLowerCase()}|${e.style.strokeWidth}` : null;
+    };
+    const want = new Set(src.map(key).filter((k): k is string => k !== null));
+    if (!want.size) {
+      this.toast(by === 'fill' ? 'Die Auswahl hat keine Füllung.' : 'Die Auswahl hat keine Kontur.', 'info');
+      return 0;
+    }
+    const hits = visibleOrder(doc).filter((id) => {
+      const e = doc.entities[id];
+      if (!e || e.construction) return false;
+      const k = key(e);
+      return k !== null && want.has(k);
+    });
+    this.select(hits);
+    return hits.length;
+  }
+
+  /** Ansicht auf die Auswahl (Umschalt+F). */
+  zoomToSelection(margin = 80): void {
+    const doc = this.s.doc;
+    const ids = drawableTargets(doc, this.s.selection);
+    const box = ids.length ? docBBox(doc, { only: new Set(ids.flatMap((id) => groupMembers(doc, id))), construction: true }) : null;
+    if (!box) {
+      this.zoomToFit();
+      return;
+    }
+    const { width, height } = this.viewport;
+    const w = Math.max(box.maxX - box.minX, 2);
+    const h = Math.max(box.maxY - box.minY, 2);
+    const zoom = Math.min((width - 2 * margin) / w, (height - 2 * margin) / h);
+    this.setView({ cx: (box.minX + box.maxX) / 2, cy: (box.minY + box.maxY) / 2, zoom: clampZoom(zoom) });
   }
 
   /** Alles anzeigen („F“). */
