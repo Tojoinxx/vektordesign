@@ -114,8 +114,9 @@ Soll das Bild selbst ins Motiv (z. B. für DTF), das Häkchen „Nur Vorlage“ 
 - Registerkarte **Bearbeiten**:
   - _Ändern_: Verschieben, Drehen, Skalieren (Faktor oder Zielbreite), Spiegeln, rechteckiges und kreisförmiges Muster – jeweils mit Eingabedialog (Ausdrücke wie `20+5` erlaubt, optional als Kopie).
   - _Skizze_: **Stutzen** (`X`) entfernt das angeklickte Linienstück bis zu den nächsten Schnittpunkten, **Dehnen** (`E`) verlängert eine Linie bis zur nächsten Geometrie.
-  - _Form_: **Text in Pfade**, **Versatz** (`O`, Rand außen/innen), **Abrunden**, **Fase**, _In Form umwandeln_.
-  - _Kombinieren_: **Vereinigen**, **Abziehen** (hinterstes minus die übrigen), **Schnittmenge**, **Ausschließen**. Text wird dabei automatisch in Pfade umgewandelt.
+  - _Form_: **Text in Pfade**, **Versatz** (`O`, Rand außen/innen), **Abrunden**, **Fase**, _In Form umwandeln_, **Kontur in Fläche** (der Strich wird zur gefüllten Form in Konturfarbe, gestrichelte Linien zu einzelnen Strichen – Plotter, Cricut und Silhouette schneiden nur Flächen).
+  - _Kombinieren_: **Formgenerator** (`Umschalt+M`, wie der Shape Builder in Illustrator): sich überlappende Formen auswählen, dann über die Teilflächen ziehen → werden zu einer Form vereinigt; mit `Alt` klicken oder ziehen → Teilflächen werden entfernt. **Vereinigen**, **Abziehen** (hinterstes minus die übrigen), **Schnittmenge**, **Ausschließen**. Text wird dabei automatisch in Pfade umgewandelt.
+- **Abhängigkeits-Manager** (Eigenschaften → _Skizze_, wie in Onshape): alle Abhängigkeiten und Bemaßungen als Liste mit Filter (Alle, Probleme, Abhängigkeiten, Maße). Überfahren hebt die beteiligte Geometrie hervor, Doppelklick oder Fadenkreuz zeigt sie, Papierkorb löscht. Bei Überbestimmung klappt er automatisch auf und zeigt die Konflikte oben in Rot.
 - **Freie Formen** (Ergebnis von Text in Pfade und booleschen Operationen) lassen sich über _Größe_ (Breite oder Höhe in mm) oder mit dem Bemaßungswerkzeug `D` proportional auf ein Maß bringen; das Maß bleibt als Bemaßung erhalten.
 - **Messen** (`M`): zwei Punkte → Abstand, Δx, Δy und Winkel; zwei Linien → Winkel; Klick in eine Fläche → Fläche, Umfang, Breite und Höhe. Die Zeichnung bleibt unverändert.
 
@@ -300,7 +301,7 @@ Optional beim Export: Rand inklusive Konturstärke und horizontal spiegeln (Flex
 | `S`         | Freihandskizze mit Formerkennung                   |     | `←` `→` `↑` `↓`              | Auswahl 1 mm schieben (`Umschalt` 10 mm, `Alt` 0,1 mm) |
 | `A`         | Bogen (3 Punkte; Mittelpunktbogen im Werkzeugmenü) |     | `Umschalt+F`                 | Auf Auswahl zoomen                                     |
 | `N`         | Vieleck (erneuter Klick: Umkreis/Inkreis)          |     | `Strg+Umschalt+C`            | Auswahl als SVG kopieren                               |
-| `B`         | Zeichenstift für Bézierpfade                       |     |                              |                                                        |
+| `B`         | Zeichenstift für Bézierpfade                       |     | `Umschalt+M`                 | Formgenerator                                          |
 | `Esc`       | Abbrechen, zurück zur Auswahl                      |     |                              |                                                        |
 
 Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Ziehen verschiebt die Ansicht, Rechtsklick öffnet das Markierungsmenü (wie in Inventor; Rechtsklick gedrückt halten und in eine Richtung ziehen startet den Befehl direkt). Fang an Endpunkt, Mitte, Schnittpunkt, Kreismittelpunkt, Kurve und Raster lässt sich unten in der Statusleiste umschalten.

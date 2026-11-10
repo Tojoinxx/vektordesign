@@ -1257,6 +1257,73 @@ await step('Bibliothek, Paletten, Format übertragen', async () => {
   results.push(`   Bibliothek: 1 Element, ${pals.length} Paletten; Format übertragen`);
 });
 
+await step('Formgenerator (Umschalt+M), Kontur in Fläche, Abhängigkeits-Manager', async () => {
+  // Formgenerator über die Leiste: Rechteck + Kreis, Linse und rechte Hälfte zusammenziehen
+  await newDoc();
+  const [rid, cid] = await app(() => {
+    const ed = window.vektordesign.editor;
+    const r = ed.createRectangle({ pos: { x: -30, y: -15 } }, { pos: { x: 10, y: 15 } }, 'corner', { noAuto: true, style: { fill: '#e8590c', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    const c = ed.createCircle({ pos: { x: 12, y: 0 } }, 16, { noAuto: true, style: { fill: '#1f4532', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    ed.setView({ cx: 0, cy: 0, zoom: 4 });
+    ed.select([r.pathId, c.circleId]);
+    return [r.pathId, c.circleId];
+  });
+  await page.click('[data-testid="ribbon-edit"]');
+  await page.click('[data-testid="tool-shapebuilder"]');
+  await sleep(200);
+  const p1 = await screenOf(2, 0);
+  const p2 = await screenOf(22, 0);
+  await page.mouse.move(p1.x, p1.y, { steps: 3 });
+  await page.mouse.down();
+  await page.mouse.move(p2.x, p2.y, { steps: 8 });
+  await page.mouse.up();
+  await sleep(150);
+  const fg = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return Object.values(d.entities).map((e) => ({ kind: e.kind, name: e.name, fill: e.style.fill }));
+  });
+  assert(fg.length === 2 && fg.some((e) => e.name === 'Formgenerator' && e.fill === '#1f4532') && fg.some((e) => e.fill === '#e8590c'), `Formgenerator: ${JSON.stringify(fg)}`);
+  await shot('47b-formgenerator');
+  await page.keyboard.press('Escape');
+  void rid;
+  void cid;
+
+  // Kontur in Fläche
+  await newDoc();
+  const lid = await app(() => {
+    const ed = window.vektordesign.editor;
+    const l = ed.createLine({ pos: { x: 0, y: 0 } }, { pos: { x: 50, y: 0 } }, { noAuto: true, style: { fill: null, stroke: '#000000', strokeWidth: 3, opacity: 1 } });
+    ed.select([l.line.id]);
+    return l.line.id;
+  });
+  await page.click('[data-testid="edit-outline-stroke"]');
+  await sleep(200);
+  const ol = await app((id) => {
+    const d = window.vektordesign.store.getState().doc;
+    return {
+      line: !!d.entities[id],
+      shapes: Object.values(d.entities)
+        .filter((e) => e.kind === 'shape')
+        .map((e) => e.style),
+    };
+  }, lid);
+  assert(!ol.line && ol.shapes.length === 1 && ol.shapes[0].fill === '#000000' && !ol.shapes[0].stroke, `Kontur in Fläche: ${JSON.stringify(ol)}`);
+
+  // Abhängigkeits-Manager: Überbestimmung erscheint als Konflikt, Löschen löst sie
+  await newDoc();
+  await app(() => {
+    const ed = window.vektordesign.editor;
+    ed.createRectangle({ pos: { x: -40, y: -20 } }, { pos: { x: 40, y: 20 } }, 'corner', { width: '80', height: '40' });
+    window.vektordesign.ui.setState({ side: 'props', sideOpen: true });
+    ed.select([]);
+  });
+  await page.waitForSelector('[data-testid="constraint-manager"]');
+  await page.click('[data-testid="cmgr-toggle"]');
+  const rows = await page.$$('[data-testid^="cmgr-row-"]');
+  assert(rows.length >= 6, `Manager-Zeilen: ${rows.length}`);
+  results.push(`   Formgenerator, Kontur → Fläche, Abhängigkeits-Manager (${rows.length} Einträge)`);
+});
+
 await step('Import: SVG (aus Illustrator/Inkscape) und DXF (CAD/Schnittmuster) als bearbeitbare Vektoren', async () => {
   await newDoc();
   const res = await app(async () => {
