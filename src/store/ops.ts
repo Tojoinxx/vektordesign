@@ -12,6 +12,12 @@ import { loadFont, makeShaper, textContours } from '../platform/fontOutline';
 import { bendText } from '../model/generators';
 import { roundOf } from '../model/arc';
 import { reduceColorMap } from '../model/library';
+import { entityContours } from '../model/boolean';
+import { contoursBBox, flattenContour } from '../model/shape';
+import { arcContour, arcGeom, pathContour as pathContourOf } from '../model/arc';
+import { pathWalker, sweepArea, textOnPath, warpContours, type WarpMode } from '../model/textEffects';
+import { circleContour } from '../model/shape';
+import { pathOfLine } from '../model/doc';
 import { drawableTargets, type CommitOutcome, type Editor } from './editor';
 import { applyXf, cloneInto } from './xform';
 
@@ -490,4 +496,151 @@ export function shadowOp(ed: Editor, dx: number, dy: number, color: string, ids:
   });
   if (out.ok) ed.select(created);
   return { ...out, ids: created };
+}
+
+// ---------------------------------------------------------------------------
+// Text- und Formeffekte (wie Kittl / Illustrator „Verkrümmen“)
+// ---------------------------------------------------------------------------
+
+/** Weltumrisse eines Objekts; Text über seine Schrift. */
+async function outlineOf(doc: SketchDoc, e: Entity, fonts: Set<string>): Promise<Contour[] | null> {
+  if (e.kind === 'text') {
+    const f = await loadFont(e.fontFamily, e.fontWeight, e.italic);
+    if (f.substitute) fonts.add(e.fontFamily);
+    return textContours(f.font, e, pt(doc, e.anchor));
+  }
+  return entityContours(doc, e);
+}
+
+const substituteNote = (ed: Editor, fonts: Set<string>) => {
+  if (fonts.size) ed.toast(`Schrift ${[...fonts].join(', ')} ist hier nicht verfügbar – ersetzt durch IBM Plex Sans.`, 'info', 6000);
+};
+
+/**
+ * Verformt Texte und Flächen gemeinsam (Bogen, Wölbung, Welle, Perspektive, Ansteigend).
+ * `bend` von −1 bis 1. Text wird dabei zu Pfaden.
+ */
+export async function warpOp(ed: Editor, mode: WarpMode, bend: number, ids: Id[] = ed.s.selection): Promise<Outcome> {
+  const doc = ed.s.doc;
+  const targets = drawableTargets(doc, ids)
+    .flatMap((id) => groupMembers(doc, id))
+    .map((id) => doc.entities[id])
+    .filter((e): e is Entity => !!e && !e.construction);
+  if (!targets.length) return fail('Zuerst Text oder Flächen auswählen.');
+  const fonts = new Set<string>();
+  const jobs: { e: Entity; cs: Contour[] }[] = [];
+  for (const e of targets) {
+    const cs = await outlineOf(doc, e, fonts);
+    if (cs?.length) jobs.push({ e, cs });
+  }
+  if (!jobs.length) return fail('Verformen geht mit Text und geschlossenen Flächen (Kreise, Rechtecke, Formen).');
+  if (ed.s.doc !== doc) return fail('Die Zeichnung hat sich währenddessen geändert – bitte noch einmal.');
+  const box = contoursBBox(jobs.flatMap((j) => j.cs));
+  if (!box) return fail('Die Auswahl hat keine Ausdehnung.');
+  const created: Id[] = [];
+  const out = ed.commit(`Verformen`, (d) => {
+    for (const j of jobs) {
+      const warped = warpContours(j.cs, box, mode, Math.max(-1, Math.min(1, bend)));
+      const name = j.e.kind === 'text' ? `Text „${j.e.text}“ verformt` : j.e.kind === 'shape' ? j.e.name : undefined;
+      created.push(replaceWithShape(d, [j.e.id], warped, j.e.style, { like: j.e, name, fillRule: j.e.kind === 'shape' ? j.e.fillRule : undefined }));
+    }
+  });
+  if (out.ok) ed.select(created);
+  substituteNote(ed, fonts);
+  return { ...out, ids: created };
+}
+
+/** Linienzug eines Pfads (Linie, Bogen, Kreis, Linienzug, Form) in Weltkoordinaten. */
+function guidePolyline(doc: SketchDoc, e: Entity): { poly: Vec2[]; closed: boolean } | null {
+  const tol = 0.01;
+  switch (e.kind) {
+    case 'line': {
+      const path = pathOfLine(doc, e.id);
+      if (path) return guidePolyline(doc, path);
+      return { poly: [pt(doc, e.p1), pt(doc, e.p2)], closed: false };
+    }
+    case 'arc':
+      return { poly: flattenContour(arcContour(arcGeom(doc, e)), tol), closed: false };
+    case 'circle': {
+      const c = pt(doc, e.center);
+      return { poly: flattenContour(circleContour(c.x, c.y, e.r), tol), closed: true };
+    }
+    case 'path':
+      return { poly: flattenContour(pathContourOf(doc, e), tol), closed: e.closed };
+    case 'shape': {
+      const c = entityContours(doc, e)?.[0];
+      return c ? { poly: flattenContour(c, tol), closed: true } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Text auf Pfad: legt den gewählten Text auf die gewählte Linie, den Bogen, Kreis oder Linienzug.
+ * Offene Pfade werden von links gelesen, geschlossene oben im Uhrzeigersinn.
+ */
+export async function textOnPathOp(ed: Editor, align: 'start' | 'center' | 'end', offset: number, ids: Id[] = ed.s.selection): Promise<Outcome> {
+  const doc = ed.s.doc;
+  const ents = ids.map((id) => doc.entities[doc.points[id]?.owner ?? id]).filter((e): e is Entity => !!e);
+  const text = ents.find((e): e is TextEntity => e.kind === 'text');
+  const guideEnt = ents.find((e) => e.kind !== 'text' && e.kind !== 'image');
+  if (!text || !guideEnt) return fail('Einen Text und einen Pfad (Linie, Bogen, Kreis, Linienzug oder Form) auswählen.');
+  const guide = guidePolyline(doc, guideEnt);
+  if (!guide || guide.poly.length < 2) return fail('Dieser Pfad lässt sich nicht als Leitlinie nutzen.');
+  const f = await loadFont(text.fontFamily, text.fontWeight, text.italic);
+  const t = makeShaper(f.font)(text.text, text.fontSize);
+  if (ed.s.doc !== doc) return fail('Die Zeichnung hat sich währenddessen geändert – bitte noch einmal.');
+  const walker = pathWalker(guide.poly, guide.closed);
+  const contours = textOnPath(t.contours, t.width, walker, align, offset);
+  let id: Id | undefined;
+  const out = ed.commit('Text auf Pfad', (d) => {
+    id = replaceWithShape(d, [text.id], contours, text.style, { like: text, name: `Text „${text.text}“ auf Pfad` });
+  });
+  if (out.ok && id) ed.select([id]);
+  if (t.width > walker.length + 1e-6) ed.toast(`Der Text ist ${(t.width - walker.length).toFixed(1).replace('.', ',')} mm länger als der Pfad – er läuft über das Ende hinaus.`, 'info', 6000);
+  if (f.substitute) ed.toast(`Schrift ${text.fontFamily} ist hier nicht verfügbar – ersetzt durch IBM Plex Sans.`, 'info', 6000);
+  return { ...out, ids: id ? [id] : [] };
+}
+
+/**
+ * Langer Schatten bzw. 3D-Tiefe: die Auswahl wird in Richtung `angle` (Grad, 0 = rechts,
+ * gegen den Uhrzeigersinn) um `length` mm „gezogen“; die überstrichene Fläche liegt als eine
+ * Form in `color` direkt hinter den Objekten.
+ */
+export async function longShadowOp(ed: Editor, angle: number, length: number, color: string, ids: Id[] = ed.s.selection): Promise<Outcome> {
+  const doc = ed.s.doc;
+  const targets = drawableTargets(doc, ids)
+    .flatMap((id) => groupMembers(doc, id))
+    .map((id) => doc.entities[id])
+    .filter((e): e is Entity => !!e && !e.construction);
+  if (!targets.length) return fail('Zuerst Text oder Flächen auswählen.');
+  if (!(length > 0)) return fail('Die Länge muss größer als 0 sein.');
+  const fonts = new Set<string>();
+  const polys: Vec2[][] = [];
+  for (const e of targets) {
+    const cs = await outlineOf(doc, e, fonts);
+    if (cs?.length) for (const c of cs) if (c.closed) polys.push(flattenContour(c, 0.02));
+  }
+  if (!polys.length) return fail('Langer Schatten geht mit Text und geschlossenen Flächen.');
+  if (ed.s.doc !== doc) return fail('Die Zeichnung hat sich währenddessen geändert – bitte noch einmal.');
+  const a = (angle * Math.PI) / 180;
+  const area = sweepArea(unionAreaOf(polys), Math.cos(a) * length, Math.sin(a) * length);
+  if (!area.length) return fail('Es ist keine Schattenfläche entstanden.');
+  let id: Id | undefined;
+  const out = ed.commit('Langer Schatten', (d) => {
+    const s = addShapeFromWorld(d, polysToContours(area), { ...targets[0].style, fill: color, stroke: null, opacity: 1 }, { name: 'Langer Schatten', layer: targets[0].layer });
+    id = s.id;
+    // hinter das hinterste Objekt
+    d.order = d.order.filter((x) => x !== s.id);
+    const back = Math.min(...targets.map((e) => d.order.indexOf(e.id)).filter((i) => i >= 0));
+    d.order.splice(Number.isFinite(back) ? back : 0, 0, s.id);
+  });
+  if (out.ok && id) ed.select([id]);
+  substituteNote(ed, fonts);
+  return { ...out, ids: id ? [id] : [] };
+}
+
+function unionAreaOf(polys: Vec2[][]): Vec2[][] {
+  return booleanAreas('union', [polys]);
 }

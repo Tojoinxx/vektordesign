@@ -5,7 +5,8 @@ import { separate } from '../model/separation';
 import { addShapeFromWorld } from '../model/shape';
 import { polysToContours } from '../model/boolean';
 import { docColors } from '../model/library';
-import { normalizeHex } from '../model/color';
+import { hexToRgb, hsvToRgb, normalizeHex, rgbToHex, rgbToHsv } from '../model/color';
+import { WARP_LABELS, type WarpMode } from '../model/textEffects';
 import { FormatTool } from '../tools/formatTool';
 import { SeamTool } from '../tools/seamTool';
 import { exportPatternDxf } from '../export/patternDxf';
@@ -17,7 +18,7 @@ import { setAvatar, setPieceLook, updateMaterial } from '../store/patternOps';
 import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
 import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
 import { createAppStore, type AppStore, type ToolId } from '../store/state';
-import { Editor, type PlacedPoint } from '../store/editor';
+import { drawableTargets, Editor, type PlacedPoint } from '../store/editor';
 import type { SceneLayout } from '../render/renderer';
 import type { Viewport } from '../render/viewport';
 import { SelectTool } from '../tools/selectTool';
@@ -46,6 +47,9 @@ import {
   reduceColorsOp,
   selectionCenter,
   shadowOp,
+  warpOp,
+  textOnPathOp,
+  longShadowOp,
   textOnCircleOp,
   selectionSize,
   textToPaths,
@@ -216,6 +220,9 @@ export type EditCommand =
   | 'text-circle'
   | 'shadow'
   | 'reduce-colors'
+  | 'warp'
+  | 'text-path'
+  | 'long-shadow'
   | BoolOp;
 
 export interface ExportRequest {
@@ -941,6 +948,77 @@ export class AppController {
               const changed = [...out.map].filter(([a, b]) => a !== b);
               ed.toast(changed.length ? `Zusammengefasst: ${changed.map(([a, b]) => `${a.toUpperCase()} → ${b.toUpperCase()}`).join(', ')}` : 'Keine Änderung', 'success', 7000);
             }
+          },
+        });
+        return;
+      }
+      case 'warp':
+        if (needSel()) return;
+        open({
+          title: 'Verformen',
+          text: 'Biegt Text und Flächen gemeinsam in ihrer Box – wie die Texteffekte in Kittl oder „Verkrümmen“ in Illustrator. Text wird dabei zu Pfaden (danach nicht mehr als Text bearbeitbar). Strg+Z nimmt es zurück.',
+          fields: [
+            {
+              key: 'mode',
+              label: 'Art',
+              value: 'arc',
+              kind: 'choice',
+              options: (Object.keys(WARP_LABELS) as WarpMode[]).map((k) => ({ value: k, label: WARP_LABELS[k] })),
+            },
+            { key: 'bend', label: 'Stärke', unit: '%', value: '40', hint: 'Negativ biegt in die andere Richtung, z. B. −40' },
+          ],
+          ok: 'Verformen',
+          run: (v) => {
+            const b = num(v.bend, 'Stärke');
+            if (Math.abs(b) > 100) throw new Error('Die Stärke liegt zwischen −100 und 100 %.');
+            void this.runOp(warpOp(ed, v.mode as WarpMode, b / 100));
+          },
+        });
+        return;
+      case 'text-path':
+        if (needSel()) return;
+        open({
+          title: 'Text auf Pfad',
+          text: 'Legt den gewählten Text auf die gewählte Linie, den Bogen, Kreis, Linienzug oder die Form. Offene Pfade werden von links gelesen, geschlossene oben im Uhrzeigersinn. Der Text wird zu Pfaden.',
+          fields: [
+            {
+              key: 'align',
+              label: 'Ausrichtung',
+              value: 'center',
+              kind: 'choice',
+              options: [
+                { value: 'start', label: 'Am Anfang' },
+                { value: 'center', label: 'Mittig' },
+                { value: 'end', label: 'Am Ende' },
+              ],
+            },
+            { key: 'offset', label: 'Abstand zum Pfad', unit: 'mm', value: '1', hint: 'Negativ setzt den Text unter den Pfad' },
+          ],
+          ok: 'Auf Pfad legen',
+          run: (v) => void this.runOp(textOnPathOp(ed, v.align as 'start' | 'center' | 'end', num(v.offset, 'Abstand'))),
+        });
+        return;
+      case 'long-shadow': {
+        if (needSel()) return;
+        const first = drawableTargets(doc, sel)
+          .map((id) => doc.entities[id])
+          .find((e) => e && typeof e.style.fill === 'string');
+        const base = first && typeof first.style.fill === 'string' ? first.style.fill : '#1e2328';
+        const hsv = rgbToHsv(hexToRgb(base));
+        const dark = rgbToHex(hsvToRgb({ ...hsv, v: Math.max(8, hsv.v * 0.55) }));
+        open({
+          title: 'Langer Schatten / 3D-Tiefe',
+          text: 'Zieht die Auswahl in eine Richtung und legt die überstrichene Fläche als eigene Druckfarbe dahinter – kurz = 3D-Tiefe, lang = langer Schatten. Text bleibt Text.',
+          fields: [
+            { key: 'angle', label: 'Richtung', unit: '°', value: '-45', hint: '0 = rechts, −45 = rechts unten, −90 = unten' },
+            { key: 'length', label: 'Länge', unit: 'mm', value: '4' },
+            { key: 'color', label: 'Farbe (HEX)', value: dark },
+          ],
+          ok: 'Anlegen',
+          run: (v) => {
+            const c = normalizeHex(v.color.trim());
+            if (!c) throw new Error('Farbe bitte als HEX angeben, z. B. #1E2328.');
+            void this.runOp(longShadowOp(ed, num(v.angle, 'Richtung'), num(v.length, 'Länge'), c));
           },
         });
         return;

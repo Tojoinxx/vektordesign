@@ -28,6 +28,9 @@ import {
   SwatchBook,
   LayoutGrid,
   Calculator,
+  Rainbow,
+  Spline,
+  Box,
 } from 'lucide-react';
 import type { ConstraintKind } from '../model/types';
 import { CONSTRAINT_LABELS } from '../solver/analysis';
@@ -417,14 +420,21 @@ function DesignRibbon() {
         <Big icon={<Paintbrush size={22} strokeWidth={1.75} />} label="Format übertragen" active={tool === 'format'} onClick={() => app.setTool('format')} testId="tool-format" />
         <Stack>
           <Small icon={<IconReduce size={18} />} label="Farben reduzieren" onClick={cmd('reduce-colors')} testId="edit-reduce" />
-          <Small icon={<IconShadow size={18} />} label="Schatten" onClick={cmd('shadow')} testId="edit-shadow" />
+        </Stack>
+      </Group>
+      <Group title="Text-Effekte">
+        <Big icon={<Rainbow size={22} strokeWidth={1.75} />} label="Verformen" onClick={cmd('warp')} testId="edit-warp" />
+        <Big icon={<Spline size={22} strokeWidth={1.75} />} label="Text auf Pfad" onClick={cmd('text-path')} testId="edit-text-path" />
+        <Big icon={<Box size={22} strokeWidth={1.75} />} label="Langer Schatten" onClick={cmd('long-shadow')} testId="edit-long-shadow" />
+        <Stack>
+          <Small icon={<IconTextCircle size={18} />} label="Text auf Kreis" onClick={cmd('text-circle')} testId="edit-text-circle" />
+          <Small icon={<IconShadow size={18} />} label="Schatten (versetzte Kopie)" onClick={cmd('shadow')} testId="edit-shadow" />
         </Stack>
       </Group>
       <Group title="Textil">
         <Big icon={<IconHalftone />} label="Halbton" onClick={cmd('halftone')} testId="edit-halftone" />
         <Big icon={<IconGrunge />} label="Used-Look" onClick={cmd('grunge')} testId="edit-grunge" />
         <Big icon={<IconRapport />} label="Rapport" onClick={cmd('rapport')} testId="edit-rapport" />
-        <Big icon={<IconTextCircle />} label="Text auf Kreis" onClick={cmd('text-circle')} testId="edit-text-circle" />
       </Group>
       <Group title="Einfügen">
         <Big icon={<IconBadge />} label="Vorlagen" onClick={() => app.ui.setState({ generator: true })} testId="insert-generator" />
