@@ -18,6 +18,10 @@ import { arcContour, arcGeom, pathContour as pathContourOf } from '../model/arc'
 import { pathWalker, sweepArea, textOnPath, warpContours, type WarpMode } from '../model/textEffects';
 import { circleContour } from '../model/shape';
 import { pathOfLine } from '../model/doc';
+import { dashContours, strokeArea } from '../model/boolean';
+import { strokeContours } from '../model/separation';
+import { dashPattern } from '../render/drawDesign';
+import { buildRegions, planBuild, type BuilderRegion } from '../model/shapeBuilder';
 import { drawableTargets, type CommitOutcome, type Editor } from './editor';
 import { applyXf, cloneInto } from './xform';
 
@@ -164,6 +168,132 @@ export async function booleanOp(ed: Editor, op: BoolOp, ids: Id[] = ed.s.selecti
     // Misslungen: auch die Umwandlung der Texte zurücknehmen
     if (ed.endTransaction() > 0 && !ok) ed.undo();
   }
+}
+
+/**
+ * Kontur in Fläche umwandeln (wie „Konturlinie“ in Illustrator): Der Strich wird zu einer gefüllten Form in der
+ * Konturfarbe – Plotter, Cricut und Silhouette schneiden nur Flächen. Hat das Objekt auch eine Füllung, bleibt es
+ * ohne Kontur darunter liegen. Gestrichelte Linien werden in einzelne Striche zerlegt.
+ */
+export async function outlineStrokeOp(ed: Editor, ids: Id[] = ed.s.selection): Promise<Outcome> {
+  let doc = ed.s.doc;
+  let targets = drawableTargets(doc, ids).flatMap((id) => groupMembers(doc, id));
+  targets = [...new Set(targets)].filter((id) => {
+    const e = doc.entities[id];
+    return e && !e.construction && e.style.stroke && e.style.strokeWidth > 0;
+  });
+  if (!targets.length) return fail('Kein Objekt mit Kontur ausgewählt.');
+  const label = 'Kontur in Fläche';
+  ed.beginTransaction(label);
+  let ok = false;
+  try {
+    const texts = targets.filter((id) => doc.entities[id]?.kind === 'text');
+    if (texts.length) {
+      const t = await textToPaths(ed, texts);
+      if (!t.ok) return t;
+      doc = ed.s.doc;
+      targets = [...targets.filter((id) => !texts.includes(id)), ...(t.ids ?? [])];
+    }
+    const items: { e: Entity; contours: Contour[] }[] = [];
+    for (const id of targets) {
+      const e = doc.entities[id];
+      if (!e?.style.stroke) continue;
+      const st = e.style;
+      let cs = strokeContours(doc, e);
+      const dash = dashPattern(st);
+      if (dash) cs = dashContours(cs, dash);
+      const cap = st.dash === 'dotted' ? 'round' : (st.lineCap ?? 'butt');
+      const area = strokeArea(cs, st.strokeWidth, cap);
+      if (area.length) items.push({ e, contours: polysToContours(area) });
+    }
+    if (!items.length) return fail('Die Kontur ergibt keine Fläche.');
+    const created: Id[] = [];
+    const out = ed.commit(label, (d) => {
+      for (const { e, contours } of items) {
+        const strokeStyle: Style = { fill: e.style.stroke, stroke: null, strokeWidth: 0, opacity: e.style.opacity };
+        const hasFill = !!e.style.fill && e.kind !== 'line' && !(e.kind === 'path' && !e.closed) && e.kind !== 'arc';
+        if (hasFill) {
+          // Füllung bleibt (ohne Kontur), Konturfläche direkt darüber
+          d.entities[e.id].style = { ...e.style, stroke: null, strokeWidth: 0 };
+          const s = addShapeFromWorld(d, contours, strokeStyle, { fillRule: 'nonzero', layer: e.layer, name: 'Kontur' });
+          if (e.group) s.group = e.group;
+          d.order = d.order.filter((x) => x !== s.id);
+          d.order.splice(d.order.indexOf(e.id) + 1, 0, s.id);
+          created.push(e.id, s.id);
+        } else created.push(replaceWithShape(d, [e.id], contours, strokeStyle, { fillRule: 'nonzero', like: e, name: 'Kontur' }));
+      }
+    });
+    if (out.ok) {
+      ok = true;
+      ed.select(created);
+    }
+    return { ...out, ids: created };
+  } finally {
+    if (ed.endTransaction() > 0 && !ok) ed.undo();
+  }
+}
+
+/** Ausgangsflächen für den Formgenerator: geschlossene Flächen der Auswahl, von hinten nach vorne. */
+export function builderSources(doc: SketchDoc, ids: Id[]): { ids: Id[]; areas: Vec2[][][]; regions: BuilderRegion[]; skipped: number } {
+  let targets = drawableTargets(doc, ids).flatMap((id) => groupMembers(doc, id));
+  targets = [...new Set(targets)];
+  const order = layeredOrder(doc);
+  targets.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const out: Id[] = [];
+  const areas: Vec2[][][] = [];
+  let skipped = 0;
+  for (const id of targets) {
+    const e = doc.entities[id];
+    const a = e && !e.construction && e.kind !== 'text' && e.kind !== 'image' ? entityArea(doc, e) : null;
+    if (a?.length) {
+      out.push(id);
+      areas.push(a);
+    } else skipped++;
+  }
+  return { ids: out, areas, regions: buildRegions(areas), skipped };
+}
+
+/**
+ * Formgenerator anwenden: Teilflächen `picked` vereinigen (neue Form) oder entfernen. Die beteiligten
+ * Ausgangsformen verlieren diese Teilflächen; unbeteiligte bleiben unverändert. Ein Rückgängig-Schritt.
+ */
+export function shapeBuildOp(ed: Editor, src: { ids: Id[]; areas: Vec2[][][]; regions: BuilderRegion[] }, picked: number[], mode: 'merge' | 'delete'): Outcome {
+  const plan = planBuild(src.areas, src.regions, picked, mode);
+  if (!plan) return fail('Keine Teilfläche gewählt.');
+  const doc = ed.s.doc;
+  if (src.ids.some((id) => !doc.entities[id])) return fail('Die Zeichnung hat sich geändert – bitte neu auswählen.');
+  const result: Id[] = [];
+  const label = mode === 'merge' ? 'Formgenerator: vereinigen' : 'Formgenerator: entfernen';
+  const out = ed.commit(label, (d) => {
+    // vordersten beteiligten Platz merken, bevor Formen ersetzt werden
+    const involved = src.ids.filter((_, i) => plan.rest[i] !== null);
+    const frontId = involved.reduce((p, q) => (d.order.indexOf(q) > d.order.indexOf(p) ? q : p), involved[0]);
+    const styleSrc = doc.entities[src.ids[plan.styleFrom]];
+    let merged: Id | null = null;
+    if (plan.merged) {
+      const sh = addShapeFromWorld(d, polysToContours(plan.merged), structuredClone(styleSrc.style), { fillRule: 'evenodd', layer: styleSrc.layer, name: 'Formgenerator' });
+      if (styleSrc.group) sh.group = styleSrc.group;
+      d.order = d.order.filter((x) => x !== sh.id);
+      d.order.splice(d.order.indexOf(frontId) + 1, 0, sh.id);
+      merged = sh.id;
+    }
+    src.ids.forEach((id, i) => {
+      const rest = plan.rest[i];
+      const e = doc.entities[id];
+      if (rest === null) {
+        result.push(id);
+        return;
+      }
+      if (!rest.length) {
+        deleteIds(d, [id]);
+        return;
+      }
+      result.push(replaceWithShape(d, [id], polysToContours(rest), structuredClone(e.style), { fillRule: 'evenodd', like: e, name: e.kind === 'shape' ? e.name : undefined }));
+    });
+    // Die ersetzte vorderste Form rückt an ihren alten Platz, also direkt hinter die neue Fläche.
+    if (merged) result.push(merged);
+  });
+  return { ...out, ids: result };
 }
 
 /** Versatz: neue Form im Abstand `delta` mm um die Auswahl (negativ = nach innen). */

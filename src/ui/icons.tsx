@@ -274,6 +274,21 @@ export const IconToShape = (p: { size?: number }) => (
     <circle cx="9" cy="9" r="1.4" />
   </Icon>
 );
+export const IconOutlineStroke = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 17 C8 5 16 5 20 17" strokeWidth="4.2" strokeOpacity="0.18" />
+    <path d="M4.8 19.2 C8.4 8.6 15.6 8.6 19.2 19.2 M3.2 14.8 C7.6 1.6 16.4 1.6 20.8 14.8" />
+  </Icon>
+);
+export const IconShapeBuilder = (p: { size?: number }) => (
+  <Icon {...p}>
+    <circle cx="9" cy="10" r="5.5" />
+    <circle cx="15" cy="10" r="5.5" />
+    <path d="M12 5.4 A5.5 5.5 0 0 1 12 14.6 A5.5 5.5 0 0 1 12 5.4 Z" fill="currentColor" fillOpacity="0.35" stroke="none" />
+    <path d="M5 20 L19 20" strokeDasharray="2 2" />
+    <path d="M17 18 L19 20 L17 22" />
+  </Icon>
+);
 const boolShapes = (fillA: number, fillB: number, fillI: number) => (
   <>
     <defs />

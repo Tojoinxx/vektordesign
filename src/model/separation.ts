@@ -67,7 +67,7 @@ export function sameColor(a: string, b: string, tol = 12): boolean {
 export const isDarkFabric = (fabric: string) => luminance(fabric) < 0.45;
 
 /** Konturen eines Objekts (für den Strich). */
-function strokeContours(doc: SketchDoc, e: Entity, outlines?: Map<Id, Contour[]>): Contour[] {
+export function strokeContours(doc: SketchDoc, e: Entity, outlines?: Map<Id, Contour[]>): Contour[] {
   switch (e.kind) {
     case 'line':
       return [polygonContour([pt(doc, e.p1), pt(doc, e.p2)], false)];

@@ -8,6 +8,7 @@ import { docColors } from '../model/library';
 import { hexToRgb, hsvToRgb, normalizeHex, rgbToHex, rgbToHsv } from '../model/color';
 import { WARP_LABELS, type WarpMode } from '../model/textEffects';
 import { FormatTool } from '../tools/formatTool';
+import { ShapeBuilderTool } from '../tools/shapeBuilderTool';
 import { SeamTool } from '../tools/seamTool';
 import { exportPatternDxf } from '../export/patternDxf';
 import { buildTechPack, techPackFileName } from '../export/techPack';
@@ -54,6 +55,7 @@ import {
   selectionSize,
   textToPaths,
   toShape,
+  outlineStrokeOp,
 } from '../store/ops';
 import type { BoolOp } from '../model/boolean';
 import { evaluate, numberToExpr } from '../params/expr';
@@ -215,6 +217,7 @@ export type EditCommand =
   | 'fillet'
   | 'chamfer'
   | 'text-to-paths'
+  | 'outline-stroke'
   | 'to-shape'
   | 'halftone'
   | 'grunge'
@@ -386,6 +389,9 @@ export class AppController {
         break;
       case 'format':
         t = new FormatTool(this.ctx);
+        break;
+      case 'shapebuilder':
+        t = new ShapeBuilderTool(this.ctx);
         break;
       case 'seam':
         t = new SeamTool(this.ctx);
@@ -721,6 +727,9 @@ export class AppController {
         return;
       case 'text-to-paths':
         if (!needSel()) void this.runOp(textToPaths(ed));
+        return;
+      case 'outline-stroke':
+        if (!needSel()) void this.runOp(outlineStrokeOp(ed));
         return;
       case 'to-shape':
         if (!needSel()) void this.runOp(toShape(ed));

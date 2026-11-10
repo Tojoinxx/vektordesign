@@ -64,6 +64,8 @@ import {
   IconChamfer,
   IconTextToPaths,
   IconToShape,
+  IconOutlineStroke,
+  IconShapeBuilder,
   IconUnion,
   IconSubtract,
   IconIntersect,
@@ -365,9 +367,11 @@ function EditRibbon() {
         <Big icon={<IconTextToPaths />} label="Text → Pfade" onClick={cmd('text-to-paths')} testId="edit-text-to-paths" />
         <Stack>
           <Small icon={<IconToShape size={18} />} label="In Form umwandeln (Skizze → freie Form)" onClick={cmd('to-shape')} testId="edit-to-shape" />
+          <Small icon={<IconOutlineStroke size={18} />} label="Kontur in Fläche (für Plotter)" onClick={cmd('outline-stroke')} testId="edit-outline-stroke" />
         </Stack>
       </Group>
       <Group title="Kombinieren">
+        <Big icon={<IconShapeBuilder />} label="Formgenerator" kbd="Umschalt+M" active={tool === 'shapebuilder'} onClick={() => app.setTool('shapebuilder')} testId="tool-shapebuilder" />
         <Big icon={<IconUnion />} label="Vereinigen" onClick={cmd('union')} testId="bool-union" />
         <Big icon={<IconSubtract />} label="Abziehen" onClick={cmd('subtract')} testId="bool-subtract" />
         <Stack>

@@ -14,6 +14,7 @@ export type ToolId =
   | 'star'
   | 'pen'
   | 'format'
+  | 'shapebuilder'
   | 'text'
   | 'point'
   | 'dimension'
