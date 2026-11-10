@@ -259,6 +259,7 @@ const SNAPS: [keyof Settings, string, string][] = [
   ['snapCenter', 'Kreismittelpunkt', 'Zentrum'],
   ['snapOnCurve', 'Auf Kurve', 'Kurve'],
   ['gridSnap', 'Raster', 'Raster'],
+  ['smartGuides', 'Smarte Hilfslinien beim Verschieben (Alt = frei ziehen)', 'Hilfslinien'],
 ];
 
 export function StatusBar() {

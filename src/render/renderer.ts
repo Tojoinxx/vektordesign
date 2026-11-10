@@ -16,6 +16,7 @@ import { gridStep, toScreen, toWorld, visibleWorld, type Viewport } from './view
 import { formatNumber } from '../params/expr';
 import { drawPatternOverlay } from './patternOverlay';
 import { spritesAvailable, stamp } from './sprites';
+import { strokeContours } from '../model/separation';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -174,8 +175,10 @@ function drawHover(ctx: Ctx, s: SceneState, layout: SceneLayout): void {
   const problems = problemSet(doc, s.analysis);
   if (id === ORIGIN_ID) drawOrigin(ctx, vp, true);
   else if (doc.dims[id]) {
+    drawRefs(ctx, s, doc.dims[id].refs);
     if (s.settings.showDims) drawDimensions(ctx, s, problems.items, id);
   } else if (doc.constraints[id]) {
+    drawRefs(ctx, s, doc.constraints[id].refs);
     const items = layout.glyphs.filter((g) => g.constraintId === id);
     if (items.length) drawGlyphs(ctx, items, { hover: id, selection: s.selection, problems: problems.items });
   } else if (s.settings.showOverlay) {
@@ -183,6 +186,33 @@ function drawHover(ctx: Ctx, s: SceneState, layout: SceneLayout): void {
     const e = doc.entities[id];
     if (e?.kind === 'path') for (const ed of e.edges) only.add(ed.id);
     drawSketchOverlay(ctx, s, problems.entities, only);
+  }
+  ctx.restore();
+}
+
+/** Bezüge einer Abhängigkeit/Bemaßung hervorheben (Linien, Kreise, Punkte), z. B. beim Überfahren im Abhängigkeits-Manager. */
+function drawRefs(ctx: Ctx, s: SceneState, refs: Id[]): void {
+  const { doc, vp } = s;
+  const T = (p: Vec2) => toScreen(vp, p);
+  ctx.save();
+  ctx.strokeStyle = THEME.hover;
+  ctx.fillStyle = THEME.hover;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (const r of refs) {
+    const p = doc.points[r];
+    if (p) {
+      const q = T(p);
+      ctx.fillRect(q.x - 4, q.y - 4, 8, 8);
+      continue;
+    }
+    const e = doc.entities[r];
+    if (!e) continue;
+    for (const c of strokeContours(doc, e)) {
+      ctx.beginPath();
+      traceContour(ctx, T, c);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -195,6 +225,7 @@ function renderStatic(ctx: Ctx, s: SceneState, extra?: (ctx: Ctx, vp: Viewport) 
 
   if (settings.grid) drawGrid(ctx, vp);
   drawAxes(ctx, vp);
+  drawGuides(ctx, vp, doc.guides);
 
   const T = (p: Vec2) => toScreen(vp, p);
   drawDesign({ ctx, toScreen: T, scale: vp.zoom, minStrokePx: 0.6, contrast: { background: THEME.paper, hint: THEME.contrastHint } }, doc, { skip: s.skip });
@@ -266,6 +297,30 @@ function drawGrid(ctx: Ctx, vp: Viewport): void {
   };
   lines(minor, THEME.gridMinor);
   lines(major, THEME.gridMajor);
+}
+
+/** Hilfslinien aus dem Lineal: über die ganze Fläche, dünn und hellblau (wie in Illustrator). */
+export function drawGuides(ctx: Ctx, vp: Viewport, guides: SketchDoc['guides'], active?: string | null): void {
+  if (!guides?.length) return;
+  ctx.save();
+  ctx.lineWidth = 1;
+  for (const g of guides) {
+    ctx.strokeStyle = THEME.guide;
+    ctx.globalAlpha = g.id === active ? 1 : 0.85;
+    ctx.lineWidth = g.id === active ? 2 : 1;
+    ctx.beginPath();
+    if (g.axis === 'x') {
+      const x = Math.round(toScreen(vp, { x: g.at, y: 0 }).x) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, vp.height);
+    } else {
+      const y = Math.round(toScreen(vp, { x: 0, y: g.at }).y) + 0.5;
+      ctx.moveTo(0, y);
+      ctx.lineTo(vp.width, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawAxes(ctx: Ctx, vp: Viewport): void {

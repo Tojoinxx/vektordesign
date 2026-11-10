@@ -39,6 +39,7 @@ const views = {
   screen: () => import('./ScreenPrintView'),
   costs: () => import('./CostView'),
   generator: () => import('./GeneratorView'),
+  warp: () => import('./WarpTextView'),
 };
 const PlacementView = lazy(() => views.placement().then((m) => ({ default: m.PlacementView })));
 const MockupView = lazy(() => views.mockup().then((m) => ({ default: m.MockupView })));
@@ -47,6 +48,7 @@ const TechPackView = lazy(() => views.techPack().then((m) => ({ default: m.TechP
 const ScreenPrintView = lazy(() => views.screen().then((m) => ({ default: m.ScreenPrintView })));
 const CostView = lazy(() => views.costs().then((m) => ({ default: m.CostView })));
 const GeneratorView = lazy(() => views.generator().then((m) => ({ default: m.GeneratorView })));
+const WarpTextView = lazy(() => views.warp().then((m) => ({ default: m.WarpTextView })));
 
 /** Nach dem Start im Leerlauf vorladen, damit das erste Öffnen ohne Wartezeit klappt. */
 function preloadViews() {
@@ -67,6 +69,7 @@ function LazyViews() {
   const screen = useUi((s) => s.screenPrint);
   const costs = useUi((s) => s.costs);
   const generator = useUi((s) => s.generator);
+  const warp = useUi((s) => s.warpText);
   return (
     <>
       <Gate when={placement}>
@@ -89,6 +92,9 @@ function LazyViews() {
       </Gate>
       <Gate when={generator}>
         <GeneratorView />
+      </Gate>
+      <Gate when={warp}>
+        <WarpTextView />
       </Gate>
     </>
   );

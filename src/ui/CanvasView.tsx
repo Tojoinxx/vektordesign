@@ -8,6 +8,9 @@ import { onImageLoaded } from '../model/image';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
 import type { PreflightResult } from '../model/preflight';
 import { computeSnap } from '../tools/snap';
+import { hitTest } from '../tools/hit';
+import { RULER } from '../render/theme';
+import { gridStep } from '../render/viewport';
 import type { ToolPointer } from '../tools/types';
 import { clampZoom } from '../store/editor';
 import { useApp, useAppState } from './hooks';
@@ -560,6 +563,63 @@ export function CanvasView() {
     lastTouchEnd.current = Date.now();
   };
 
+  /** Hilfslinie, die gerade aus dem Lineal gezogen bzw. verschoben wird */
+  const guideDrag = useRef<{ id: string; axis: 'x' | 'y'; isNew: boolean } | null>(null);
+
+  /** Hilfslinie unter dem Mauszeiger (nur Auswahlwerkzeug, wenn kein Objekt getroffen wird). */
+  const guideAt = (screen: Vec2): { id: string; axis: 'x' | 'y' } | null => {
+    const s = app.store.getState();
+    const guides = s.doc.guides;
+    if (!guides?.length || s.tool !== 'select') return null;
+    const v = vp();
+    let best: { id: string; axis: 'x' | 'y'; d: number } | null = null;
+    for (const g of guides) {
+      const p = toScreen(v, { x: g.at, y: g.at });
+      const d = Math.abs(g.axis === 'x' ? p.x - screen.x : p.y - screen.y);
+      if (d <= 4 && (!best || d < best.d)) best = { id: g.id, axis: g.axis, d };
+    }
+    if (!best) return null;
+    if (hitTest(s.doc, v, layoutRef.current, screen)) return null;
+    return best;
+  };
+
+  const guideValue = (axis: 'x' | 'y', screen: Vec2): number => {
+    const v = vp();
+    const w = toWorld(v, screen);
+    const raw = axis === 'x' ? w.x : w.y;
+    const st = app.store.getState().settings;
+    const step = st.gridSnap ? gridStep(v.zoom).minor : 0.1;
+    return Math.round(raw / step) * step;
+  };
+
+  /** Ziehen aus dem Lineal (neue Hilfslinie) oder einer vorhandenen Hilfslinie beginnen. */
+  const startGuide = (e: React.PointerEvent<HTMLCanvasElement>): boolean => {
+    if (e.button !== 0) return false;
+    const r = canvasRef.current!.getBoundingClientRect();
+    const screen = { x: e.clientX - r.left, y: e.clientY - r.top };
+    const onTop = screen.y < RULER && screen.x > RULER;
+    const onLeft = screen.x < RULER && screen.y > RULER;
+    if (onTop || onLeft) {
+      const axis = onTop ? 'y' : 'x';
+      const ed = app.editor;
+      ed.beginDrag('Hilfslinie');
+      let id = '';
+      ed.dragDoc((d) => {
+        id = `g${d.nextId++}`;
+        (d.guides ??= []).push({ id, axis, at: guideValue(axis, screen) });
+      });
+      guideDrag.current = { id, axis, isNew: true };
+      return true;
+    }
+    const g = guideAt(screen);
+    if (g) {
+      app.editor.beginDrag('Hilfslinie verschieben');
+      guideDrag.current = { ...g, isNew: false };
+      return true;
+    }
+    return false;
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const c = canvasRef.current!;
     // Kein mousedown-Standardverhalten: sonst holt sich die Fläche den Fokus zurück, nachdem
@@ -590,6 +650,7 @@ export function CanvasView() {
       right.current = { x: e.clientX, y: e.clientY };
       return;
     }
+    if (startGuide(e)) return;
     app.current.pointerDown?.(toPointer(e));
   };
 
@@ -608,8 +669,25 @@ export function CanvasView() {
       return;
     }
     if (right.current) return;
+    const gd = guideDrag.current;
+    if (gd) {
+      const r = canvasRef.current!.getBoundingClientRect();
+      const at = guideValue(gd.axis, { x: e.clientX - r.left, y: e.clientY - r.top });
+      app.editor.dragDoc((d) => {
+        const g = d.guides?.find((x) => x.id === gd.id);
+        if (g) g.at = at;
+      });
+      app.ui.setState({ cursorWorld: gd.axis === 'x' ? { x: at, y: toWorld(vp(), { x: 0, y: e.clientY - r.top }).y } : { x: toWorld(vp(), { x: e.clientX - r.left, y: 0 }).x, y: at } });
+      return;
+    }
     const p = toPointer(e);
     app.ui.setState({ cursorWorld: p.snap.pos });
+    const c = canvasRef.current!;
+    if (e.buttons === 0 && app.store.getState().tool === 'select') {
+      const g = p.screen.x < RULER || p.screen.y < RULER ? null : guideAt(p.screen);
+      const want = g ? (g.axis === 'x' ? 'col-resize' : 'row-resize') : '';
+      if (c.style.cursor !== want && (want || c.style.cursor === 'col-resize' || c.style.cursor === 'row-resize')) c.style.cursor = want;
+    }
     app.current.pointerMove?.(p);
   };
 
@@ -637,6 +715,20 @@ export function CanvasView() {
         app.ui.setState({
           marking: { x: start.x - r.left, y: start.y - r.top },
         });
+      }
+      return;
+    }
+    const gd = guideDrag.current;
+    if (gd) {
+      guideDrag.current = null;
+      const r = canvasRef.current!.getBoundingClientRect();
+      const screen = { x: e.clientX - r.left, y: e.clientY - r.top };
+      // zurück ins Lineal (oder aus dem Fenster) = Hilfslinie entfernen
+      const out = gd.axis === 'x' ? screen.x < RULER || screen.x > r.width : screen.y < RULER || screen.y > r.height;
+      if (out && gd.isNew) app.editor.cancelDrag();
+      else {
+        if (out) app.editor.dragDoc((d) => void (d.guides = d.guides?.filter((x) => x.id !== gd.id)));
+        app.editor.endDrag();
       }
       return;
     }

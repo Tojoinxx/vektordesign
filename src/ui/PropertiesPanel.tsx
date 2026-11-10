@@ -13,6 +13,7 @@ import { ColorButton } from './ColorPicker';
 import { useApp, useAppState } from './hooks';
 import { StyleSuggestions } from './StyleSuggestions';
 import { ArrangeSection } from './ArrangeSection';
+import { ConstraintManager } from './ConstraintManager';
 
 const KIND_NAMES: Record<string, string> = { path: 'Fläche', line: 'Linie', circle: 'Kreis', text: 'Text', shape: 'Form', image: 'Bild' };
 
@@ -720,6 +721,7 @@ function SketchInfo() {
         </table>
       )}
       {!dims.length && <p className="muted">Noch keine Bemaßungen. Mit D bemaßen – Werte lassen sich hier später als Tabelle ändern.</p>}
+      <ConstraintManager />
       <p className="muted small">
         {Object.keys(doc.entities).length} Objekte · {Object.keys(doc.constraints).length} Abhängigkeiten
       </p>

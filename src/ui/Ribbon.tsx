@@ -61,6 +61,9 @@ import {
   IconChamfer,
   IconTextToPaths,
   IconToShape,
+  IconOutlineStroke,
+  IconShapeBuilder,
+  IconWarpText,
   IconUnion,
   IconSubtract,
   IconIntersect,
@@ -362,9 +365,11 @@ function EditRibbon() {
         <Big icon={<IconTextToPaths />} label="Text → Pfade" onClick={cmd('text-to-paths')} testId="edit-text-to-paths" />
         <Stack>
           <Small icon={<IconToShape size={18} />} label="In Form umwandeln (Skizze → freie Form)" onClick={cmd('to-shape')} testId="edit-to-shape" />
+          <Small icon={<IconOutlineStroke size={18} />} label="Kontur in Fläche (für Plotter)" onClick={cmd('outline-stroke')} testId="edit-outline-stroke" />
         </Stack>
       </Group>
       <Group title="Kombinieren">
+        <Big icon={<IconShapeBuilder />} label="Formgenerator" kbd="Umschalt+M" active={tool === 'shapebuilder'} onClick={() => app.setTool('shapebuilder')} testId="tool-shapebuilder" />
         <Big icon={<IconUnion />} label="Vereinigen" onClick={cmd('union')} testId="bool-union" />
         <Big icon={<IconSubtract />} label="Abziehen" onClick={cmd('subtract')} testId="bool-subtract" />
         <Stack>
@@ -424,6 +429,7 @@ function DesignRibbon() {
         <Big icon={<IconHalftone />} label="Halbton" onClick={cmd('halftone')} testId="edit-halftone" />
         <Big icon={<IconGrunge />} label="Used-Look" onClick={cmd('grunge')} testId="edit-grunge" />
         <Big icon={<IconRapport />} label="Rapport" onClick={cmd('rapport')} testId="edit-rapport" />
+        <Big icon={<IconWarpText />} label="Text verformen" onClick={cmd('warp-text')} testId="edit-warp-text" />
         <Big icon={<IconTextCircle />} label="Text auf Kreis" onClick={cmd('text-circle')} testId="edit-text-circle" />
       </Group>
       <Group title="Einfügen">

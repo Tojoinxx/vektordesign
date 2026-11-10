@@ -4,6 +4,7 @@ import { Copy, Lock, Maximize, Palette, RotateCcw, Trash2, ArrowUpToLine, ArrowD
 import type { AppController } from './controller';
 import { useApp, useAppState, useUi } from './hooks';
 import { IconCircle, IconConstruction, IconDimension, IconLine, IconProfile, IconRect, IconSketch, IconText } from './icons';
+import { selectSame } from '../store/ops';
 
 interface Item {
   label: string;
@@ -77,6 +78,7 @@ function contextItems(app: AppController): Item[] {
     items.push({ label: 'Ganz nach vorne', icon: <ArrowUpToLine size={15} />, run: (a) => void a.editor.arrange(a.editor.s.selection, 'front') });
     items.push({ label: 'Ganz nach hinten', icon: <ArrowDownToLine size={15} />, run: (a) => void a.editor.arrange(a.editor.s.selection, 'back') });
     items.push({ label: 'Stilvorschläge', icon: <Palette size={15} />, run: (a) => a.ui.setState({ side: 'props', sideOpen: true }) });
+    items.push({ label: 'Gleiche Farbe auswählen', run: (a) => void selectSame(a.editor, 'fill') });
     items.push({ label: 'Löschen', icon: <Trash2 size={15} />, run: (a) => void a.editor.deleteSelection() });
   } else {
     items.push({ label: 'Alle Abhängigkeiten anzeigen (F8)', run: (a) => a.store.setState({ settings: { ...a.store.getState().settings, showGlyphs: true } }) });

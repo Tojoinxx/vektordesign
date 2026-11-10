@@ -14,6 +14,7 @@ export type ToolId =
   | 'star'
   | 'pen'
   | 'format'
+  | 'shapebuilder'
   | 'text'
   | 'point'
   | 'dimension'
@@ -44,6 +45,8 @@ export interface Settings {
   snapIntersection: boolean;
   snapCenter: boolean;
   snapOnCurve: boolean;
+  /** smarte Hilfslinien beim Verschieben (Kanten, Mitten, gleiche Abstände) */
+  smartGuides: boolean;
   autoConstraints: boolean;
   showDims: boolean;
   showGlyphs: boolean;
@@ -137,6 +140,7 @@ export const DEFAULT_SETTINGS: Settings = {
   snapIntersection: true,
   snapCenter: true,
   snapOnCurve: true,
+  smartGuides: true,
   autoConstraints: true,
   showDims: true,
   showGlyphs: true,

@@ -7,6 +7,7 @@ import { polysToContours } from '../model/boolean';
 import { docColors } from '../model/library';
 import { normalizeHex } from '../model/color';
 import { FormatTool } from '../tools/formatTool';
+import { ShapeBuilderTool } from '../tools/shapeBuilderTool';
 import { SeamTool } from '../tools/seamTool';
 import { exportPatternDxf } from '../export/patternDxf';
 import { buildTechPack, techPackFileName } from '../export/techPack';
@@ -17,7 +18,7 @@ import { setAvatar, setPieceLook, updateMaterial } from '../store/patternOps';
 import { ArcTool, EllipseTool, PenTool, PolygonTool, StarTool } from '../tools/shapeTools';
 import type { ConstraintKind, Id, SketchDoc, Vec2 } from '../model/types';
 import { createAppStore, type AppStore, type ToolId } from '../store/state';
-import { Editor, type PlacedPoint } from '../store/editor';
+import { drawableTargets, Editor, type PlacedPoint } from '../store/editor';
 import type { SceneLayout } from '../render/renderer';
 import type { Viewport } from '../render/viewport';
 import { SelectTool } from '../tools/selectTool';
@@ -50,6 +51,7 @@ import {
   selectionSize,
   textToPaths,
   toShape,
+  outlineStrokeOp,
 } from '../store/ops';
 import type { BoolOp } from '../model/boolean';
 import { evaluate, numberToExpr } from '../params/expr';
@@ -174,6 +176,8 @@ export interface UiState {
   costs: boolean;
   /** Vorlagen-Generator offen */
   generator: boolean;
+  /** Text verformen: Text bzw. verformte Form, die bearbeitet wird */
+  warpText: Id | null;
   /** Druckbereich als Rahmen auf der Arbeitsfläche (Bereichs-Id des Kleidungsstücks) */
   printArea: string | null;
   /** iPad: fertige Datei, die per Knopf geteilt wird */
@@ -209,11 +213,13 @@ export type EditCommand =
   | 'fillet'
   | 'chamfer'
   | 'text-to-paths'
+  | 'outline-stroke'
   | 'to-shape'
   | 'halftone'
   | 'grunge'
   | 'rapport'
   | 'text-circle'
+  | 'warp-text'
   | 'shadow'
   | 'reduce-colors'
   | BoolOp;
@@ -301,6 +307,7 @@ export class AppController {
       screenPrint: false,
       costs: false,
       generator: false,
+      warpText: null,
       printArea: null,
     }));
     applyAppearance(this.ui.getState().appearance);
@@ -322,6 +329,7 @@ export class AppController {
       clearDynamicValues: () => app.ui.setState({ dynValues: {}, dynFocus: null }),
       openDimEditor: (dimId, isNew) => app.store.setState({ dimPrompt: { dimId, isNew } }),
       openTextEditor: (id, at) => app.ui.setState({ textEdit: { id, at: at ?? null } }),
+      openWarpText: (id) => app.ui.setState({ warpText: id }),
       setTool: (id) => app.setTool(id),
       snapExclude: () => {},
     };
@@ -377,6 +385,9 @@ export class AppController {
         break;
       case 'format':
         t = new FormatTool(this.ctx);
+        break;
+      case 'shapebuilder':
+        t = new ShapeBuilderTool(this.ctx);
         break;
       case 'seam':
         t = new SeamTool(this.ctx);
@@ -716,6 +727,9 @@ export class AppController {
       case 'to-shape':
         if (!needSel()) void this.runOp(toShape(ed));
         return;
+      case 'outline-stroke':
+        if (!needSel()) void this.runOp(outlineStrokeOp(ed));
+        return;
       case 'move':
         if (needSel()) return;
         open({
@@ -943,6 +957,18 @@ export class AppController {
             }
           },
         });
+        return;
+      }
+      case 'warp-text': {
+        const t = drawableTargets(doc, sel).find((id) => {
+          const x = doc.entities[id];
+          return x?.kind === 'text' || (x?.kind === 'shape' && !!x.warp);
+        });
+        if (!t) {
+          ed.toast('Zuerst einen Text auswählen.', 'info');
+          return;
+        }
+        this.ui.setState({ warpText: t });
         return;
       }
       case 'text-circle':

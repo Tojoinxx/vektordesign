@@ -166,6 +166,22 @@ export interface ShapeEntity extends EntityBase {
   flipX?: boolean;
   /** Ursprung, z. B. „Text TEAM“ */
   name?: string;
+  /** Verformter Text: Ausgangstext und Verformung – Doppelklick öffnet ihn wieder zum Bearbeiten */
+  warp?: WarpSource;
+}
+
+export type WarpStyle = 'arch' | 'bulge' | 'wave' | 'flag' | 'rise' | 'squeeze';
+
+export interface WarpSource {
+  text: string;
+  fontFamily: string;
+  /** Schriftgröße in mm (vor dem Maßstab der Form) */
+  fontSize: number;
+  fontWeight: number;
+  italic: boolean;
+  style: WarpStyle;
+  /** −100 … 100 */
+  amount: number;
 }
 
 /**
@@ -274,10 +290,19 @@ export interface SketchDoc {
   pattern?: Pattern;
   /** Tech-Pack-Angaben (Ergänzung zum Tech-Pack in LabwearOS) */
   techPack?: TechPack;
+  /** Hilfslinien aus dem Lineal (nur Bildschirm, nie exportiert) */
+  guides?: Guide[];
   /** Zähler für eindeutige Ids */
   nextId: number;
   /** Zähler für Bemaßungsnamen d0, d1 … */
   nextDim: number;
+}
+
+/** Hilfslinie: axis 'x' = senkrechte Linie bei x = at, 'y' = waagrechte Linie bei y = at (mm). */
+export interface Guide {
+  id: Id;
+  axis: 'x' | 'y';
+  at: number;
 }
 
 export const ORIGIN_ID = 'O';

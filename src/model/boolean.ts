@@ -119,6 +119,47 @@ export function strokeArea(contours: Contour[], width: number, cap: 'butt' | 'ro
   return fromPaths(exec(CL.ClipType.ctUnion, out, [], CL.PolyFillType.pftNonZero));
 }
 
+/**
+ * Konturen in Striche zerlegen (gestrichelte/gepunktete Linie), Muster in mm [Strich, Lücke, …].
+ * Ergebnis sind offene Konturen für {@link strokeArea}.
+ */
+export function dashContours(contours: Contour[], pattern: number[]): Contour[] {
+  const total = pattern.reduce((a, b) => a + b, 0);
+  if (!(total > 0)) return contours;
+  const out: Contour[] = [];
+  for (const c of contours) {
+    const pts = flattenContour(c, CURVE_TOL);
+    if (c.closed && pts.length > 2) pts.push(pts[0]);
+    let idx = 0;
+    let left = pattern[0];
+    let on = true;
+    let cur: Vec2[] = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      let a = pts[i - 1];
+      const b = pts[i];
+      let seg = Math.hypot(b.x - a.x, b.y - a.y);
+      while (seg > 1e-9) {
+        const step = Math.min(seg, left);
+        const t = step / seg;
+        const q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        if (on) cur.push(q);
+        seg -= step;
+        left -= step;
+        a = q;
+        if (left <= 1e-9) {
+          if (on && cur.length >= 2) out.push({ closed: false, nodes: cur.map((p) => ({ x: p.x, y: p.y })) });
+          on = !on;
+          idx = (idx + 1) % pattern.length;
+          left = pattern[idx];
+          cur = [q];
+        }
+      }
+    }
+    if (on && cur.length >= 2) out.push({ closed: false, nodes: cur.map((p) => ({ x: p.x, y: p.y })) });
+  }
+  return out;
+}
+
 /** Fläche ohne die zweite (a − b). */
 export function subtractArea(a: Vec2[][], b: Vec2[][]): Vec2[][] {
   if (!a.length || !b.length) return a;

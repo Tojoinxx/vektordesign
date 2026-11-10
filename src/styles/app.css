@@ -3721,3 +3721,139 @@ body {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* Abhängigkeits-Manager */
+.cmgr {
+  margin-top: 8px;
+}
+.cmgr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--bad-soft);
+  color: var(--bad-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.cmgr-filter {
+  margin-bottom: 6px;
+}
+.cmgr-filter button {
+  flex: 1;
+  font-size: 11.5px;
+}
+.cmgr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--paper);
+}
+.cmgr-list li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px 1px 0;
+  border-bottom: 1px solid var(--line-2);
+  border-left: 3px solid transparent;
+}
+.cmgr-list li:last-child {
+  border-bottom: 0;
+}
+.cmgr-list li:hover {
+  background: var(--hover);
+}
+.cmgr-list li.sel {
+  background: var(--free-soft);
+}
+.cmgr-list li.cmgr-conflict {
+  border-left-color: var(--bad);
+  background: var(--bad-soft);
+}
+.cmgr-list li.cmgr-redundant {
+  border-left-color: #e8a317;
+}
+.cmgr-list .icon-btn {
+  width: 26px;
+  height: 26px;
+  opacity: 0.55;
+}
+.cmgr-list li:hover .icon-btn {
+  opacity: 1;
+}
+.cmgr-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.cmgr-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--ink-2);
+}
+.cmgr-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+.cmgr-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Text verformen */
+.warp-styles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.warp-styles button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.warp-styles button:hover {
+  border-color: var(--free-line);
+  color: var(--ink);
+}
+.warp-styles button.on {
+  border-color: var(--free);
+  background: var(--free-soft);
+  color: var(--free);
+  font-weight: 600;
+}
+.gen-fields .field.wide input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+.cmgr-filter {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+}

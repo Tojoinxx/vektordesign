@@ -4,6 +4,7 @@ import { CONSTRAINT_LABELS } from '../solver/analysis';
 import type { AppController } from './controller';
 import { CONSTRAINT_ORDER } from './icons';
 import { makePieces } from '../store/patternOps';
+import { selectSame } from '../store/ops';
 
 export interface KeyBinding {
   key: string;
@@ -287,8 +288,54 @@ export function buildCommands(): Command[] {
     { id: 'edit.offset', label: 'Versatz …', group: 'Form', shortcut: 'O', keys: [{ key: 'o' }], keywords: 'offset kontur rand', run: (a) => a.editCommand('offset') },
     { id: 'edit.fillet', label: 'Abrunden …', group: 'Form', keywords: 'radius ecke', run: (a) => a.editCommand('fillet') },
     { id: 'edit.chamfer', label: 'Fase …', group: 'Form', keywords: 'ecke abschrägen', run: (a) => a.editCommand('chamfer') },
+    {
+      id: 'edit.outlineStroke',
+      label: 'Kontur in Fläche umwandeln',
+      group: 'Form',
+      keywords: 'konturlinie outline stroke plotter cricut schneiden linie fläche',
+      run: (a) => a.editCommand('outline-stroke'),
+    },
+    { id: 'select.sameFill', label: 'Gleiche Füllfarbe auswählen', group: 'Bearbeiten', keywords: 'auswahl gleich ähnlich farbe füllung same', run: (a) => void selectSame(a.editor, 'fill') },
+    { id: 'select.sameStroke', label: 'Gleiche Kontur auswählen', group: 'Bearbeiten', keywords: 'auswahl gleich ähnlich kontur linie same', run: (a) => void selectSame(a.editor, 'stroke') },
+    { id: 'select.sameStyle', label: 'Gleiches Aussehen auswählen', group: 'Bearbeiten', keywords: 'auswahl gleich ähnlich stil format same', run: (a) => void selectSame(a.editor, 'style') },
+    {
+      id: 'select.sameKind',
+      label: 'Gleiche Objektart auswählen (alle Kreise, alle Texte …)',
+      group: 'Bearbeiten',
+      keywords: 'auswahl gleich art typ same',
+      run: (a) => void selectSame(a.editor, 'kind'),
+    },
+    {
+      id: 'view.clearGuides',
+      label: 'Alle Hilfslinien löschen',
+      group: 'Ansicht',
+      keywords: 'hilfslinien lineal guides entfernen',
+      run: (a) => {
+        if (!a.editor.s.doc.guides?.length) {
+          a.editor.toast('Keine Hilfslinien vorhanden. Hilfslinien zieht man aus dem Lineal.', 'info');
+          return;
+        }
+        a.editor.commit('Hilfslinien löschen', (d) => void (d.guides = []));
+      },
+    },
+    {
+      id: 'edit.warpText',
+      label: 'Text verformen (Bogen, Wölbung, Welle …) …',
+      group: 'Gestalten',
+      keywords: 'bogen college arch warp krümmen verkrümmen welle flagge wölbung text effekt kittl',
+      run: (a) => a.editCommand('warp-text'),
+    },
     { id: 'edit.textToPaths', label: 'Text in Pfade umwandeln', group: 'Form', keywords: 'kontur umriss outline', run: (a) => a.editCommand('text-to-paths') },
     { id: 'edit.toShape', label: 'In Form umwandeln', group: 'Form', keywords: 'pfad fest', run: (a) => a.editCommand('to-shape') },
+    {
+      id: 'tool.shapeBuilder',
+      label: 'Formgenerator (Teilflächen vereinigen/entfernen)',
+      group: 'Kombinieren',
+      shortcut: 'Umschalt+M',
+      keys: [{ key: 'm', shift: true }],
+      keywords: 'shape builder formerstellung zusammenfügen teilen pathfinder',
+      run: (a) => a.setTool('shapebuilder'),
+    },
     { id: 'bool.union', label: 'Vereinigen', group: 'Kombinieren', keywords: 'boolesch addieren union', run: (a) => a.editCommand('union') },
     { id: 'bool.subtract', label: 'Subtrahieren', group: 'Kombinieren', keywords: 'boolesch abziehen ausschneiden', run: (a) => a.editCommand('subtract') },
     { id: 'bool.intersect', label: 'Schnittmenge', group: 'Kombinieren', keywords: 'boolesch', run: (a) => a.editCommand('intersect') },

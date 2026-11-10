@@ -45,6 +45,8 @@ export interface ToolContext {
   clearDynamicValues(): void;
   openDimEditor(dimId: Id, isNew: boolean): void;
   openTextEditor(textId: Id | null, at?: PlacedPoint): void;
+  /** Dialog „Text verformen“ öffnen */
+  openWarpText(id: Id): void;
   setTool(id: ToolId): void;
   /** Fang-Optionen für dieses Werkzeug */
   snapExclude(ids: Id[]): void;

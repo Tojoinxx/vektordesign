@@ -274,6 +274,29 @@ export const IconToShape = (p: { size?: number }) => (
     <circle cx="9" cy="9" r="1.4" />
   </Icon>
 );
+export const IconOutlineStroke = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M4 17 C8 5 16 5 20 17" strokeWidth="4.2" strokeOpacity="0.18" />
+    <path d="M4.8 19.2 C8.4 8.6 15.6 8.6 19.2 19.2 M3.2 14.8 C7.6 1.6 16.4 1.6 20.8 14.8" />
+  </Icon>
+);
+export const IconWarpText = (p: { size?: number }) => (
+  <Icon {...p}>
+    <path d="M3 19 Q12 4 21 19" strokeOpacity="0.4" />
+    <path d="M6 15.5 L7.5 10 L9 15.5 M6.6 13.6 H8.4" />
+    <path d="M11 11.5 V7 H13 A1.6 1.6 0 0 1 13 10.2 H11" />
+    <path d="M18 15.5 A2.3 2.3 0 0 1 15.2 11.5 A2.3 2.3 0 0 1 18 10.5" />
+  </Icon>
+);
+export const IconShapeBuilder = (p: { size?: number }) => (
+  <Icon {...p}>
+    <circle cx="9" cy="10" r="5.5" />
+    <circle cx="15" cy="10" r="5.5" />
+    <path d="M12 5.4 A5.5 5.5 0 0 1 12 14.6 A5.5 5.5 0 0 1 12 5.4 Z" fill="currentColor" fillOpacity="0.35" stroke="none" />
+    <path d="M5 20 L19 20" strokeDasharray="2 2" />
+    <path d="M17 18 L19 20 L17 22" />
+  </Icon>
+);
 const boolShapes = (fillA: number, fillB: number, fillI: number) => (
   <>
     <defs />

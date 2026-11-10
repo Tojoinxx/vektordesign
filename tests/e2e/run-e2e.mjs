@@ -1257,6 +1257,161 @@ await step('Bibliothek, Paletten, Format übertragen', async () => {
   results.push(`   Bibliothek: 1 Element, ${pals.length} Paletten; Format übertragen`);
 });
 
+await step('Smarte Hilfslinien, Hilfslinie aus dem Lineal, Formgenerator, Kontur in Fläche, Text verformen, Abhängigkeits-Manager', async () => {
+  await newDoc();
+  // Smarte Hilfslinien: dritter Kreis rastet auf gleichen Abstand ein
+  const ids = await app(() => {
+    const ed = window.vektordesign.editor;
+    const mk = (x, y) => ed.createCircle({ pos: { x, y } }, 10, { noAuto: true, style: { fill: '#2f6fd6', stroke: null, strokeWidth: 0.5, opacity: 1 } }).circleId;
+    const r = [mk(-60, 0), mk(-20, 0), mk(45, 32)];
+    ed.setView({ cx: 0, cy: 0, zoom: 4 });
+    return r;
+  });
+  await sleep(150);
+  const from = await screenOf(45, 32);
+  const to = await screenOf(20.6, 0.7);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 12 });
+  await shot('47a-smarte-hilfslinien');
+  await page.mouse.up();
+  const c3 = await app((id) => {
+    const d = window.vektordesign.store.getState().doc;
+    return d.points[d.entities[id].center];
+  }, ids[2]);
+  assert(Math.abs(c3.x - 20) < 1e-6 && Math.abs(c3.y) < 1e-6, `nicht eingerastet: ${JSON.stringify(c3)}`);
+  // Hilfslinie aus dem linken Lineal ziehen
+  const cv = await page.$eval('[data-testid="canvas"]', (c) => {
+    const r = c.getBoundingClientRect();
+    return { x: r.left, y: r.top };
+  });
+  const gx = await screenOf(-40, 0);
+  await page.mouse.move(cv.x + 10, cv.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(gx.x, cv.y + 300, { steps: 6 });
+  await page.mouse.up();
+  const guides = await app(() => window.vektordesign.store.getState().doc.guides ?? []);
+  assert(guides.length === 1 && guides[0].axis === 'x' && Math.abs(guides[0].at + 40) < 0.051, `Hilfslinie: ${JSON.stringify(guides)}`);
+
+  // Formgenerator über die Leiste: Rechteck + Kreis, Linse und rechte Hälfte zusammenziehen
+  await newDoc();
+  const [rid, cid] = await app(() => {
+    const ed = window.vektordesign.editor;
+    const r = ed.createRectangle({ pos: { x: -30, y: -15 } }, { pos: { x: 10, y: 15 } }, 'corner', { noAuto: true, style: { fill: '#e8590c', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    const c = ed.createCircle({ pos: { x: 12, y: 0 } }, 16, { noAuto: true, style: { fill: '#1f4532', stroke: null, strokeWidth: 0.5, opacity: 1 } });
+    ed.setView({ cx: 0, cy: 0, zoom: 4 });
+    ed.select([r.pathId, c.circleId]);
+    return [r.pathId, c.circleId];
+  });
+  await page.click('[data-testid="ribbon-edit"]');
+  await page.click('[data-testid="tool-shapebuilder"]');
+  await sleep(200);
+  const p1 = await screenOf(2, 0);
+  const p2 = await screenOf(22, 0);
+  await page.mouse.move(p1.x, p1.y, { steps: 3 });
+  await page.mouse.down();
+  await page.mouse.move(p2.x, p2.y, { steps: 8 });
+  await page.mouse.up();
+  await sleep(150);
+  const fg = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return Object.values(d.entities).map((e) => ({ kind: e.kind, name: e.name, fill: e.style.fill }));
+  });
+  assert(fg.length === 2 && fg.some((e) => e.name === 'Formgenerator' && e.fill === '#1f4532') && fg.some((e) => e.fill === '#e8590c'), `Formgenerator: ${JSON.stringify(fg)}`);
+  await shot('47b-formgenerator');
+  await page.keyboard.press('Escape');
+  void rid;
+  void cid;
+
+  // Kontur in Fläche
+  await newDoc();
+  const lid = await app(() => {
+    const ed = window.vektordesign.editor;
+    const l = ed.createLine({ pos: { x: 0, y: 0 } }, { pos: { x: 50, y: 0 } }, { noAuto: true, style: { fill: null, stroke: '#000000', strokeWidth: 3, opacity: 1 } });
+    ed.select([l.line.id]);
+    return l.line.id;
+  });
+  await page.click('[data-testid="edit-outline-stroke"]');
+  await sleep(200);
+  const ol = await app((id) => {
+    const d = window.vektordesign.store.getState().doc;
+    return {
+      line: !!d.entities[id],
+      shapes: Object.values(d.entities)
+        .filter((e) => e.kind === 'shape')
+        .map((e) => e.style),
+    };
+  }, lid);
+  assert(!ol.line && ol.shapes.length === 1 && ol.shapes[0].fill === '#000000' && !ol.shapes[0].stroke, `Kontur in Fläche: ${JSON.stringify(ol)}`);
+
+  // Text verformen: Bogen, danach per Doppelklick wieder öffnen
+  await newDoc();
+  await app(() => {
+    const ed = window.vektordesign.editor;
+    const t = ed.createText({ pos: { x: 0, y: 0 } }, 'VARSITY', { fontFamily: 'IBM Plex Sans', fontSize: 20, fontWeight: 700, align: 'center' });
+    ed.select([t.textId]);
+    ed.setView({ cx: 0, cy: 8, zoom: 5 });
+  });
+  await page.click('[data-testid="ribbon-design"]');
+  await page.click('[data-testid="edit-warp-text"]');
+  await page.waitForSelector('[data-testid="warp-text"]');
+  await page.click('[data-testid="warp-arch"]');
+  await page.waitForFunction(() => !document.querySelector('[data-testid="warp-apply"]').disabled, { timeout: 15000 });
+  await shot('47c-text-verformen');
+  await page.click('[data-testid="warp-apply"]');
+  await page.waitForFunction(() => !document.querySelector('[data-testid="warp-text"]'));
+  const ws = await app(() => Object.values(window.vektordesign.store.getState().doc.entities).find((e) => e.kind === 'shape'));
+  assert(ws?.warp?.style === 'arch' && ws.warp.text === 'VARSITY', `Verformung: ${JSON.stringify(ws?.warp)}`);
+  await page.click('[data-testid="ribbon-sketch"]');
+  // Punkt mitten in einem Buchstaben suchen (Form ist ein Bogen mit Lücken)
+  const inside = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    const sh = Object.values(d.entities).find((e) => e.kind === 'shape');
+    const o = d.points[sh.anchor];
+    const polys = sh.contours.map((c) => c.nodes.map((n) => ({ x: o.x + n.x, y: o.y + n.y })));
+    const inPoly = (p) => {
+      let w = 0;
+      for (const poly of polys)
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const a = poly[j];
+          const b = poly[i];
+          if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) w++;
+        }
+      return w % 2 === 1;
+    };
+    const xs = polys.flat().map((p) => p.x);
+    const ys = polys.flat().map((p) => p.y);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    for (let i = 1; i < 60; i++)
+      for (let j = 1; j < 20; j++) {
+        const p = { x: x0 + ((x1 - x0) * i) / 60, y: y0 + ((y1 - y0) * j) / 20 };
+        // mit etwas Rand, damit der Klick sicher in der Fläche liegt
+        if (inPoly(p) && inPoly({ x: p.x + 0.6, y: p.y }) && inPoly({ x: p.x - 0.6, y: p.y }) && inPoly({ x: p.x, y: p.y + 0.6 }) && inPoly({ x: p.x, y: p.y - 0.6 })) return p;
+      }
+    return null;
+  });
+  assert(inside, 'kein Punkt in der Form gefunden');
+  const ctr = await screenOf(inside.x, inside.y);
+  await page.mouse.click(ctr.x, ctr.y, { clickCount: 2 });
+  await page.waitForSelector('[data-testid="warp-text"]', { timeout: 3000 });
+  await page.keyboard.press('Escape');
+  await app(() => window.vektordesign.ui.setState({ warpText: null }));
+
+  // Abhängigkeits-Manager: Überbestimmung erscheint als Konflikt, Löschen löst sie
+  await newDoc();
+  await app(() => {
+    const ed = window.vektordesign.editor;
+    ed.createRectangle({ pos: { x: -40, y: -20 } }, { pos: { x: 40, y: 20 } }, 'corner', { width: '80', height: '40' });
+    window.vektordesign.ui.setState({ side: 'props', sideOpen: true });
+    ed.select([]);
+  });
+  await page.waitForSelector('[data-testid="constraint-manager"]');
+  await page.click('[data-testid="cmgr-toggle"]');
+  const rows = await page.$$('[data-testid^="cmgr-row-"]');
+  assert(rows.length >= 6, `Manager-Zeilen: ${rows.length}`);
+  results.push(`   Hilfslinien, Formgenerator, Kontur → Fläche, Text verformen, Abhängigkeits-Manager (${rows.length} Einträge)`);
+});
+
 await step('Import: SVG (aus Illustrator/Inkscape) und DXF (CAD/Schnittmuster) als bearbeitbare Vektoren', async () => {
   await newDoc();
   const res = await app(async () => {

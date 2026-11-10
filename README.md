@@ -102,8 +102,12 @@ Soll das Bild selbst ins Motiv (z. B. für DTF), das Häkchen „Nur Vorlage“ 
 - Registerkarte **Bearbeiten**:
   - _Ändern_: Verschieben, Drehen, Skalieren (Faktor oder Zielbreite), Spiegeln, rechteckiges und kreisförmiges Muster – jeweils mit Eingabedialog (Ausdrücke wie `20+5` erlaubt, optional als Kopie).
   - _Skizze_: **Stutzen** (`X`) entfernt das angeklickte Linienstück bis zu den nächsten Schnittpunkten, **Dehnen** (`E`) verlängert eine Linie bis zur nächsten Geometrie.
-  - _Form_: **Text in Pfade**, **Versatz** (`O`, Rand außen/innen), **Abrunden**, **Fase**, _In Form umwandeln_.
-  - _Kombinieren_: **Vereinigen**, **Abziehen** (hinterstes minus die übrigen), **Schnittmenge**, **Ausschließen**. Text wird dabei automatisch in Pfade umgewandelt.
+  - _Form_: **Text in Pfade**, **Versatz** (`O`, Rand außen/innen), **Abrunden**, **Fase**, _In Form umwandeln_, **Kontur in Fläche** (der Strich wird zur gefüllten Form in Konturfarbe, gestrichelte Linien zu einzelnen Strichen – Plotter, Cricut und Silhouette schneiden nur Flächen).
+  - _Kombinieren_: **Formgenerator** (`Umschalt+M`, wie der Shape Builder in Illustrator): sich überlappende Formen auswählen, dann über die Teilflächen ziehen → werden zu einer Form vereinigt; mit `Alt` klicken oder ziehen → Teilflächen werden entfernt. **Vereinigen**, **Abziehen** (hinterstes minus die übrigen), **Schnittmenge**, **Ausschließen**. Text wird dabei automatisch in Pfade umgewandelt.
+- **Smarte Hilfslinien** beim Verschieben (wie in Figma): Kanten und Mitten rasten an anderen Objekten, am Ursprung und an Hilfslinien ein; gleiche Abstände in einer Reihe werden erkannt und mit Maß angezeigt. `Alt` gedrückt halten = frei ziehen; Schalter „Hilfslinien“ in der Statusleiste.
+- **Hilfslinien aus dem Lineal**: aus dem oberen oder linken Lineal auf die Fläche ziehen; Zeichenwerkzeuge fangen daran und an ihren Kreuzungen. Verschieben durch Ziehen, zurück ins Lineal ziehen = löschen; _Alle Hilfslinien löschen_ über `Strg+K`. Hilfslinien werden nie exportiert.
+- **Gleiche auswählen** (`Strg+K` bzw. Rechtsklick): alle Objekte mit gleicher Füllfarbe, gleicher Kontur, gleichem Aussehen oder gleicher Art.
+- **Abhängigkeits-Manager** (Eigenschaften → _Skizze_, wie in Onshape): alle Abhängigkeiten und Bemaßungen als Liste mit Filter (Alle, Probleme, Abhängigkeiten, Maße). Überfahren hebt die beteiligte Geometrie hervor, Doppelklick oder Fadenkreuz zeigt sie, Papierkorb löscht. Bei Überbestimmung klappt er automatisch auf und zeigt die Konflikte oben in Rot.
 - **Freie Formen** (Ergebnis von Text in Pfade und booleschen Operationen) lassen sich über _Größe_ (Breite oder Höhe in mm) oder mit dem Bemaßungswerkzeug `D` proportional auf ein Maß bringen; das Maß bleibt als Bemaßung erhalten.
 - **Messen** (`M`): zwei Punkte → Abstand, Δx, Δy und Winkel; zwei Linien → Winkel; Klick in eine Fläche → Fläche, Umfang, Breite und Höhe. Die Zeichnung bleibt unverändert.
 
@@ -135,6 +139,8 @@ Die Tech-Packs entstehen in LabwearOS. Vektordesign liefert die passenden Artwor
 4. **ZIP-Paket exportieren**: Das Paket enthält je Variante PDF, SVG und PNG (300 dpi) sowie das Artwork-Blatt.
 
 ### Weitere Zeichenwerkzeuge
+
+- **Text verformen** (Gestalten → _Textil_): Bogen (College-Schriftzug), Wölbung, Taille, Welle, Flagge, Ansteigen mit Stärkeregler und Live-Vorschau. Der verformte Text bleibt änderbar – Doppelklick öffnet den Dialog wieder (Text, Schrift, Art, Stärke).
 
 - **Bogen** (`A`): Start, Ende, Wölbung – oder vom Mittelpunkt. Bögen bemaßt man wie Kreise (Radius), legt sie tangential an Linien und macht aus Linien und Bögen mit **Geschlossene Fläche** (Rechtsklick oder Leiste) eine füllbare Kontur – z. B. ein vollständig bemaßtes Langloch.
 - **Vieleck** (`N`) und **Stern**: Mittelpunkt, Ecke bzw. Spitze; Eckenzahl und Durchmesser direkt eintippen. Die Geometrie bleibt parametrisch (Konstruktionskreise mit Durchmesserbemaßung).
@@ -267,31 +273,31 @@ Optional beim Export: Rand inklusive Konturstärke und horizontal spiegeln (Flex
 
 ## Tastenkürzel
 
-| Taste       | Befehl                                             |     | Taste                        | Befehl                      |
-| ----------- | -------------------------------------------------- | --- | ---------------------------- | --------------------------- |
-| `L`         | Linie (Kettenmodus)                                |     | `Strg+Z` / `Strg+Y`          | Rückgängig / Wiederholen    |
-| `R`         | Rechteck                                           |     | `Strg+C` / `Strg+V`          | Kopieren / Einfügen         |
-| `C`         | Kreis                                              |     | `Strg+D`                     | Duplizieren                 |
-| `T`         | Text                                               |     | `Entf`                       | Löschen                     |
-| `P`         | Punkt                                              |     | `Strg+A`                     | Alles auswählen             |
-| `D`         | Bemaßung                                           |     | `Strg+N` / `Strg+O`          | Neu / Öffnen                |
-| `G`         | Farbverlauf ziehen                                 |     | `Strg+S` / `Strg+Umschalt+S` | Speichern / Speichern unter |
-| `Q`         | Konstruktionsgeometrie ein/aus                     |     | `Strg+E`                     | Exportieren                 |
-| `F`         | Alles anzeigen                                     |     | `Strg+K`                     | Befehlssuche                |
-| `+` / `−`   | Vergrößern / Verkleinern                           |     | `Strg+I`                     | Claude-Assistent            |
-| `F8` / `F9` | Abhängigkeiten ein-/ausblenden                     |     | `Strg+]` / `Strg+[`          | Nach vorne / nach hinten    |
-| `X`         | Stutzen                                            |     | `Strg+Umschalt+]` / `[`      | Ganz nach vorne / hinten    |
-| `E`         | Dehnen                                             |     | `Strg+G`                     | Gruppieren                  |
-| `O`         | Versatz                                            |     | `Strg+Umschalt+G`            | Gruppierung aufheben        |
-| `M`         | Messen                                             |     | `J`                          | Naht verbinden (Schnitt)    |
-|             |                                                    |     | `Strg+3`                     | 3D-Vorschau ein/aus         |
-| `S`         | Freihandskizze mit Formerkennung                   |     |                              |                             |
-| `A`         | Bogen (3 Punkte; Mittelpunktbogen im Werkzeugmenü) |     |                              |                             |
-| `N`         | Vieleck (erneuter Klick: Umkreis/Inkreis)          |     |                              |                             |
-| `B`         | Zeichenstift für Bézierpfade                       |     |                              |                             |
-| `Esc`       | Abbrechen, zurück zur Auswahl                      |     |                              |                             |
+| Taste        | Befehl                                             |     | Taste                        | Befehl                      |
+| ------------ | -------------------------------------------------- | --- | ---------------------------- | --------------------------- |
+| `L`          | Linie (Kettenmodus)                                |     | `Strg+Z` / `Strg+Y`          | Rückgängig / Wiederholen    |
+| `R`          | Rechteck                                           |     | `Strg+C` / `Strg+V`          | Kopieren / Einfügen         |
+| `C`          | Kreis                                              |     | `Strg+D`                     | Duplizieren                 |
+| `T`          | Text                                               |     | `Entf`                       | Löschen                     |
+| `P`          | Punkt                                              |     | `Strg+A`                     | Alles auswählen             |
+| `D`          | Bemaßung                                           |     | `Strg+N` / `Strg+O`          | Neu / Öffnen                |
+| `G`          | Farbverlauf ziehen                                 |     | `Strg+S` / `Strg+Umschalt+S` | Speichern / Speichern unter |
+| `Q`          | Konstruktionsgeometrie ein/aus                     |     | `Strg+E`                     | Exportieren                 |
+| `F`          | Alles anzeigen                                     |     | `Strg+K`                     | Befehlssuche                |
+| `+` / `−`    | Vergrößern / Verkleinern                           |     | `Strg+I`                     | Claude-Assistent            |
+| `F8` / `F9`  | Abhängigkeiten ein-/ausblenden                     |     | `Strg+]` / `Strg+[`          | Nach vorne / nach hinten    |
+| `X`          | Stutzen                                            |     | `Strg+Umschalt+]` / `[`      | Ganz nach vorne / hinten    |
+| `E`          | Dehnen                                             |     | `Strg+G`                     | Gruppieren                  |
+| `O`          | Versatz                                            |     | `Strg+Umschalt+G`            | Gruppierung aufheben        |
+| `M`          | Messen                                             |     | `J`                          | Naht verbinden (Schnitt)    |
+| `Umschalt+M` | Formgenerator                                      |     | `Strg+3`                     | 3D-Vorschau ein/aus         |
+| `S`          | Freihandskizze mit Formerkennung                   |     |                              |                             |
+| `A`          | Bogen (3 Punkte; Mittelpunktbogen im Werkzeugmenü) |     |                              |                             |
+| `N`          | Vieleck (erneuter Klick: Umkreis/Inkreis)          |     |                              |                             |
+| `B`          | Zeichenstift für Bézierpfade                       |     |                              |                             |
+| `Esc`        | Abbrechen, zurück zur Auswahl                      |     |                              |                             |
 
-Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Ziehen verschiebt die Ansicht, Rechtsklick öffnet das Markierungsmenü (wie in Inventor; Rechtsklick gedrückt halten und in eine Richtung ziehen startet den Befehl direkt). Fang an Endpunkt, Mitte, Schnittpunkt, Kreismittelpunkt, Kurve und Raster lässt sich unten in der Statusleiste umschalten.
+Maus: Mausrad zoomt zur Mausposition, mittlere Maustaste oder `Leertaste` + Ziehen verschiebt die Ansicht, Rechtsklick öffnet das Markierungsmenü (wie in Inventor; Rechtsklick gedrückt halten und in eine Richtung ziehen startet den Befehl direkt). Fang an Endpunkt, Mitte, Schnittpunkt, Kreismittelpunkt, Kurve und Raster sowie die smarten Hilfslinien lassen sich unten in der Statusleiste umschalten; `Alt` beim Ziehen schaltet den Fang kurz aus.
 
 ## Entwicklung
 

@@ -9,12 +9,15 @@ import { dimGeometry } from '../render/dimGeometry';
 import { THEME } from '../render/theme';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
 import { hitTest, pointsOf, type Hit } from './hit';
+import { isHidden } from '../model/layers';
+import { bboxAddPoint, bboxUnion, emptyBBox } from '../model/geometry';
+import { drawSmartGuides, smartSnap, type SmartSnap } from './smartGuides';
 import type { Tool, ToolContext, ToolPointer } from './types';
 
 type Mode =
   | { kind: 'idle' }
   | { kind: 'press'; hit: Hit | null; start: ToolPointer; additive: boolean }
-  | { kind: 'drag'; targets: { id: Id; x: number; y: number }[]; start: Vec2 }
+  | { kind: 'drag'; targets: { id: Id; x: number; y: number }[]; start: Vec2; box: BBox | null; others: BBox[]; guides: SmartSnap | null }
   | { kind: 'radius'; circle: Id; center: Vec2 }
   | { kind: 'dim'; id: Id }
   | { kind: 'box'; start: Vec2; end: Vec2 };
@@ -64,8 +67,20 @@ export class SelectTool implements Tool {
       return;
     }
     if (m.kind === 'drag') {
-      const dx = p.world.x - m.start.x;
-      const dy = p.world.y - m.start.y;
+      let dx = p.world.x - m.start.x;
+      let dy = p.world.y - m.start.y;
+      // smarte Hilfslinien (Alt = frei ziehen)
+      m.guides = null;
+      if (m.box && !p.alt && this.ed.s.settings.smartGuides) {
+        const gl = this.ed.s.doc.guides ?? [];
+        const g = smartSnap(m.box, dx, dy, m.others, 6 / this.ctx.vp().zoom, {
+          x: [0, ...gl.filter((q) => q.axis === 'x').map((q) => q.at)],
+          y: [0, ...gl.filter((q) => q.axis === 'y').map((q) => q.at)],
+        });
+        dx = g.dx;
+        dy = g.dy;
+        if (g.lines.length || g.gaps.length) m.guides = g;
+      }
       this.ed.dragTo({ kind: 'points', targets: m.targets.map((t) => ({ id: t.id, x: t.x + dx, y: t.y + dy })) });
       return;
     }
@@ -118,12 +133,38 @@ export class SelectTool implements Tool {
       return;
     }
     this.ed.beginDrag('Verschieben');
+    const { box, others } = this.guideBoxes(pts);
     this.mode = {
       kind: 'drag',
       start: m.start.world,
       targets: [...pts].map((id) => ({ id, x: doc.points[id].x, y: doc.points[id].y })),
+      box,
+      others,
+      guides: null,
     };
     this.pointerMove(p);
+  }
+
+  /** Box der gezogenen Objekte und Boxen aller übrigen sichtbaren Objekte (für die smarten Hilfslinien). */
+  private guideBoxes(pts: Set<Id>): { box: BBox | null; others: BBox[] } {
+    const doc = this.ed.s.doc;
+    let box = emptyBBox();
+    const others: BBox[] = [];
+    for (const e of Object.values(doc.entities)) {
+      const own = pointsOf(doc, e.id);
+      if (!own.length) continue;
+      const moving = own.filter((id) => pts.has(id)).length;
+      if (moving === own.length) {
+        const b = entityBBox(doc, e);
+        if (bboxValid(b)) box = bboxUnion(box, b);
+      } else if (moving === 0 && !isHidden(doc, e.id)) {
+        const b = entityBBox(doc, e);
+        if (bboxValid(b)) others.push(b);
+      }
+    }
+    if (!bboxValid(box)) for (const id of pts) bboxAddPoint(box, doc.points[id]);
+    if (others.length > 4000) others.length = 4000;
+    return { box: bboxValid(box) ? box : null, others };
   }
 
   private moveDimension(id: Id, w: Vec2): void {
@@ -191,6 +232,9 @@ export class SelectTool implements Tool {
       this.ctx.openDimEditor(hit.id, false);
     } else if (hit.kind === 'text') {
       this.ctx.openTextEditor(hit.id);
+    } else if (hit.kind === 'shape') {
+      const e = doc.entities[hit.id];
+      if (e?.kind === 'shape' && e.warp) this.ctx.openWarpText(hit.id);
     }
   }
 
@@ -241,7 +285,11 @@ export class SelectTool implements Tool {
       if (e.kind === 'line' || e.kind === 'arc') {
         if (pathOfLine(doc, e.id)) continue;
         if (e.kind === 'arc') {
-          take(e.id, inside, flattenContour(arcContour(arcGeom(doc, e)), 0.1).some((q, i, arr) => i > 0 && segmentTouchesBox(arr[i - 1], q, box)));
+          take(
+            e.id,
+            inside,
+            flattenContour(arcContour(arcGeom(doc, e)), 0.1).some((q, i, arr) => i > 0 && segmentTouchesBox(arr[i - 1], q, box)),
+          );
           continue;
         }
         take(e.id, inside, segmentTouchesBox(pt(doc, e.p1), pt(doc, e.p2), box));
@@ -263,8 +311,12 @@ export class SelectTool implements Tool {
     return [...out];
   }
 
-  drawOverlay(ctx: CanvasRenderingContext2D, _vp: Viewport): void {
+  drawOverlay(ctx: CanvasRenderingContext2D, vp: Viewport): void {
     const m = this.mode;
+    if (m.kind === 'drag' && m.guides) {
+      drawSmartGuides(ctx, m.guides, (x, y) => toScreen(vp, { x, y }), THEME.smartGuide, THEME.uiFont);
+      return;
+    }
     if (m.kind !== 'box') return;
     const crossing = m.end.x < m.start.x;
     const x = Math.min(m.start.x, m.end.x);

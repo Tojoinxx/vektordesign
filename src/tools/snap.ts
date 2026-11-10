@@ -2,19 +2,12 @@ import type { Id, SketchDoc, Vec2 } from '../model/types';
 import { angleOnArc, arcGeom, arcMidpoint, arcOf, closestOnArc, roundOf } from '../model/arc';
 import { ORIGIN_ID } from '../model/types';
 import { pt } from '../model/doc';
-import {
-  circleCircleIntersections,
-  closestOnSegment,
-  dist,
-  mid,
-  segmentCircleIntersections,
-  segmentIntersection,
-} from '../model/geometry';
+import { circleCircleIntersections, closestOnSegment, dist, mid, segmentCircleIntersections, segmentIntersection } from '../model/geometry';
 import type { Settings } from '../store/state';
 import type { SnapRef } from '../store/editor';
 import { gridStep, toScreen, toWorld, type Viewport } from '../render/viewport';
 
-export type SnapKind = 'endpoint' | 'center' | 'origin' | 'point' | 'midpoint' | 'intersection' | 'onCurve' | 'grid';
+export type SnapKind = 'endpoint' | 'center' | 'origin' | 'point' | 'midpoint' | 'intersection' | 'onCurve' | 'guide' | 'grid';
 
 export interface SnapResult {
   pos: Vec2;
@@ -30,6 +23,7 @@ export const SNAP_LABELS: Record<SnapKind, string> = {
   midpoint: 'Linienmitte',
   intersection: 'Schnittpunkt',
   onCurve: 'Auf Kurve',
+  guide: 'Hilfslinie',
   grid: 'Raster',
 };
 
@@ -41,6 +35,7 @@ const PRIORITY: Record<SnapKind, number> = {
   midpoint: 1,
   intersection: 2,
   onCurve: 3,
+  guide: 3,
   grid: 4,
 };
 
@@ -148,6 +143,15 @@ export function computeSnap(doc: SketchDoc, vp: Viewport, settings: Settings, s:
     }
   }
 
+  // Hilfslinien aus dem Lineal (und deren Kreuzungen)
+  if (doc.guides?.length) {
+    const nx = doc.guides.filter((g) => g.axis === 'x' && Math.abs((g.at - raw.x) * vp.zoom) <= tol);
+    const ny = doc.guides.filter((g) => g.axis === 'y' && Math.abs((g.at - raw.y) * vp.zoom) <= tol);
+    for (const g of nx) consider('guide', { x: g.at, y: raw.y }, null);
+    for (const g of ny) consider('guide', { x: raw.x, y: g.at }, null);
+    for (const a of nx) for (const b of ny) consider('intersection', { x: a.at, y: b.at }, null);
+  }
+
   if (best) {
     const b = best as { kind: SnapKind; pos: Vec2; ref: SnapRef | null };
     return { pos: b.pos, kind: b.kind, ref: b.ref };
@@ -192,6 +196,14 @@ export function drawSnapMarker(ctx: CanvasRenderingContext2D, vp: Viewport, snap
       ctx.lineTo(s.x + r, s.y + r);
       ctx.moveTo(s.x + r, s.y - r);
       ctx.lineTo(s.x - r, s.y + r);
+      break;
+    case 'guide':
+      ctx.moveTo(s.x - r, s.y);
+      ctx.lineTo(s.x + r, s.y);
+      ctx.moveTo(s.x, s.y - r);
+      ctx.lineTo(s.x, s.y + r);
+      ctx.moveTo(s.x + 3, s.y);
+      ctx.arc(s.x, s.y, 3, 0, Math.PI * 2);
       break;
     case 'onCurve':
       ctx.moveTo(s.x - r, s.y + r);

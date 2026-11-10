@@ -62,6 +62,10 @@ export interface CanvasPalette {
   pattern: string;
   seamOk: string;
   seamRib: string;
+  /** smarte Hilfslinien beim Verschieben */
+  smartGuide: string;
+  /** Hilfslinien aus dem Lineal */
+  guide: string;
 }
 
 export const LIGHT_CANVAS: CanvasPalette = {
@@ -107,6 +111,8 @@ export const LIGHT_CANVAS: CanvasPalette = {
   pattern: '#5b6573',
   seamOk: '#23915a',
   seamRib: '#7a5bd6',
+  smartGuide: '#e8368f',
+  guide: '#14a6d9',
 };
 
 export const DARK_CANVAS: CanvasPalette = {
@@ -152,6 +158,8 @@ export const DARK_CANVAS: CanvasPalette = {
   pattern: '#9aa4b1',
   seamOk: '#4cc47e',
   seamRib: '#a58bff',
+  smartGuide: '#ff5ca8',
+  guide: '#38c3f2',
 };
 
 export type CanvasMode = 'light' | 'dark';
