@@ -2013,6 +2013,38 @@ export class Editor {
     return hits.length;
   }
 
+  /** Hilfslinie anlegen (id = null) oder verschieben. Gibt die Id zurück. */
+  setGuide(id: Id | null, axis: 'x' | 'y', pos: number): Id {
+    let gid = id ?? '';
+    this.commit(
+      id ? 'Hilfslinie verschieben' : 'Hilfslinie',
+      (d) => {
+        d.guides ??= [];
+        const g = id ? d.guides.find((x) => x.id === id) : null;
+        if (g) g.pos = pos;
+        else {
+          gid = newId(d, 'h');
+          d.guides.push({ id: gid, axis, pos });
+        }
+      },
+      { skipSolve: true },
+    );
+    return gid;
+  }
+
+  /** Hilfslinie(n) löschen (ohne Id: alle). */
+  removeGuides(id?: Id): void {
+    if (!this.s.doc.guides?.length) return;
+    this.commit(
+      id ? 'Hilfslinie löschen' : 'Alle Hilfslinien löschen',
+      (d) => {
+        d.guides = id ? (d.guides ?? []).filter((g) => g.id !== id) : [];
+        if (!d.guides.length) delete d.guides;
+      },
+      { skipSolve: true },
+    );
+  }
+
   /** Ansicht auf die Auswahl (Umschalt+F). */
   zoomToSelection(margin = 80): void {
     const doc = this.s.doc;

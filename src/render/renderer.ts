@@ -200,6 +200,7 @@ function renderStatic(ctx: Ctx, s: SceneState, extra?: (ctx: Ctx, vp: Viewport) 
   drawDesign({ ctx, toScreen: T, scale: vp.zoom, minStrokePx: 0.6, contrast: { background: THEME.paper, hint: THEME.contrastHint } }, doc, { skip: s.skip });
 
   drawPatternOverlay(ctx, vp, doc);
+  if (doc.guides?.length) drawGuideLines(ctx, vp, doc.guides);
 
   const problems = problemSet(doc, s.analysis);
   if (settings.showOverlay) drawSketchOverlay(ctx, s, problems.entities);
@@ -658,6 +659,30 @@ function drawDimensions(ctx: Ctx, s: SceneState, problems: Set<Id>, only?: Id): 
   }
   ctx.restore();
   return out;
+}
+
+export const GUIDE_COLOR = '#0a9bd6';
+
+/** Hilfslinien aus dem Lineal: dünn, über die ganze Fläche. */
+export function drawGuideLines(ctx: Ctx, vp: Viewport, guides: readonly { axis: 'x' | 'y'; pos: number }[], highlight?: number): void {
+  ctx.save();
+  ctx.strokeStyle = GUIDE_COLOR;
+  ctx.lineWidth = 1;
+  guides.forEach((g, i) => {
+    ctx.globalAlpha = i === highlight ? 1 : 0.75;
+    ctx.beginPath();
+    if (g.axis === 'x') {
+      const x = Math.round(toScreen(vp, { x: g.pos, y: 0 }).x) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, vp.height);
+    } else {
+      const y = Math.round(toScreen(vp, { x: 0, y: g.pos }).y) + 0.5;
+      ctx.moveTo(0, y);
+      ctx.lineTo(vp.width, y);
+    }
+    ctx.stroke();
+  });
+  ctx.restore();
 }
 
 /** Lineale im Maßband-Stil (oben und links). */

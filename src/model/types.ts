@@ -274,10 +274,19 @@ export interface SketchDoc {
   pattern?: Pattern;
   /** Tech-Pack-Angaben (Ergänzung zum Tech-Pack in LabwearOS) */
   techPack?: TechPack;
+  /** Hilfslinien aus dem Lineal (nur Ansicht und Fang, werden nie exportiert) */
+  guides?: Guide[];
   /** Zähler für eindeutige Ids */
   nextId: number;
   /** Zähler für Bemaßungsnamen d0, d1 … */
   nextDim: number;
+}
+
+/** Hilfslinie: `axis` 'x' = senkrechte Linie bei x = pos, 'y' = waagrechte bei y = pos (mm). */
+export interface Guide {
+  id: Id;
+  axis: 'x' | 'y';
+  pos: number;
 }
 
 export const ORIGIN_ID = 'O';

@@ -45,6 +45,8 @@ export function guideCandidates(doc: SketchDoc, moving: Set<Id>): BBox[] {
     }
     if (b && !touches) out.push(b);
   }
+  // Hilfslinien aus dem Lineal als unendlich lange Kanten
+  for (const g of doc.guides ?? []) out.push(g.axis === 'x' ? { minX: g.pos, maxX: g.pos, minY: -1e5, maxY: 1e5 } : { minX: -1e5, maxX: 1e5, minY: g.pos, maxY: g.pos });
   return out;
 }
 
@@ -71,7 +73,7 @@ function bestSpacing(m: BBox, cands: BBox[], axis: 'x' | 'y', tol: number): { d:
   const hi = (b: BBox) => (axis === 'x' ? b.maxX : b.maxY);
   const plo = (b: BBox) => (axis === 'x' ? b.minY : b.minX);
   const phi = (b: BBox) => (axis === 'x' ? b.maxY : b.maxX);
-  const row = cands.filter((c) => hi(c) > lo(c) && overlaps(plo(c), phi(c), plo(m), phi(m)));
+  const row = cands.filter((c) => hi(c) > lo(c) && phi(c) > plo(c) && phi(c) - plo(c) < 1e4 && overlaps(plo(c), phi(c), plo(m), phi(m)));
   const before = row.filter((c) => hi(c) <= lo(m) + tol).sort((a, b) => hi(b) - hi(a));
   const after = row.filter((c) => lo(c) >= hi(m) - tol).sort((a, b) => lo(a) - lo(b));
   const mid = (a: BBox, b: BBox) => (Math.max(plo(a), plo(b)) + Math.min(phi(a), phi(b))) / 2;

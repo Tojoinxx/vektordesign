@@ -43,6 +43,7 @@ export function parseDoc(text: string): SketchDoc {
     ...(d.production && typeof d.production === 'object' ? { production: d.production } : {}),
     ...(d.pattern && typeof d.pattern === 'object' && Array.isArray(d.pattern.pieces) ? { pattern: d.pattern } : {}),
     ...(d.techPack && typeof d.techPack === 'object' ? { techPack: d.techPack } : {}),
+    ...(Array.isArray(d.guides) ? { guides: d.guides.filter((g) => g && (g.axis === 'x' || g.axis === 'y') && Number.isFinite(g.pos)) } : {}),
     nextId: typeof d.nextId === 'number' ? d.nextId : 1,
     nextDim: typeof d.nextDim === 'number' ? d.nextDim : 0,
   };

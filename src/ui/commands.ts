@@ -166,6 +166,16 @@ export function buildCommands(): Command[] {
       keywords: 'pfeiltaste verschieben nudge',
       run: (a) => nudge(a, 0, -1),
     },
+    {
+      id: 'edit.copySvg',
+      label: 'Als SVG kopieren',
+      group: 'Bearbeiten',
+      shortcut: 'Strg+Umschalt+C',
+      keys: [{ key: 'c', ctrl: true, shift: true }],
+      keywords: 'zwischenablage svg figma illustrator copy',
+      run: (a) => void a.copyAs('svg'),
+    },
+    { id: 'edit.copyPng', label: 'Als PNG kopieren (300 dpi)', group: 'Bearbeiten', keywords: 'zwischenablage bild png copy mail chat', run: (a) => void a.copyAs('png') },
     { id: 'edit.selectAll', label: 'Alles auswählen', group: 'Bearbeiten', shortcut: 'Strg+A', keys: [{ key: 'a', ctrl: true }], run: (a) => a.editor.selectAll() },
     {
       id: 'edit.copy',
@@ -487,6 +497,13 @@ export function buildCommands(): Command[] {
     { id: 'pattern.dxf', label: 'Schnittteile als DXF exportieren', group: 'Schnitt', keywords: 'dxf schnittmuster plotter zuschnitt nahtzugabe export', run: (a) => void a.exportPatternDxf() },
 
     // Ansicht
+    {
+      id: 'view.clearGuides',
+      label: 'Alle Hilfslinien löschen',
+      group: 'Ansicht',
+      keywords: 'lineal hilfslinien guides entfernen',
+      run: (a) => (a.editor.s.doc.guides?.length ? a.editor.removeGuides() : a.editor.toast('Hilfslinien zieht man aus dem Lineal oben oder links auf die Fläche.', 'info')),
+    },
     {
       id: 'view.fitSelection',
       label: 'Auf Auswahl zoomen',

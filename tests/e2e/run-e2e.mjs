@@ -2073,6 +2073,104 @@ await step('Größentabelle eines Shops einfügen: Polo XS–XXL, jede Größe e
   await page.keyboard.press('Escape');
 });
 
+await step('Präzision: smarte Hilfslinie beim Ziehen, Pfeiltasten, Hilfslinie aus dem Lineal, auf Auswahl zoomen', async () => {
+  await newDoc();
+  const ids = await app(() => {
+    const ed = window.vektordesign.editor;
+    const a = ed.createRectangle({ pos: { x: 0, y: 0 } }, { pos: { x: 20, y: 10 } }, 'corner');
+    const b = ed.createRectangle({ pos: { x: 40, y: 6 } }, { pos: { x: 60, y: 16 } }, 'corner');
+    ed.setStyle([a.pathId, b.pathId], { fill: '#2b6cb0' });
+    ed.setView({ cx: 30, cy: 8, zoom: 10 });
+    ed.select([]);
+    return [a.pathId, b.pathId];
+  });
+  await sleep(200);
+  // B an der Fläche greifen und so ziehen, dass die Unterkante knapp über 0 liegt → rastet bei 0 ein
+  const from = await screenOf(50, 11);
+  const to = await screenOf(50.3, 5.3);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 4 });
+  await page.mouse.move(to.x, to.y, { steps: 4 });
+  await sleep(150);
+  await shot('60-smarte-hilfslinie');
+  await page.mouse.up();
+  const box = await app((id) => {
+    const a = window.vektordesign;
+    const d = a.store.getState().doc;
+    const xs = [];
+    const ys = [];
+    for (const p of Object.values(d.points)) if (p.owner && d.entities[id].edges.some((e) => e.id === p.owner)) (xs.push(p.x), ys.push(p.y));
+    return { minY: Math.min(...ys), minX: Math.min(...xs) };
+  }, ids[1]);
+  assert(Math.abs(box.minY) < 1e-6, `Unterkante nicht eingerastet: ${box.minY}`);
+  // Pfeiltasten: Umschalt+→ = 10 mm
+  await app((id) => window.vektordesign.editor.select([id]), ids[0]);
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.up('Shift');
+  await page.keyboard.press('ArrowUp');
+  const moved = await app((id) => {
+    const d = window.vektordesign.store.getState().doc;
+    const b = { x: Infinity, y: Infinity };
+    for (const p of Object.values(d.points)) if (p.owner && d.entities[id].edges.some((e) => e.id === p.owner)) ((b.x = Math.min(b.x, p.x)), (b.y = Math.min(b.y, p.y)));
+    return b;
+  }, ids[0]);
+  assert(Math.abs(moved.x - 10) < 1e-6 && Math.abs(moved.y - 1) < 1e-6, `Pfeiltasten: ${JSON.stringify(moved)}`);
+  // Hilfslinie aus dem oberen Lineal ziehen
+  const c = await page.$eval('[data-testid="canvas"]', (e) => {
+    const r = e.getBoundingClientRect();
+    return { x: r.left, y: r.top };
+  });
+  const target = await screenOf(30, 25);
+  await page.mouse.move(target.x, c.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 6 });
+  await page.mouse.up();
+  const guides = await app(() => window.vektordesign.store.getState().doc.guides ?? []);
+  assert(guides.length === 1 && guides[0].axis === 'y' && Math.abs(guides[0].pos - 25) < 0.2, `Hilfslinie: ${JSON.stringify(guides)}`);
+  // Umschalt+F zoomt auf die Auswahl
+  const z0 = await app(() => window.vektordesign.store.getState().view.zoom);
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('f');
+  await page.keyboard.up('Shift');
+  const z1 = await app(() => window.vektordesign.store.getState().view.zoom);
+  assert(z1 > z0, `Zoom auf Auswahl: ${z0} → ${z1}`);
+});
+
+await step('Text-Effekte: Text im Bogen verformen, Text auf Kreis-Pfad, langer Schatten', async () => {
+  await newDoc();
+  const ids = await app(() => {
+    const ed = window.vektordesign.editor;
+    const t = ed.createText({ pos: { x: -40, y: 20 } }, 'VEKTOR');
+    const u = ed.createText({ pos: { x: -30, y: -30 } }, 'DESIGN');
+    const c = ed.createCircle({ pos: { x: 0, y: -60 } }, 25);
+    ed.setStyle([t.textId], { fill: '#d6336c' });
+    ed.zoomToFit();
+    return { t: t.textId, u: u.textId, c: c.circleId };
+  });
+  await app((id) => window.vektordesign.editor.select([id]), ids.t);
+  await page.click('[data-testid="edit-warp"]');
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await page.click('[data-testid="param-ok"]');
+  await waitFor(() => app(() => Object.values(window.vektordesign.store.getState().doc.entities).some((e) => e.kind === 'shape' && /verformt/.test(e.name ?? ''))), 'kein verformter Text');
+  const warped = await app(() => window.vektordesign.store.getState().selection[0]);
+  await app((id) => window.vektordesign.editor.select([id]), warped);
+  await page.click('[data-testid="edit-long-shadow"]');
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await page.click('[data-testid="param-ok"]');
+  await waitFor(() => app(() => Object.values(window.vektordesign.store.getState().doc.entities).some((e) => e.name === 'Langer Schatten')), 'kein langer Schatten');
+  await app((a) => window.vektordesign.editor.select([a.u, a.c]), ids);
+  await page.click('[data-testid="edit-text-path"]');
+  await page.waitForSelector('[data-testid="param-dialog"]');
+  await page.click('[data-testid="param-ok"]');
+  await waitFor(() => app(() => Object.values(window.vektordesign.store.getState().doc.entities).some((e) => /auf Pfad/.test(e.name ?? ''))), 'kein Text auf Pfad');
+  await app(() => window.vektordesign.editor.select([]));
+  await page.keyboard.press('f');
+  await sleep(300);
+  await shot('61-text-effekte');
+});
+
 await browser.close();
 // Ganze Prozessgruppe beenden (npx startet vite als Kindprozess)
 if (server) {

@@ -3,7 +3,9 @@ import { garmentOf } from '../model/garments';
 import { productionOf } from '../model/production';
 import { docBBox } from '../model/bounds';
 import type { Vec2 } from '../model/types';
-import { createSceneCache, renderScene, type SceneLayout } from '../render/renderer';
+import { createSceneCache, drawGuideLines, GUIDE_COLOR, renderScene, type SceneLayout } from '../render/renderer';
+import { RULER } from '../render/theme';
+import { hitTest } from '../tools/hit';
 import { onImageLoaded } from '../model/image';
 import { toScreen, toWorld, type Viewport } from '../render/viewport';
 import type { PreflightResult } from '../model/preflight';
@@ -153,6 +155,24 @@ export function CanvasView() {
         cursor: ui.cursorWorld,
       },
       (cx, v) => {
+        const gd = guideDrag.current;
+        if (gd && !gd.over) {
+          drawGuideLines(cx, v, [gd], 0);
+          // Lage als Zahl neben der Linie
+          const q = toScreen(v, { x: gd.pos, y: gd.pos });
+          const txt = `${gd.axis === 'x' ? 'x' : 'y'} = ${String(gd.pos).replace('.', ',')} mm`;
+          cx.save();
+          cx.font = '600 11px Inter, system-ui, sans-serif';
+          const w = cx.measureText(txt).width + 10;
+          const bx = gd.axis === 'x' ? q.x + 6 : RULER + 8;
+          const by = gd.axis === 'x' ? RULER + 8 : q.y + 6;
+          cx.fillStyle = GUIDE_COLOR;
+          cx.fillRect(bx, by, w, 18);
+          cx.fillStyle = '#fff';
+          cx.textBaseline = 'middle';
+          cx.fillText(txt, bx + 5, by + 9.5);
+          cx.restore();
+        }
         app.current.drawOverlay?.(cx, v);
         const sym = s.symmetry;
         if (sym !== 'off') {
@@ -297,6 +317,17 @@ export function CanvasView() {
     return () => ro.disconnect();
   }, [app, draw]);
 
+  /** Hilfslinie, die gerade aus dem Lineal gezogen oder verschoben wird */
+  const guideDrag = useRef<{ id: string | null; axis: 'x' | 'y'; pos: number; over: boolean } | null>(null);
+  /** Hilfslinie unter dem Mauszeiger (nur mit dem Auswahlwerkzeug, wenn kein Objekt getroffen ist) */
+  const guideAt = (screen: Vec2) => {
+    const s = app.store.getState();
+    const v = vp();
+    return (s.doc.guides ?? []).find((g) => {
+      const q = toScreen(v, { x: g.pos, y: g.pos });
+      return g.axis === 'x' ? Math.abs(q.x - screen.x) < 4 : Math.abs(q.y - screen.y) < 4;
+    });
+  };
   const toPointer = useCallback(
     (e: PointerLike): ToolPointer => {
       const r = canvasRef.current!.getBoundingClientRect();
@@ -590,6 +621,26 @@ export function CanvasView() {
       right.current = { x: e.clientX, y: e.clientY };
       return;
     }
+    if (e.button === 0) {
+      const p = toPointer(e);
+      const inTop = p.screen.y < RULER;
+      const inLeft = p.screen.x < RULER;
+      if (inTop !== inLeft) {
+        // Aus dem Lineal ziehen: oben → waagrechte, links → senkrechte Hilfslinie
+        const axis = inTop ? 'y' : 'x';
+        guideDrag.current = { id: null, axis, pos: axis === 'x' ? p.world.x : p.world.y, over: true };
+        requestRender();
+        return;
+      }
+      if (app.current.id === 'select') {
+        const g = guideAt(p.screen);
+        const s = app.store.getState();
+        if (g && !hitTest(s.doc, vp(), layoutRef.current, p.screen)) {
+          guideDrag.current = { id: g.id, axis: g.axis, pos: g.pos, over: false };
+          return;
+        }
+      }
+    }
     app.current.pointerDown?.(toPointer(e));
   };
 
@@ -609,6 +660,16 @@ export function CanvasView() {
     }
     if (right.current) return;
     const p = toPointer(e);
+    const gd = guideDrag.current;
+    if (gd) {
+      // Auf 0,1 mm runden, mit Umschalt auf ganze mm
+      const raw = gd.axis === 'x' ? p.world.x : p.world.y;
+      gd.pos = e.shiftKey ? Math.round(raw) : Math.round(raw * 10) / 10;
+      gd.over = gd.axis === 'x' ? p.screen.x < RULER : p.screen.y < RULER;
+      app.ui.setState({ cursorWorld: gd.axis === 'x' ? { x: gd.pos, y: p.world.y } : { x: p.world.x, y: gd.pos } });
+      requestRender();
+      return;
+    }
     app.ui.setState({ cursorWorld: p.snap.pos });
     app.current.pointerMove?.(p);
   };
@@ -622,6 +683,16 @@ export function CanvasView() {
     if (pan.current) {
       pan.current = null;
       canvasRef.current!.style.cursor = '';
+      return;
+    }
+    const gd = guideDrag.current;
+    if (gd) {
+      guideDrag.current = null;
+      if (gd.over) {
+        // Zurück ins Lineal = löschen
+        if (gd.id) app.editor.removeGuides(gd.id);
+      } else app.editor.setGuide(gd.id, gd.axis, gd.pos);
+      requestRender();
       return;
     }
     if (e.button === 2 && right.current) {

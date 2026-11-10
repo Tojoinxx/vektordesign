@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { makeEditor } from './helpers';
 import { smartSnap } from '../../src/tools/smartGuides';
 import { docBBox } from '../../src/model/bounds';
+import { computeSnap } from '../../src/tools/snap';
+import { DEFAULT_SETTINGS } from '../../src/store/state';
+import { serializeDoc, parseDoc } from '../../src/model/serialize';
 
 const box = (minX: number, minY: number, w: number, h: number) => ({ minX, minY, maxX: minX + w, maxY: minY + h });
 
@@ -65,5 +68,27 @@ describe('Pfeiltasten, gleiche Auswahl, Auswahl zoomen', () => {
     ed.zoomToSelection(100);
     expect(ed.s.view.cx).toBeCloseTo(100);
     expect(ed.s.view.zoom).toBeGreaterThan(40);
+  });
+});
+
+describe('Hilfslinien aus dem Lineal', () => {
+  it('fängt an Hilfslinien und ihren Kreuzungen und bleibt beim Speichern erhalten', async () => {
+    const ed = await makeEditor();
+    const gx = ed.setGuide(null, 'x', 25);
+    ed.setGuide(null, 'y', 40);
+    const vp = { cx: 0, cy: 0, zoom: 4, width: 800, height: 600 };
+    // Bildschirmpunkt nahe (25, 40): x = 400 + 25·4, y = 300 − 40·4
+    const s = computeSnap(ed.s.doc, vp, DEFAULT_SETTINGS, { x: 501, y: 141 });
+    expect(s.pos.x).toBeCloseTo(25);
+    expect(s.pos.y).toBeCloseTo(40);
+    const near = computeSnap(ed.s.doc, vp, DEFAULT_SETTINGS, { x: 502, y: 400 });
+    expect(near.kind).toBe('guide');
+    expect(near.pos.x).toBeCloseTo(25);
+    const back = parseDoc(serializeDoc(ed.s.doc));
+    expect(back.guides?.length).toBe(2);
+    ed.removeGuides(gx);
+    expect(ed.s.doc.guides?.length).toBe(1);
+    ed.undo();
+    expect(ed.s.doc.guides?.length).toBe(2);
   });
 });

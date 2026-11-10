@@ -67,6 +67,8 @@ import { decodeImage, renderPdfPage } from '../platform/pdfImport';
 import { deviceName, tauriLink, pickProjectWithLink, pickSaveTarget, ProjectSync, readMeta, type FileMeta, type ProjectLink, type SyncEvent } from '../platform/sync';
 import type { DynamicInputSpec, Tool, ToolContext } from '../tools/types';
 import { exportSvg } from '../export/svg';
+import { makeElement } from '../model/library';
+import { groupMembers } from '../model/layers';
 import { exportPng, renderPreviewPng } from '../export/png';
 import { parseDoc, serializeDoc, PROJECT_EXT } from '../model/serialize';
 import {
@@ -1082,6 +1084,41 @@ export class AppController {
 
   currentProfile(): ExportProfile {
     return profileById(productionOf(this.editor.s.doc).profileId, this.ui.getState().profiles);
+  }
+
+  /**
+   * Auswahl (oder alles) als SVG bzw. PNG in die Zwischenablage – zum Einfügen in Illustrator,
+   * Figma, Kittl, Mails oder Chats (wie „Als SVG kopieren“ in Figma). Text wird zu Pfaden.
+   */
+  async copyAs(kind: 'svg' | 'png'): Promise<void> {
+    const ed = this.editor;
+    const doc = ed.s.doc;
+    const ids = drawableTargets(doc, ed.s.selection);
+    const src = ids.length
+      ? makeElement(
+          doc,
+          ids.flatMap((id) => groupMembers(doc, id)),
+          'Auswahl',
+        )?.doc
+      : doc;
+    if (!src || !Object.keys(src.entities).length) {
+      ed.toast('Es gibt nichts zu kopieren.', 'info');
+      return;
+    }
+    try {
+      if (kind === 'svg') {
+        const t = await textOutlines(src);
+        const svg = exportSvg(src, { outlines: t.outlines, title: this.projectName() }).svg;
+        await navigator.clipboard.writeText(svg);
+        ed.toast(`${ids.length ? 'Auswahl' : 'Zeichnung'} als SVG kopiert – in Illustrator, Figma oder Inkscape mit Strg+V einfügen`, 'success');
+      } else {
+        const png = await this.pngBytes(src, 300, false, 'stroke');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([png as BlobPart], { type: 'image/png' }) })]);
+        ed.toast(`${ids.length ? 'Auswahl' : 'Zeichnung'} als PNG (300 dpi, transparent) kopiert`, 'success');
+      }
+    } catch (e) {
+      ed.toast(`Kopieren in die Zwischenablage ging nicht: ${e instanceof Error ? e.message : String(e)}`, 'error', 6000);
+    }
   }
 
   private async pngBytes(doc: import('../model/types').SketchDoc, dpi: number, mirror: boolean, bounds: 'geometry' | 'stroke'): Promise<Uint8Array> {
