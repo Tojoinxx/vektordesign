@@ -125,6 +125,8 @@ export class GarmentSim {
   private linkRest0: Float32Array;
   private pinned: Uint8Array;
   private friction: Float32Array;
+  /** Haftreibung am Körper (Bund, Beinbündchen): der Gummizug hält das Kleidungsstück, statt langsam zu rutschen */
+  private grip: Float32Array;
   /** Luftwiderstand je Partikel (leichte Stoffe schweben länger) */
   private drag: Float32Array;
   /** Stoffdicke je Partikel (mm): schwere Stoffe tragen dicker auf */
@@ -179,6 +181,16 @@ export class GarmentSim {
   private grabW: number[] = [];
   private grabOff: number[] = [];
   private grabTarget: [number, number, number] = [0, 0, 0];
+  /**
+   * Bund hält an der Taille: sobald er nach dem Nähen sitzt, merkt sich jeder Bund-Partikel seine Stelle am Körper
+   * (in Ruhehaltung, mit Knochengewichten) und wird wie von einem Gummizug dorthin zurückgezogen – auch wenn sich
+   * die Puppe bewegt. Ohne das rutscht ein schwerer Rock langsam über die Hüfte.
+   */
+  private anchorIdx: Int32Array | null = null;
+  private anchorRest = new Float32Array(0);
+  private anchorW = new Float32Array(0);
+  private anchorFrom = new Float32Array(0);
+  private anchorTo = new Float32Array(0);
   private adjStart: Uint32Array | null = null;
   private adjList = new Uint32Array(0);
 
@@ -203,7 +215,9 @@ export class GarmentSim {
       const xs = piece.polygon.map((q) => q[0]);
       const ys = piece.polygon.map((q) => q[1]);
       const minDim = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-      const mesh = meshPiece(piece, Math.max(6, Math.min(h, minDim / 3.2)));
+      // Faltenteile feiner: mindestens fünf Dreiecksreihen je Falte, sonst kann der Stoff die Falte nicht legen
+      const pleatH = piece.pleats ? Math.max(15, (Math.max(...xs) - Math.min(...xs)) / piece.pleats / 5) : Infinity;
+      const mesh = meshPiece(piece, Math.max(6, Math.min(h, minDim / 3.2, pleatH)));
       const material = ex.materials.find((m) => m.id === piece.material) ?? ex.materials[0] ?? null;
       for (const copy of piece.cut === 2 ? ([0, 1] as const) : ([0] as const)) {
         const tris = new Uint32Array(mesh.tris.length);
@@ -238,6 +252,8 @@ export class GarmentSim {
     this.thick = new Float32Array(total);
     this.windAcc = new Float32Array(total);
     this.windGain = new Float32Array(total);
+    this.grip = new Float32Array(total);
+    for (const p of this.parts) if (p.piece.role === 'waistband' || p.piece.role === 'legCuff') this.grip.fill(p.piece.role === 'waistband' ? 1.6 : 0.8, p.offset, p.offset + p.count);
     this.place();
     // Massen aus Flächengewicht
     const mass = new Float32Array(total);
@@ -298,6 +314,8 @@ export class GarmentSim {
       // selbst und hängt mehr durch; dickerer Stoff ist biegesteifer (große, weiche Falten statt feiner).
       const g = Math.max(30, p.material?.gsm ?? REF_GSM);
       const heavy = g / REF_GSM;
+      // Bund: fester Gummizug – dehnt sich beim Anziehen, rutscht aber nicht über die Hüfte
+      const stretch = p.piece.role === 'waistband' ? Math.min(phys.stretch, 0.04) : phys.stretch;
       const uv = p.mesh.uv;
       const map = new Map<string, number>();
       const tri = p.mesh.tris;
@@ -312,7 +330,7 @@ export class GarmentSim {
             map.set(key, edges.length / 2);
             edges.push(p.offset + a, p.offset + b);
             eRest.push(Math.hypot(uv[2 * a] - uv[2 * b], uv[2 * a + 1] - uv[2 * b + 1]));
-            eComp.push(phys.stretch * ((invM[p.offset + a] + invM[p.offset + b]) / 2) * heavy);
+            eComp.push(stretch * ((invM[p.offset + a] + invM[p.offset + b]) / 2) * heavy);
           }
           const o = opp.get(key) ?? [];
           o.push(c);
@@ -494,6 +512,57 @@ export class GarmentSim {
     this.posed = true;
   }
   private posedNext = false;
+
+  /** Bund an seiner Stelle am Körper festmachen (einmal, wenn er nach dem Nähen sitzt). */
+  private captureAnchors(): void {
+    const idx: number[] = [];
+    for (const p of this.parts) if (p.piece.role === 'waistband') for (let i = 0; i < p.count; i++) if (this.invMass[p.offset + i] > 0) idx.push(p.offset + i);
+    this.anchorIdx = Int32Array.from(idx);
+    const n = idx.length;
+    this.anchorRest = new Float32Array(n * 3);
+    this.anchorW = new Float32Array(n * BONE_COUNT);
+    this.anchorFrom = new Float32Array(n * 3);
+    this.anchorTo = new Float32Array(n * 3);
+    const seg = this.rig ? posedSegments(this.rig, identityBones()) : null;
+    for (let q = 0; q < n; q++) {
+      const k = 3 * idx[q];
+      for (let c = 0; c < 3; c++) this.anchorRest[3 * q + c] = this.anchorFrom[3 * q + c] = this.anchorTo[3 * q + c] = this.pos[k + c];
+      if (this.rig && seg) boneWeights(this.rig, seg, this.pos[k], this.pos[k + 1], this.pos[k + 2], this.anchorW.subarray(q * BONE_COUNT, (q + 1) * BONE_COUNT));
+    }
+  }
+
+  /** Ziel der Bund-Partikel für diesen Bildschritt: ihre Stelle am Körper in der aktuellen Haltung. */
+  private updateAnchors(): void {
+    const idx = this.anchorIdx;
+    if (!idx || !idx.length) return;
+    this.anchorFrom.set(this.anchorTo);
+    const { anchorRest: R, anchorW: W, anchorTo: T, bones } = this;
+    for (let q = 0; q < idx.length; q++) {
+      const x = R[3 * q];
+      const y = R[3 * q + 1];
+      const z = R[3 * q + 2];
+      if (!this.posed) {
+        T[3 * q] = x;
+        T[3 * q + 1] = y;
+        T[3 * q + 2] = z;
+        continue;
+      }
+      let tx = 0;
+      let ty = 0;
+      let tz = 0;
+      for (let b = 0; b < BONE_COUNT; b++) {
+        const w = W[q * BONE_COUNT + b];
+        if (w === 0) continue;
+        const o = 12 * b;
+        tx += w * (bones[o] * x + bones[o + 1] * y + bones[o + 2] * z + bones[o + 3]);
+        ty += w * (bones[o + 4] * x + bones[o + 5] * y + bones[o + 6] * z + bones[o + 7]);
+        tz += w * (bones[o + 8] * x + bones[o + 9] * y + bones[o + 10] * z + bones[o + 11]);
+      }
+      T[3 * q] = tx;
+      T[3 * q + 1] = ty;
+      T[3 * q + 2] = tz;
+    }
+  }
 
   /** Wind: Böen über die Zeit, dazu eine Welle, die durch den Stoff läuft. */
   private updateWind(): void {
@@ -742,6 +811,63 @@ export class GarmentSim {
       e2y = -e2y;
       e2z = -e2z;
     }
+    // --- Unterteile: Bundhöhe, Schritthöhe und Beinachse ---
+    const [axTop, axKnee, axAnkle] = mq.legAxis;
+    const legAt = (y: number): [number, number] => {
+      const [a, b] = y >= axKnee[1] ? [axTop, axKnee] : [axKnee, axAnkle];
+      const t = Math.min(1, Math.max(0, (a[1] - y) / (a[1] - b[1])));
+      return [a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t];
+    };
+    /** Hosenbein: Schrittspitze, Mitte und Breite auf Schritt- und Saumhöhe, vordere/hintere Mitte am Bund */
+    const legInfo = (p: GarmentPart) => {
+      const uv = p.mesh.uv;
+      const b = this.partBox(p);
+      const front = p.piece.role === 'legFront';
+      let tip = 0;
+      let cTop = 0;
+      for (let i = 1; i < p.count; i++) {
+        if (front ? uv[2 * i] < uv[2 * tip] : uv[2 * i] > uv[2 * tip]) tip = i;
+        // vordere Mitte: innerster Punkt der Bundkante; hintere Mitte: höchster Punkt
+        const top = uv[2 * i + 1] > b.maxY - 2;
+        const best = uv[2 * cTop + 1] > b.maxY - 2;
+        if (front ? top && (!best || uv[2 * i] < uv[2 * cTop]) : uv[2 * i + 1] > uv[2 * cTop + 1]) cTop = i;
+      }
+      const tipU = uv[2 * tip];
+      const tipV = uv[2 * tip + 1];
+      const range = (lo: number, hi: number) => {
+        let min = Infinity;
+        let max = -Infinity;
+        for (let i = 0; i < p.count; i++) {
+          const v = uv[2 * i + 1];
+          if (v < lo || v > hi) continue;
+          min = Math.min(min, uv[2 * i]);
+          max = Math.max(max, uv[2 * i]);
+        }
+        return min <= max ? [min, max] : [b.minX, b.maxX];
+      };
+      const c = range(tipV - 12, tipV + 12);
+      const h = range(b.minY - 1, b.minY + 6);
+      return { b, front, tipV, tipU, centerU: uv[2 * cTop], cMid: (c[0] + c[1]) / 2, cW: c[1] - c[0], hMid: (h[0] + h[1]) / 2, hW: h[1] - h[0] };
+    };
+    const legParts = this.parts.filter((x) => x.piece.role === 'legFront' || x.piece.role === 'legBack');
+    const legInfos = new Map(legParts.map((x) => [x.key, legInfo(x)]));
+    const lf = legInfos.get(legParts.find((x) => x.piece.role === 'legFront')?.key ?? '') ?? [...legInfos.values()][0];
+    // Hose: Schritt 3 cm unter dem Körper; Rock: Bund knapp unter der Taille
+    const crotchLevel = axTop[1] - 30;
+    const waistTop = lf ? crotchLevel + (lf.b.maxY - lf.tipV) : mq.waistY - 10;
+    const legHemY = lf ? crotchLevel + (lf.b.minY - lf.tipV) : 0;
+    // Hüftweite der Hose: je Teil von der vorderen/hinteren Mitte bis zur Seitennaht (beide Kopien zählen mit)
+    const hipCirc = legParts.reduce((acc, x) => {
+      const L = legInfos.get(x.key)!;
+      return acc + (L.front ? L.b.maxX - L.centerU : L.centerU - L.b.minX);
+    }, 0);
+    const Rhip = Math.max((hipCirc / (2 * Math.PI)) * 1.1 + 15, mq.maxR + 35);
+    const skirtW = this.parts.filter((x) => x.piece.role === 'skirtFront' || x.piece.role === 'skirtBack').reduce((a, x) => a + this.partBox(x).w, 0);
+    const Rskirt = Math.max((skirtW / (2 * Math.PI)) * 1.12 + 15, mq.maxR + 35);
+    const smooth = (t: number) => {
+      const k = Math.min(1, Math.max(0, t));
+      return k * k * (3 - 2 * k);
+    };
     const others = this.parts.filter((p) => p.piece.role === 'other' || p.piece.role === 'pocket');
     let otherX = -others.reduce((s, p) => s + this.partBox(p).w + 30, 0) / 2;
 
@@ -818,6 +944,65 @@ export class GarmentSim {
             const Rn = W / (2 * Math.PI) + 10 + (stand ? 0 : 8 + h0 * 0.35);
             const y = mq.neckBaseY + 8 + (stand ? h0 : 34 + h0 * 0.9);
             set(i, Math.sin(a) * Rn, y, (sec?.cz ?? 0) + Math.cos(a) * Rn);
+            break;
+          }
+          case 'skirtFront':
+          case 'skirtBack': {
+            const sgn = role === 'skirtFront' ? 1 : -1;
+            const y = waistTop - (b.maxY - v);
+            const N = p.piece.pleats ?? 0;
+            if (N > 0) {
+              // Faltenrock: Zickzack um die Hüfte – die Falten sind von Anfang an angelegt, der Bund zieht sie zusammen
+              const R0 = mq.maxR + 35;
+              const th = ((u - b.cx) / (b.w / 2)) * (Math.PI / 2) * 0.96;
+              const pitch = b.w / N;
+              const arc = (Math.PI * 0.96 * R0) / N;
+              const A = Math.sqrt(Math.max(0, (pitch / 2) ** 2 - (arc / 2) ** 2));
+              const ph = ((u - b.minX) / pitch) % 1;
+              const r = R0 + A * (1 - Math.abs(2 * ph - 1));
+              set(i, sgn * r * Math.sin(th), y, sgn * r * Math.cos(th));
+            } else {
+              const th = (u - b.cx) / Rskirt;
+              set(i, sgn * Rskirt * Math.sin(th), y, sgn * Rskirt * Math.cos(th));
+            }
+            break;
+          }
+          case 'legFront':
+          case 'legBack': {
+            const L = legInfos.get(p.key)!;
+            const sgn = L.front ? 1 : -1;
+            const y = crotchLevel + (v - L.tipV);
+            // unterhalb des Schritts: Röhre um das Bein, zum Saum hin enger
+            const tHem = Math.min(1, Math.max(0, (L.tipV - v) / Math.max(1, L.tipV - b.minY)));
+            const mid = L.cMid + (L.hMid - L.cMid) * tHem;
+            const Rl = (((L.cW + (L.hW - L.cW) * tHem) * 2) / (2 * Math.PI)) * 1.08 + 12;
+            const [lx, lz] = legAt(Math.min(y, axTop[1]));
+            const a = (u - mid) / Rl;
+            const tx = lx + sgn * Rl * Math.sin(a);
+            const tz = lz + sgn * Rl * Math.cos(a);
+            // oberhalb: Viertelbogen um den Rumpf ab der vorderen/hinteren Mitte
+            const th = (u - L.centerU) / Rhip;
+            const hx = sgn * Rhip * Math.sin(th);
+            const hz = sgn * Rhip * Math.cos(th);
+            const w = smooth((v - (L.tipV - 50)) / 110);
+            set(i, Math.max(6, tx + (hx - tx) * w), y, tz + (hz - tz) * w);
+            break;
+          }
+          case 'waistband': {
+            // Ring um die Taille: rechte Seite → vorne → linke Seite → hinten
+            const sec = sectionAt(mq, Math.min(waistTop, mq.sections[mq.sections.length - 1].y));
+            const Rw = Math.max(b.w / (2 * Math.PI) + 10, (sec ? Math.max(sec.a, sec.bf, sec.bb) : mq.maxR) + 22);
+            const a = ((u - b.minX) / b.w) * Math.PI * 2;
+            set(i, -Math.cos(a) * Rw, waistTop + 6 + (v - b.minY), (sec?.cz ?? 0) + Math.sin(a) * Rw);
+            break;
+          }
+          case 'legCuff': {
+            // Ring um den Knöchel: Innenbein → vorne → außen → hinten
+            const y = legHemY - 6 - (b.maxY - v);
+            const [lx, lz] = legAt(Math.max(y, axAnkle[1]));
+            const Rc = Math.max(b.w / (2 * Math.PI) + 12, 62);
+            const a = ((b.maxX - u) / b.w) * Math.PI * 2;
+            set(i, Math.max(6, lx - Math.cos(a) * Rc), y, lz + Math.sin(a) * Rc);
             break;
           }
           case 'hood': {
@@ -946,7 +1131,7 @@ export class GarmentSim {
 
   /** Freie Teile, die an keinem Körperteil hängen, oben aufhängen (wie auf einer Stange). */
   private pinLoosePieces(): void {
-    const bodyRoles = new Set<PieceRole>(['front', 'back', 'sleeve', 'hood', 'cuff', 'hem', 'neckband', 'collar', 'placket']);
+    const bodyRoles = new Set<PieceRole>(['front', 'back', 'sleeve', 'hood', 'cuff', 'hem', 'neckband', 'collar', 'placket', 'skirtFront', 'skirtBack', 'legFront', 'legBack', 'waistband', 'legCuff']);
     const partOf = (i: number) => this.parts.find((p) => i >= p.offset && i < p.offset + p.count)!;
     // Zusammenhängende Gruppen über Nähte
     const parent = this.parts.map((_, i) => i);
@@ -1025,6 +1210,8 @@ export class GarmentSim {
     const n = this.substeps;
     const h = dt / n;
     this.updatePose(dt);
+    if (!this.anchorIdx && this.t >= this.sewTime + 0.5 && !this.posed) this.captureAnchors();
+    this.updateAnchors();
     if (liveNow) this.updateWind();
     const sew = Math.min(1, this.t / this.sewTime);
     // Schwerkraft erst, wenn die Nähte fast geschlossen sind
@@ -1085,6 +1272,24 @@ export class GarmentSim {
       if (wind) {
         pos[k] += windAcc[i] * wind;
         pos[k + 2] += windAcc[i] * wind * 0.3;
+      }
+    }
+    // Bund: Gummizug zurück an seine Stelle am Körper (2 mm Spiel)
+    const aIdx = this.anchorIdx;
+    if (aIdx && aIdx.length) {
+      const al = (this.subIndex + 1) / this.substeps;
+      const { anchorFrom: A0, anchorTo: A1 } = this;
+      for (let q = 0; q < aIdx.length; q++) {
+        const k = 3 * aIdx[q];
+        const dx = A0[3 * q] + (A1[3 * q] - A0[3 * q]) * al - pos[k];
+        const dy = A0[3 * q + 1] + (A1[3 * q + 1] - A0[3 * q + 1]) * al - pos[k + 1];
+        const dz = A0[3 * q + 2] + (A1[3 * q + 2] - A0[3 * q + 2]) * al - pos[k + 2];
+        const L = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (L < 2) continue;
+        const m = ((L - 2) * 0.25) / L;
+        pos[k] += dx * m;
+        pos[k + 1] += dy * m;
+        pos[k + 2] += dz * m;
       }
     }
     // Angefasster Stoff folgt dem Griffpunkt (begrenzter Zug)
@@ -1226,6 +1431,16 @@ export class GarmentSim {
         prev[k] += tx * mu;
         prev[k + 1] += ty * mu;
         prev[k + 2] += tz * mu;
+        // Haftreibung: drückt der Stoff fest genug an, bleibt er an der Stelle (Coulomb)
+        const gr = this.grip[i];
+        if (gr > 0 && tx * tx + ty * ty + tz * tz < (gr * push) ** 2) {
+          pos[k] -= tx;
+          pos[k + 1] -= ty;
+          pos[k + 2] -= tz;
+          prev[k] += tx * (1 - mu);
+          prev[k + 1] += ty * (1 - mu);
+          prev[k + 2] += tz * (1 - mu);
+        }
         gap[i] = th;
       }
       if (pos[k + 1] < th) pos[k + 1] = th;
@@ -1283,9 +1498,22 @@ export class GarmentSim {
         const vy = pos[k + 1] - prev[k + 1] - my;
         const vz = pos[k + 2] - prev[k + 2] - mz;
         const vn = vx * nx + vy * ny + vz * nz;
-        prev[k] += (vx - vn * nx) * mu;
-        prev[k + 1] += (vy - vn * ny) * mu;
-        prev[k + 2] += (vz - vn * nz) * mu;
+        const tx = vx - vn * nx;
+        const ty = vy - vn * ny;
+        const tz = vz - vn * nz;
+        prev[k] += tx * mu;
+        prev[k + 1] += ty * mu;
+        prev[k + 2] += tz * mu;
+        // Haftreibung: der Bund geht mit dem Körper mit
+        const gr = this.grip[i];
+        if (gr > 0 && tx * tx + ty * ty + tz * tz < (gr * push) ** 2) {
+          pos[k] -= tx;
+          pos[k + 1] -= ty;
+          pos[k + 2] -= tz;
+          prev[k] += tx * (1 - mu);
+          prev[k + 1] += ty * (1 - mu);
+          prev[k + 2] += tz * (1 - mu);
+        }
         gap[i] = th;
       }
       if (pos[k + 1] < th) pos[k + 1] = th;

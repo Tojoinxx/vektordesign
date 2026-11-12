@@ -2261,6 +2261,52 @@ await step('Text-Effekte: Text im Bogen verformen, Text auf Kreis-Pfad, langer S
   await shot('61-text-effekte');
 });
 
+await step('Rock und Hose: Faltenrock und Jogginghose als Grundschnitt, Nähte passen, 3D mit Live-Physik', async () => {
+  await app(() => window.vektordesign.editor.store.setState({ dirty: false }));
+  await page.keyboard.down('Control');
+  await page.keyboard.press('n');
+  await page.keyboard.up('Control');
+  await page.waitForSelector('[data-testid="new-project"]', { timeout: 3000 });
+  await page.click('[data-testid="new-pattern"]');
+  await page.waitForSelector('[data-testid="pattern-panel"]', { timeout: 3000 });
+  // Jogginghose: Vorder- und Hinterhose, Bund, Beinbündchen
+  await page.select('[data-testid="block-kind"]', 'pants');
+  assert((await page.$('[data-testid="block-sleeve"]')) === null || (await page.$eval('[data-testid="block-sleeve"]', (e) => e.offsetParent === null)), 'Ärmelfeld sollte bei der Hose ausgeblendet sein');
+  await page.click('[data-testid="block-generate"]');
+  await sleep(300);
+  const pants = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return { roles: d.pattern.pieces.map((p) => p.role).sort().join(','), seams: d.pattern.seams.length };
+  });
+  assert(pants.roles === 'legBack,legCuff,legFront,waistband' && pants.seams === 12, `Hose: ${JSON.stringify(pants)}`);
+  assert(/Alle 12 Nähte passen/.test(await page.$eval('[data-testid="seam-summary"]', (e) => e.textContent)), 'Nahtprüfung Hose');
+  await shot('40-schnitt-hose');
+  // Faltenrock ersetzt die Hose
+  await page.select('[data-testid="block-kind"]', 'pleated');
+  await page.select('[data-testid="block-size"]', 'D-M');
+  await page.click('[data-testid="block-generate"]');
+  await sleep(300);
+  const skirt = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return { roles: d.pattern.pieces.map((p) => p.role).sort().join(','), pleats: d.pattern.pieces.find((p) => p.role === 'skirtFront').pleats };
+  });
+  assert(skirt.roles === 'skirtBack,skirtFront,waistband' && skirt.pleats > 4, `Faltenrock: ${JSON.stringify(skirt)}`);
+  assert(/Alle 5 Nähte passen/.test(await page.$eval('[data-testid="seam-summary"]', (e) => e.textContent)), 'Nahtprüfung Faltenrock');
+  await page.click('[data-testid="pattern-3d"]');
+  await page.waitForSelector('[data-testid="viewer3d"]', { timeout: 15000 });
+  await page.waitForFunction(() => /Fertig/.test(document.querySelector('[data-testid="v3-status"]')?.textContent ?? ''), { timeout: 180000 });
+  assert(/Nähte geschlossen/.test(await page.$eval('[data-testid="v3-status"]', (e) => e.textContent)), 'Faltenrock: Nähte offen');
+  await shot('41-3d-faltenrock');
+  await page.click('[data-testid="v3-live"]');
+  await page.waitForFunction(() => /Live/.test(document.querySelector('[data-testid="v3-status"]')?.textContent ?? ''), { timeout: 60000 });
+  await page.select('[data-testid="v3-motion"]', 'turn');
+  await sleep(2500);
+  await shot('42-3d-faltenrock-drehen');
+  await page.click('[data-testid="v3-live"]');
+  await page.waitForFunction(() => /Fertig/.test(document.querySelector('[data-testid="v3-status"]')?.textContent ?? ''), { timeout: 60000 });
+  await page.click('[data-testid="v3-close"]');
+});
+
 await browser.close();
 // Ganze Prozessgruppe beenden (npx startet vite als Kindprozess)
 if (server) {

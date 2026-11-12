@@ -63,6 +63,8 @@ export interface Mannequin {
   ellipsoids: Ellipsoid[];
   /** Größter Rumpfradius (für die Anordnung der Teile) */
   maxR: number;
+  /** Achse des linken Beins (x > 0) von oben nach unten: Schritt, Knie, Knöchel – für Hosenbeine */
+  legAxis: [number, number, number][];
   /** Abstandsfeld des realistischen Menschen-Netzes (falls vorhanden: ersetzt die einfachen Formen) */
   sdf?: Sdf;
 }
@@ -221,7 +223,13 @@ export function buildMannequin(m: BodyMeasures, gender: Gender = 'male', armAngl
   const headR = m.head / (2 * Math.PI);
   ellipsoids.push({ c: [0, chinY + headR * 1.05, 6], r: [headR * 0.84, headR * (fem ? 1.18 : 1.22), headR * 1.04] });
   const maxR = Math.max(...sections.map((q) => Math.max(q.a, Math.max(q.bf, q.bb) + q.bust + q.seat + Math.abs(q.cz))));
-  return { measures: m, gender, sections, neckBaseY, shoulderY, chestY, waistY, hipY, crotchY, chinY, neckR, shoulderJoint: joint, armDir: dir, armAngle, capsules, ellipsoids, maxR };
+  const kx0 = hipA * (fem ? 0.34 : 0.38);
+  const legAxis: [number, number, number][] = [
+    [hipA * (fem ? 0.42 : 0.4), crotchY, -6],
+    [kx0, kneeY, 6],
+    [kx0 * 0.95, ankleY, -10],
+  ];
+  return { measures: m, gender, sections, neckBaseY, shoulderY, chestY, waistY, hipY, crotchY, chinY, neckR, shoulderJoint: joint, armDir: dir, armAngle, capsules, ellipsoids, maxR, legAxis };
 }
 
 const KEYS = ['a', 'bf', 'bb', 'cz', 'bust', 'bustAng', 'seat'] as const;

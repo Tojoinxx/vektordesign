@@ -27,6 +27,12 @@ export const ROLE_NAMES: Record<PieceRole, string> = {
   collar: 'Kragen',
   placket: 'Knopfleiste',
   pocket: 'Tasche',
+  skirtFront: 'Rockbahn vorne',
+  skirtBack: 'Rockbahn hinten',
+  legFront: 'Hosenbein vorne',
+  legBack: 'Hosenbein hinten',
+  waistband: 'Bund',
+  legCuff: 'Beinbündchen',
   other: 'Sonstiges',
 };
 
@@ -70,6 +76,16 @@ export function pieceStyle(color: string): Style {
 }
 
 function defaultMaterials(kind: PatternBlock['kind']): PatternMaterial[] {
+  if (kind === 'skirt' || kind === 'pleated')
+    return [
+      { id: 'm-main', name: kind === 'pleated' ? 'Oberstoff (Webware)' : 'Oberstoff', fabric: 'woven', color: '#4a6a8f', gsm: kind === 'pleated' ? 170 : 200 },
+      { id: 'm-rib', name: 'Bund (elastisch)', fabric: 'rib', color: '#4a6a8f', gsm: FABRICS[3].gsm },
+    ];
+  if (kind === 'pants' || kind === 'shorts')
+    return [
+      { id: 'm-main', name: 'Oberstoff', fabric: 'sweat', color: '#4a6a8f', gsm: kind === 'shorts' ? 280 : 320 },
+      { id: 'm-rib', name: 'Bund/Bündchen', fabric: 'rib', color: '#4a6a8f', gsm: FABRICS[3].gsm },
+    ];
   const main = kind === 'tshirt' || kind === 'longsleeve' || kind === 'polo' ? FABRICS[0] : FABRICS[1];
   if (kind === 'polo')
     return [
@@ -159,6 +175,7 @@ export function generatePattern(ed: Editor, body: BodyMeasures, bodySize: string
           material: m.id,
           block: true,
           ...(bp.stripeShift ? { stripeShift: Math.round(bp.stripeShift * 10) / 10 } : {}),
+          ...(bp.pleats ? { pleats: bp.pleats } : {}),
         });
       }
       for (const s of res.seams) {

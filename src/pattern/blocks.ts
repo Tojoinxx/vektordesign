@@ -21,7 +21,22 @@ export const BLOCK_KINDS: { id: BlockKind; name: string; hint: string }[] = [
   { id: 'longsleeve', name: 'Longsleeve', hint: 'Langarm, Halsbündchen' },
   { id: 'sweatshirt', name: 'Sweatshirt', hint: 'Langarm, Bündchen an Ärmel, Saum und Hals' },
   { id: 'hoodie', name: 'Hoodie', hint: 'Langarm, Bündchen, zweiteilige Kapuze' },
+  { id: 'skirt', name: 'Rock', hint: 'A-Linie, elastischer Bund' },
+  { id: 'pleated', name: 'Faltenrock', hint: 'Rundum eingelegte Falten, elastischer Bund' },
+  { id: 'pants', name: 'Jogginghose', hint: 'Lang, elastischer Bund, Beinbündchen' },
+  { id: 'shorts', name: 'Shorts', hint: 'Kurz, elastischer Bund' },
 ];
+
+/** Unterteile (Rock, Hose) – sitzen an der Taille statt an den Schultern. */
+export const isBottom = (kind: BlockKind): boolean => kind === 'skirt' || kind === 'pleated' || kind === 'pants' || kind === 'shorts';
+
+/** Bundhöhe und Höhe der Beinbündchen (fertig, mm) */
+const WAISTBAND_H = 40;
+const LEG_CUFF_H = 60;
+/** Der Bund sitzt etwas unter der natürlichen Taille (mm): Rock, Hose */
+export const WAIST_DROP = { skirt: 10, pants: 25 };
+/** Schritttiefe ab Bundoberkante der Hose (mm): bis ca. 3 cm unter den Schritt der Puppe */
+export const riseOf = (b: BodyMeasures): number => Math.round(b.height * 0.374 - b.backLength);
 
 export const FIT_NAMES: Record<PatternBlock['fit'], string> = { slim: 'Schmal (Slim)', regular: 'Normal (Regular)', oversize: 'Weit (Oversize)' };
 
@@ -52,6 +67,8 @@ export interface BlockPiece {
   rib?: boolean;
   /** Versatz des Streifenrapports (mm), damit Streifen an der Achsel auf die Seitennaht treffen */
   stripeShift?: number;
+  /** Anzahl Falten über die Breite (Faltenrock) */
+  pleats?: number;
 }
 
 export interface BlockSeam {
@@ -68,6 +85,11 @@ export interface BlockResult {
 
 /** Standardwerte für Länge und Ärmel aus den Körpermaßen. */
 export function defaultBlock(kind: BlockKind, body: BodyMeasures, fit: PatternBlock['fit'] = 'regular', size = 'H-M'): PatternBlock {
+  if (isBottom(kind)) {
+    // Seitenlänge ab Bundoberkante: Rock bis über das Knie, Faltenrock kurz, Hose bis zum Knöchel, Shorts über dem Knie
+    const f = kind === 'skirt' ? 0.275 : kind === 'pleated' ? 0.225 : kind === 'pants' ? 0.545 : 0.24;
+    return { kind, size, fit, length: Math.round((body.height * f + (fit === 'oversize' && kind !== 'pants' ? 30 : 0)) / 5) * 5, sleeve: 0 };
+  }
   const longArm = kind !== 'tshirt' && kind !== 'polo';
   const lengthFactor = kind === 'tshirt' || kind === 'polo' || kind === 'longsleeve' ? 0.405 : 0.385;
   const extra = fit === 'oversize' ? 30 : 0;
@@ -321,7 +343,187 @@ function neckband(frontHalf: number, backHalf: number, k: number, height?: numbe
   return { closed: true, nodes };
 }
 
+// ---------------------------------------------------------------------------
+// Unterteile: Rock, Faltenrock, Jogginghose, Shorts
+// ---------------------------------------------------------------------------
+
+/** Zugabe am Hüftumfang (ganzer Umfang, mm) */
+const HIP_EASE_SKIRT = { slim: 20, regular: 50, oversize: 110 };
+const HIP_EASE_PANTS = { slim: 50, regular: 110, oversize: 200 };
+/** Ausstellung des Rocks je mm Länge unterhalb der Hüfte (je Seite) */
+const FLARE = { slim: 0.02, regular: 0.13, oversize: 0.26 };
+/** Saumweite der Hose (ganzer Umfang, mm) vor dem Bündchen */
+const LEG_HEM = { slim: 300, regular: 360, oversize: 440 };
+
+/**
+ * Bund als Ring: Unterkante in `segs` Abschnitte geteilt (Kanten 0 … n−1, je einer für eine Bundkante der
+ * Bahnen), dann rechts, oben, links. Reihenfolge rund um den Körper: rechte Seite → vorne → linke Seite → hinten.
+ */
+function waistband(segs: number[], h: number): Contour {
+  const L = segs.reduce((a, v) => a + v, 0);
+  const nodes: ShapeNode[] = [];
+  let x = -L / 2;
+  nodes.push(n(x, -h));
+  for (let i = 0; i < segs.length - 1; i++) {
+    x += segs[i];
+    nodes.push(n(x, -h));
+  }
+  nodes.push(n(L / 2, -h), n(L / 2, 0), n(-L / 2, 0));
+  return { closed: true, nodes };
+}
+
+/** Länge einer Kante der Kontur (Knoten i → i+1). */
+function edgeLen(c: Contour, i: number): number {
+  return curveLength(c.nodes[i], c.nodes[(i + 1) % c.nodes.length]);
+}
+
+function generateSkirt(body: BodyMeasures, blk: PatternBlock): BlockResult {
+  const spec = blk.spec ?? {};
+  const pleated = blk.kind === 'pleated';
+  const bandH = clamp(spec.waistbandH ?? WAISTBAND_H, 15, 120);
+  const len = Math.max(150, (spec.sideLen ?? blk.length) - bandH);
+  const waistHalf = (body.waist + 30) / 2;
+  const hipDepth = Math.min(len * 0.8, body.height * 0.105);
+  let contour: Contour;
+  let pleats = 0;
+  if (pleated) {
+    // Rechteck, gut doppelt so breit wie die halbe Taille: jede Falte verbraucht die doppelte Stoffbreite
+    const ratio = blk.fit === 'slim' ? 1.8 : blk.fit === 'oversize' ? 2.6 : 2.2;
+    const w = Math.max(waistHalf * ratio, (body.hip + 60) / 2);
+    pleats = Math.max(4, Math.round(waistHalf / 48));
+    contour = { closed: true, nodes: [n(-w / 2, -len), n(w / 2, -len), n(w / 2, 0), n(-w / 2, 0)] };
+  } else {
+    const hipHalf = (body.hip + HIP_EASE_SKIRT[blk.fit]) / 2;
+    const hemHalf = spec.hem ?? hipHalf + 2 * FLARE[blk.fit] * (len - hipDepth);
+    // Seitennaht: vom Saum gerade zur Hüfte, darüber in einem Bogen zur Taille
+    const k = 0.7;
+    const hx = hemHalf / 2 + (hipHalf / 2 - hemHalf / 2) * k;
+    const hy = -len + (len - hipDepth) * k;
+    contour = {
+      closed: true,
+      nodes: [
+        n(-hemHalf / 2, -len, { ix: -hx, iy: hy }),
+        n(hemHalf / 2, -len, { ox: hx, oy: hy }),
+        n(waistHalf / 2, 0, { ix: hipHalf / 2 + 2, iy: -hipDepth * 0.55 }),
+        n(-waistHalf / 2, 0, { ox: -(hipHalf / 2 + 2), oy: -hipDepth * 0.55 }),
+      ],
+    };
+  }
+  // Kanten der Bahn: 0 Saum, 1 Seite rechts (Saum → Bund), 2 Bund, 3 Seite links (Bund → Saum)
+  // Bund ungedehnt (Fertigmaß ½ Bundweite), höchstens so lang wie die Bundkante der Bahn
+  const bandHalf = spec.waist ?? Math.min(waistHalf, (body.waist * 0.9) / 2);
+  const front: BlockPiece = { key: 'skirtFront', name: 'Rockbahn vorne', role: 'skirtFront', cut: 1, contour, ...(pleats ? { pleats } : {}) };
+  const back: BlockPiece = { key: 'skirtBack', name: 'Rockbahn hinten', role: 'skirtBack', cut: 1, contour: structuredClone(contour), ...(pleats ? { pleats } : {}) };
+  const band: BlockPiece = { key: 'waistband', name: 'Bund', role: 'waistband', cut: 1, contour: waistband([bandHalf, bandHalf], bandH), rib: true };
+  return {
+    pieces: [front, back, band],
+    seams: [
+      { a: ['skirtFront', 1, 0], b: ['skirtBack', 3, 0], reversed: true, name: 'Seitennaht links' },
+      { a: ['skirtFront', 3, 0], b: ['skirtBack', 1, 0], reversed: true, name: 'Seitennaht rechts' },
+      { a: ['waistband', 0, 0], b: ['skirtFront', 2, 0], reversed: true, name: 'Bund vorne' },
+      { a: ['waistband', 1, 0], b: ['skirtBack', 2, 0], reversed: true, name: 'Bund hinten' },
+      { a: ['waistband', 2, 0], b: ['waistband', 4, 0], reversed: true, name: 'Bundnaht' },
+    ],
+  };
+}
+
+function generatePants(body: BodyMeasures, blk: PatternBlock): BlockResult {
+  const spec = blk.spec ?? {};
+  const long = blk.kind === 'pants';
+  const bandH = clamp(spec.waistbandH ?? WAISTBAND_H, 15, 120);
+  const cuffH = long ? LEG_CUFF_H : 0;
+  const rise = clamp(spec.rise ?? riseOf(body), 150, 420);
+  const hipQ = spec.hip ? spec.hip / 2 : (body.hip + HIP_EASE_PANTS[blk.fit]) / 4;
+  const extF = body.hip / 20;
+  const extB = body.hip / 10;
+  // Taille: an der Seite etwas eingezogen, den Rest zieht der elastische Bund ein
+  const sideIn = clamp((body.hip - body.waist) * 0.15, 8, 45);
+  const L = Math.max(rise + 60, (spec.sideLen ?? blk.length) - bandH - cuffH);
+  // Saumweite: Hose läuft zum Knöchel zu, Shorts bleiben weit
+  const thighCirc = 2 * hipQ + extF + extB;
+  const hemCirc = !long && spec.legOpening ? 2 * spec.legOpening : long ? Math.max(LEG_HEM[blk.fit], spec.legOpening ? 2 * spec.legOpening : 0) : thighCirc - Math.min(120, (L - rise) * 0.35);
+  /**
+   * Hosenbein in „Vorderteil-Lage“ (x+ = Seitennaht): 0 Saum innen, 1 Saum außen, 2 Bund Seite, 3 Bund Mitte,
+   * 4 Schrittspitze. Kanten: 0 Saum, 1 Seitennaht, 2 Bund, 3 Schrittnaht, 4 Innenbeinnaht.
+   */
+  const leg = (hipW: number, ext: number, hemHalf: number, centerIn: number, centerUp: number): ShapeNode[] => {
+    const c = (hipW - ext) / 2;
+    const outX = c + hemHalf;
+    const inX = c - hemHalf;
+    const below = L - rise;
+    return [
+      n(inX, -L),
+      n(outX, -L, { ox: outX + (hipW - outX) * 0.55, oy: -L + below * 0.6 }),
+      n(hipW - sideIn, 0, { ix: hipW, iy: -rise * 0.55 }),
+      n(centerIn, centerUp, { ox: centerIn * 0.4, oy: -rise * 0.62 }),
+      n(-ext, -rise, { ix: -ext * 0.15, iy: -rise, ox: -ext + (inX + ext) * 0.45, oy: -rise - below * 0.3 }),
+    ];
+  };
+  const f = leg(hipQ - 10, extF, hemCirc / 4 - 5, 8, 0);
+  // Hinterhose: breiter, längere Schrittspitze, hintere Mitte etwas höher (Gesäß)
+  const bRaw = leg(hipQ + 10, extB, hemCirc / 4 + 5, 22, 25);
+  // Seiten- und Innenbeinnaht hinten genau so lang wie vorne: Bundecke bzw. Schrittspitze der Hinterhose nachstellen
+  const shiftY = (q: ShapeNode, dy: number) => {
+    q.y += dy;
+    if (q.iy !== undefined) q.iy += dy;
+    if (q.oy !== undefined) q.oy += dy;
+  };
+  for (let it = 0; it < 6; it++) {
+    shiftY(bRaw[2], curveLength(f[1], f[2]) - curveLength(bRaw[1], bRaw[2]));
+    shiftY(bRaw[4], curveLength(f[4], f[0]) - curveLength(bRaw[4], bRaw[0]));
+  }
+  // … von hinten gesehen liegt die Seitennaht links: spiegeln und Umlaufsinn wieder gegen den Uhrzeigersinn
+  const mir = (q: ShapeNode): ShapeNode => ({
+    x: -q.x,
+    y: q.y,
+    ...(q.ox !== undefined ? { ix: -q.ox, iy: q.oy } : {}),
+    ...(q.ix !== undefined ? { ox: -q.ix, oy: q.iy } : {}),
+  });
+  // Kanten der Hinterhose: 0 Saum, 1 Innenbeinnaht, 2 Schrittnaht, 3 Bund, 4 Seitennaht
+  const b = [bRaw[1], bRaw[0], bRaw[4], bRaw[3], bRaw[2]].map(mir);
+  const frontC: Contour = { closed: true, nodes: f };
+  const backC: Contour = { closed: true, nodes: b };
+  const wf = edgeLen(frontC, 2);
+  const wb = edgeLen(backC, 3);
+  // Bund: höchstens 30 % kürzer als die Bundkanten (sonst lässt er sich nicht annähen)
+  const k = spec.waist ? spec.waist / (wf + wb) : Math.max((body.waist * 0.92) / (2 * (wf + wb)), 1 / 1.3);
+  const pieces: BlockPiece[] = [
+    { key: 'legFront', name: 'Vorderhose', role: 'legFront', cut: 2, contour: frontC },
+    { key: 'legBack', name: 'Hinterhose', role: 'legBack', cut: 2, contour: backC },
+    // rechte Seite → vorne rechts, vorne links → linke Seite → hinten links, hinten rechts
+    { key: 'waistband', name: 'Bund', role: 'waistband', cut: 1, contour: waistband([wf * k, wf * k, wb * k, wb * k], bandH), rib: true },
+  ];
+  const seams: BlockSeam[] = [
+    { a: ['legFront', 1, 0], b: ['legBack', 4, 0], reversed: true, name: 'Seitennaht' },
+    { a: ['legFront', 4, 0], b: ['legBack', 1, 0], reversed: true, name: 'Innenbeinnaht' },
+    { a: ['legFront', 3, 0], b: ['legFront', 3, 1], reversed: false, name: 'Schrittnaht vorne' },
+    { a: ['legBack', 2, 0], b: ['legBack', 2, 1], reversed: false, name: 'Schrittnaht hinten' },
+    { a: ['waistband', 0, 0], b: ['legFront', 2, 1], reversed: false, name: 'Bund vorne rechts' },
+    { a: ['waistband', 1, 0], b: ['legFront', 2, 0], reversed: true, name: 'Bund vorne links' },
+    { a: ['waistband', 2, 0], b: ['legBack', 3, 0], reversed: true, name: 'Bund hinten links' },
+    { a: ['waistband', 3, 0], b: ['legBack', 3, 1], reversed: false, name: 'Bund hinten rechts' },
+    { a: ['waistband', 4, 0], b: ['waistband', 6, 0], reversed: true, name: 'Bundnaht' },
+  ];
+  if (long) {
+    const cuffW = spec.legOpening ? 2 * spec.legOpening : Math.max(hemCirc / 1.3, Math.min(hemCirc * 0.8, body.height * 0.135));
+    pieces.push({ key: 'legCuff', name: 'Beinbündchen', role: 'legCuff', cut: 2, contour: waistband([cuffW / 2 - 5, cuffW / 2 + 5], cuffH), rib: true });
+    // Bündchen-Oberkante (Kante 3) an beide Saumkanten: dafür trägt das Bündchen oben die Teilung – Kontur umdrehen
+    const cuff = pieces[pieces.length - 1];
+    cuff.contour = { closed: true, nodes: cuff.contour.nodes.map((q) => n(-q.x, -q.y - cuffH)) };
+    // nach dem Drehen: Kante 0 (oben, Innenbein → Seite) an die Vorderhose, Kante 1 (Seite → Innenbein) an die
+    // Hinterhose – beide laufen wie die Saumkanten; Kanten 2 und 4 schließen den Ring an der Innenbeinnaht
+    seams.push(
+      { a: ['legCuff', 0, 0], b: ['legFront', 0, 0], reversed: false, name: 'Beinbündchen vorne' },
+      { a: ['legCuff', 1, 0], b: ['legBack', 0, 0], reversed: false, name: 'Beinbündchen hinten' },
+      { a: ['legCuff', 2, 0], b: ['legCuff', 4, 0], reversed: true, name: 'Beinbündchennaht' },
+    );
+  }
+  return { pieces, seams };
+}
+
 export function generateBlock(body: BodyMeasures, blk: PatternBlock): BlockResult {
+  if (blk.kind === 'skirt' || blk.kind === 'pleated') return generateSkirt(body, blk);
+  if (blk.kind === 'pants' || blk.kind === 'shorts') return generatePants(body, blk);
   const hasRib = blk.kind === 'sweatshirt' || blk.kind === 'hoodie';
   const polo = blk.kind === 'polo';
   const longArm = blk.kind !== 'tshirt' && !polo;

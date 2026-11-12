@@ -278,7 +278,17 @@ export function humanMannequin(m: BodyMeasures, gender: Gender, h: HumanMesh): M
   mq.armDir = [dx / L, dy / L, dz / L];
   mq.armAngle = Math.acos(Math.max(-1, Math.min(1, -dy / L)));
   mq.neckBaseY = h.joints.neck[1] - 15;
+  mq.waistY = mq.neckBaseY - m.backLength;
   mq.crotchY = h.joints['l-upper-leg'][1] - 45;
+  // Beinachse: oben liegt die Mitte des Oberschenkels weiter innen und vorne als das Hüftgelenk
+  const hipJ = h.joints['l-upper-leg'];
+  const knee = h.joints['l-knee'];
+  const ankle = h.joints['l-ankle'];
+  mq.legAxis = [
+    [hipJ[0] * 0.8, hipJ[1] - 90, knee[2] + 5],
+    [knee[0], knee[1], knee[2] - 8],
+    [ankle[0], ankle[1], ankle[2]],
+  ];
   // größter Rumpfradius aus dem Netz (ohne Arme)
   let maxR = 0;
   const p = h.positions;

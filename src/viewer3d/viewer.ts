@@ -310,6 +310,7 @@ export class GarmentViewer {
     this.dirty = true;
   }
   private userMoved = false;
+  private frameCat = '';
 
   /** Neuer Stand der Zeichnung. Simuliert nur neu, wenn sich Schnitt, Nähte, Maße oder Stoffart geändert haben. */
   setDoc(doc: SketchDoc, force = false): void {
@@ -353,7 +354,10 @@ export class GarmentViewer {
       const hood = this.opts.hoodUp ? 'up' : 'down';
       this.driver.start(this.runId, ex, this.opts.quality === 'high' ? { resolution: 15, substeps: 12, human, hood } : { resolution: 22, substeps: 9, human, hood });
       this.status({ state: 'simulating', stats: null, parts: this.parts.length, vertices: this.n });
-      if (bodyChanged || !this.parts.length) this.frameCamera();
+      // Wechsel zwischen Oberteil und Rock/Hose: Kamera neu einrichten
+      const cat = ex.pieces.some((p) => /^(leg|skirt)/.test(p.role)) ? (ex.pieces.some((p) => p.role === 'front' || p.role === 'back') ? 'both' : 'lower') : 'upper';
+      if (bodyChanged || !this.parts.length || cat !== this.frameCat) this.frameCamera();
+      this.frameCat = cat;
     } else {
       // Nur Aussehen geändert: Teile behalten ihre Lage
       this.setBody(ex.body, ex.gender, ex.build, skin);
@@ -829,13 +833,17 @@ export class GarmentViewer {
     const ex = this.ex;
     if (!mq || !ex) return;
     const hasHood = ex.pieces.some((p) => p.role === 'hood');
-    const top = hasHood ? mq.measures.height + 40 : mq.neckBaseY + 140;
-    const bottom = mq.crotchY - 120;
+    const roles = new Set(ex.pieces.map((p) => p.role));
+    const lower = roles.has('legFront') || roles.has('legBack') || roles.has('skirtFront') || roles.has('skirtBack');
+    const upper = roles.has('front') || roles.has('back') || roles.has('sleeve');
+    // Rock und Hose: Taille bis Boden; zusammen mit einem Oberteil die ganze Figur
+    const top = lower && !upper ? mq.waistY + 180 : hasHood ? mq.measures.height + 40 : mq.neckBaseY + 140;
+    const bottom = lower ? -20 : mq.crotchY - 120;
     const cy = (top + bottom) / 2;
     const span = top - bottom + 200;
     const vHalf = Math.tan((this.camera.fov * Math.PI) / 360);
     // Breite: Arme in A-Haltung (bis zu den Händen)
-    const half = mq.shoulderJoint[0] + Math.sin(mq.armAngle) * mq.measures.arm * 0.9 + 60;
+    const half = lower && !upper ? mq.maxR + 220 : mq.shoulderJoint[0] + Math.sin(mq.armAngle) * mq.measures.arm * 0.9 + 60;
     const dist = Math.max((span / 2 / vHalf) * 1.08, (half / (vHalf * Math.max(0.3, this.camera.aspect))) * 1.05);
     this.controls.target.set(0, cy, 0);
     this.camera.position.set(dist * 0.36, cy + 140, dist * 0.93);

@@ -32,7 +32,9 @@ describe('Grundschnitt-Generator', () => {
         const checks = checkSeams(ed.s.doc);
         expect(checks.length).toBe(res.seams.length);
         for (const c of checks) {
-          if (c.ribbed) expect(c.stretch, c.seam.name).toBeLessThanOrEqual(35);
+          // Faltenrock: die Bahn ist am Bund absichtlich viel länger (Falten werden eingelegt)
+          if (/^Falten/.test(c.message)) expect(c.lenA === c.lenB).toBe(false);
+          else if (c.ribbed) expect(c.stretch, c.seam.name).toBeLessThanOrEqual(35);
           else expect(Math.abs(c.diff), c.seam.name).toBeLessThan(0.5);
           expect(c.ok, `${c.seam.name}: ${c.message}`).toBe(true);
         }

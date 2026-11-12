@@ -37,6 +37,8 @@ export interface ExchangePiece {
   ccw: boolean;
   /** Versatz des Streifenrapports (mm) */
   stripeShift?: number;
+  /** Anzahl Falten über die Breite (Faltenrock) */
+  pleats?: number;
 }
 
 export interface PatternExchange {
@@ -94,6 +96,7 @@ export function patternExchange(doc: SketchDoc): PatternExchange | null {
       area: r2(g.area),
       ccw: g.ccw,
       ...(pc.stripeShift ? { stripeShift: pc.stripeShift } : {}),
+      ...(pc.pleats ? { pleats: pc.pleats } : {}),
     });
   }
   const ok = new Set(pieces.map((p) => p.id));

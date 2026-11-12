@@ -238,7 +238,7 @@ export function checkSeams(doc: SketchDoc, tol = 2): SeamCheck[] {
   const isRib = (id: Id) => {
     const p = pieceById(doc, id);
     if (!p) return false;
-    if (p.role === 'cuff' || p.role === 'hem' || p.role === 'neckband') return true;
+    if (p.role === 'cuff' || p.role === 'hem' || p.role === 'neckband' || p.role === 'waistband' || p.role === 'legCuff') return true;
     const m = pat.materials.find((x) => x.id === p.material);
     return m?.fabric === 'rib';
   };
@@ -253,8 +253,15 @@ export function checkSeams(doc: SketchDoc, tol = 2): SeamCheck[] {
     const stretch = short > 0 ? (Math.max(a.length, b.length) / short - 1) * 100 : 0;
     let ok = Math.abs(diff) <= tol;
     let message: string;
+    // Falten: die längere Kante gehört zum Faltenteil und wird auf die kürzere eingelegt
+    const pa = pieceById(doc, seam.a.piece);
+    const pb = pieceById(doc, seam.b.piece);
+    const pleated = (pa?.pleats && !pb?.pleats && diff > 0) || (pb?.pleats && !pa?.pleats && diff < 0);
     if (ok) message = `Passt (${fmt(a.length)} mm)`;
-    else if (ribbed) {
+    else if (pleated) {
+      ok = true;
+      message = `Falten: ${fmt(Math.max(a.length, b.length))} mm auf ${fmt(short)} mm eingelegt`;
+    } else if (ribbed) {
       ok = stretch <= 35;
       message = ok ? `Bündchen wird um ${fmt(stretch)} % gedehnt` : `Bündchen müsste um ${fmt(stretch)} % gedehnt werden – zu viel (max. ca. 35 %)`;
     } else message = `Kanten unterschiedlich lang: ${fmt(a.length)} mm zu ${fmt(b.length)} mm (Differenz ${fmt(Math.abs(diff))} mm)`;

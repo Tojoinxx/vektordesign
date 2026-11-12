@@ -183,6 +183,7 @@ Export-Dialog: **Je Farbe eine Datei** (für mehrfarbiges Plotten und Siebe, all
 Grundlage für die 3D-Passform in **Vektordesign 3D**. Über **Datei → Neues Projekt** (`Strg+N`) wählst du die Projektart: _2D-Motiv_, _Schnittmuster_ oder _3D-Modell_.
 
 - **Grundschnitt aus Maßen:** T-Shirt, Polo (Kragensteg, umgeschlagener Kragen, zwei Knopfleisten, Ärmelbündchen), Longsleeve, Sweatshirt oder Hoodie aus der Maßtabelle (Herren/Unisex XS–3XL, Damen XS–XL) oder eigenen Körpermaßen, Passform schmal/normal/weit, Länge und Ärmel einstellbar. Erzeugt alle Teile mit fertig verbundenen Nähten; die Ärmelkugel passt exakt ins Armloch. „Aktualisieren“ ersetzt nur die erzeugten Teile.
+- **Rock und Hose:** im selben Auswahlfeld unter „Röcke und Hosen“: **Rock** (A-Linie), **Faltenrock** (zwei breite Bahnen, am Bund in Falten gelegt), **Jogginghose** (Vorder- und Hinterhose 2× gegengleich, Beinbündchen) und **Shorts** – jeweils mit elastischem Bund und fertig verbundenen Nähten. Länge = Seitenlänge ab Bundoberkante. Fertigmaße: Seitenlänge, ½ Bundweite, ½ Hüftweite, Leibhöhe, ½ Beinöffnung, Bundhöhe. In 3D sitzt der Bund wie ein Gummizug an der Taille und geht bei Live-Physik mit dem Körper mit.
 - **Maße eines vorhandenen Teils nachbauen:** unter „Maße eines vorhandenen Teils“ die Fertigmaße aus der Größentabelle eintragen oder flach liegend nachmessen (cm): Gesamtlänge, ½ Brust, ½ Saum, Schulterbreite, Schulternaht, Armloch, Ärmellänge, ½ Oberarm, ½ Ärmelöffnung, Halsweite, Halsausschnitt, Bündchenhöhe, Kapuzenhöhe und -breite. Eingetragene Werte bestimmen den Schnitt genau, leere kommen aus Körpermaßen und Passform (Vorschlag grau im Feld). Die Größenstaffel im Tech-Pack stuft mit denselben Sprüngen; passt ein Maß geometrisch nicht zu den übrigen, steht es als Hinweis darunter.
 - **Größentabelle eines Shops übernehmen:** „Größentabelle übernehmen …“ – Tabelle aus dem Shop kopieren und einfügen (cm oder inch, deutsch oder englisch, flache Weite oder Umfang) oder je Größe eintragen. Jede Größe trifft ihre Werte genau, auch in der Maßtabelle des Tech-Packs; Größen, die fehlen, werden gestuft. Mit API-Schlüssel liest der Claude-Tab die Werte auch aus einem Screenshot und baut den Schnitt.
 - **Vorhandene Schnittteile** als DXF, SVG oder PDF importieren, auswählen, **Aus Auswahl** – dann Nähte verbinden und in 3D anziehen.
@@ -384,7 +385,8 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 7. ✅ Vektordesign 3D: Puppe aus Maßen, Stoffsimulation, Passform-Karte, Teile einfärben, Stoffarten, Motive auf dem 3D-Modell, Live-Vorschau und eigenes Fenster
 8. ✅ Tech-Pack als Ergänzung zu LabwearOS: Maßtabelle mit Größenstaffel, Stückliste, Verarbeitung, Artwork, Referenzen per Drag & Drop, 3D-Ansichten, PDF und CSV
 9. ✅ Live-Physik in 3D: Stoff in Echtzeit, bewegte Puppe (Gehen, Drehen, Arme heben, Hüpfen), Wind, Stoff anfassen und ziehen
-10. ⏳ Weitere Kleidungsarten: Rock und Faltenrock, Hose, Shorts, danach Kleid, Jacke, Tanktop
+10. ✅ Rock und Hose: Grundschnitte Rock (A-Linie), Faltenrock, Jogginghose und Shorts mit elastischem Bund, in 3D an der Taille sitzend und mit Live-Physik
+11. ⏳ Weitere Kleidungsarten: Kleid, Jacke, Tanktop
 
 ## Lizenz
 

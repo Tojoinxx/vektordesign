@@ -18,7 +18,7 @@ export interface ConstructionRow {
   kind: 'seam' | 'edge';
 }
 
-const RIB: PieceRole[] = ['cuff', 'hem', 'neckband'];
+const RIB: PieceRole[] = ['cuff', 'hem', 'neckband', 'waistband', 'legCuff'];
 
 export const STITCHES = [
   'Overlock 4-Faden',

@@ -18,7 +18,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import type { BodyMeasures, PatternBlock, PatternMaterial, PieceRole } from '../model/types';
-import { BLOCK_KINDS, FIT_NAMES, defaultBlock, generateBlock } from '../pattern/blocks';
+import { BLOCK_KINDS, FIT_NAMES, defaultBlock, generateBlock, isBottom } from '../pattern/blocks';
 import { POMS, blockPoms, pomsFor, specDeviations } from '../techpack/measure';
 import { chartToSpecs, parseSizeChart } from '../pattern/sizeChart';
 import { Modal } from './Chrome';
@@ -168,6 +168,9 @@ function BlockSection() {
   const current = useMemo(() => blockPoms(generateBlock(body, blk)), [body, JSON.stringify(blk)]); // eslint-disable-line react-hooks/exhaustive-deps
   const deviations = useMemo(() => specDeviations(body, blk), [body, JSON.stringify(blk)]); // eslint-disable-line react-hooks/exhaustive-deps
   const poms = useMemo(() => pomsFor(kind), [kind]);
+  const bottom = isBottom(kind);
+  const lenKey = bottom ? 'sideLen' : 'len';
+  const lenSpec = spec[lenKey];
 
   const pickSize = (id: string) => {
     setSize(id);
@@ -225,11 +228,30 @@ function BlockSection() {
       <h3>Grundschnitt aus Maßen</h3>
       <div className="form-grid">
         <span>Kleidungsstück</span>
-        <select value={kind} aria-label="Kleidungsstück" data-testid="block-kind" onChange={(e) => setKind(e.target.value as PatternBlock['kind'])}>
-          {BLOCK_KINDS.map((k) => (
-            <option key={k.id} value={k.id} title={k.hint}>
-              {k.name}
-            </option>
+        <select
+          value={kind}
+          aria-label="Kleidungsstück"
+          data-testid="block-kind"
+          onChange={(e) => {
+            const next = e.target.value as PatternBlock['kind'];
+            // Wechsel zu/zwischen Rock und Hose: Länge und Fertigmaße gelten dort anders – zurück auf Standard
+            if (isBottom(next) || isBottom(kind)) {
+              setLength(null);
+              setSleeve(null);
+              setSpec({});
+              setSizeSpecs(undefined);
+            }
+            setKind(next);
+          }}
+        >
+          {(['Oberteile', 'Röcke und Hosen'] as const).map((grp, gi) => (
+            <optgroup key={grp} label={grp}>
+              {BLOCK_KINDS.filter((k) => isBottom(k.id) === (gi === 1)).map((k) => (
+                <option key={k.id} value={k.id} title={k.hint}>
+                  {k.name}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <span>Größe</span>
@@ -256,23 +278,23 @@ function BlockSection() {
         <span>Länge</span>
         <span className="row">
           <Field
-            value={mm(spec.len ?? blk.length)}
+            value={mm(lenSpec ?? blk.length)}
             numeric
             width={64}
-            label="Gesamtlänge ab Halsansatz in mm"
+            label={bottom ? 'Seitenlänge ab Bundoberkante in mm' : 'Gesamtlänge ab Halsansatz in mm'}
             testId="block-length"
-            onCommit={(v) => (spec.len != null ? setSpec((o) => ({ ...o, len: num(v) ?? o.len })) : setLength(num(v)))}
+            onCommit={(v) => (lenSpec != null ? setSpec((o) => ({ ...o, [lenKey]: num(v) ?? o[lenKey] })) : setLength(num(v)))}
           />
           <span className="muted">mm</span>
-          {spec.len != null && <span className="muted small">Fertigmaß A</span>}
-          {length !== null && spec.len == null && (
+          {lenSpec != null && <span className="muted small">Fertigmaß {bottom ? 'S' : 'A'}</span>}
+          {length !== null && lenSpec == null && (
             <button className="link-btn small" onClick={() => setLength(null)}>
               Standard
             </button>
           )}
         </span>
-        <span>{kind === 'tshirt' ? 'Ärmel (kurz)' : 'Ärmel'}</span>
-        <span className="row">
+        {!bottom && <span>{kind === 'tshirt' ? 'Ärmel (kurz)' : 'Ärmel'}</span>}
+        <span className="row" style={bottom ? { display: 'none' } : undefined}>
           <Field
             value={mm(spec.sleeve ?? blk.sleeve)}
             numeric
@@ -392,9 +414,14 @@ function BlockSection() {
         )}
       </div>
       <p className="muted small">
-        Erzeugt Vorder- und Rückenteil, Ärmel
-        {kind === 'polo' ? ' mit Bündchen, Knopfleisten, Kragensteg und Kragen' : kind === 'sweatshirt' || kind === 'hoodie' ? ', Bündchen' : ', Halsbündchen'}
-        {kind === 'hoodie' ? ' und Kapuze' : ''} mit fertig verbundenen Nähten. Beim Aktualisieren werden nur diese Teile ersetzt – eigene Teile bleiben.
+        {bottom
+          ? kind === 'skirt'
+            ? 'Erzeugt Rockbahn vorne und hinten und den elastischen Bund'
+            : kind === 'pleated'
+              ? 'Erzeugt zwei breite Rockbahnen, die am elastischen Bund in Falten gelegt werden'
+              : `Erzeugt Vorder- und Hinterhose (je 2× gegengleich), den elastischen Bund${kind === 'pants' ? ' und Beinbündchen' : ''}`
+          : `Erzeugt Vorder- und Rückenteil, Ärmel${kind === 'polo' ? ' mit Bündchen, Knopfleisten, Kragensteg und Kragen' : kind === 'sweatshirt' || kind === 'hoodie' ? ', Bündchen' : ', Halsbündchen'}${kind === 'hoodie' ? ' und Kapuze' : ''}`}{' '}
+        mit fertig verbundenen Nähten. Beim Aktualisieren werden nur diese Teile ersetzt – eigene Teile bleiben.
       </p>
     </section>
   );

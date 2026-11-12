@@ -39,6 +39,13 @@ export const POMS: Pom[] = [
   { id: 'hoodW', code: 'P', label: 'Kapuzenbreite', how: 'Flach liegend von der Gesichtskante bis zur hinteren Mitte', tol: 8 },
   { id: 'placket', code: 'Q', label: 'Knopfleiste Länge', how: 'Von der Kragenansatznaht bis zum unteren Ende der Knopfleiste', tol: 5 },
   { id: 'collarH', code: 'R', label: 'Kragenhöhe', how: 'Höhe des Kragens in der hinteren Mitte (ohne Steg)', tol: 3 },
+  // Rock und Hose
+  { id: 'sideLen', code: 'S', label: 'Seitenlänge', how: 'Von der Bundoberkante an der Seite senkrecht bis zur Saumkante (inkl. Bund und Bündchen)', tol: 10 },
+  { id: 'waist', code: 'T', label: '½ Bundweite', how: 'Flach liegend an der Bundoberkante, ungedehnt', tol: 10 },
+  { id: 'hip', code: 'U', label: '½ Hüftweite', how: 'Flach liegend an der weitesten Stelle über dem Schritt, von Seitennaht zu Seitennaht', tol: 10 },
+  { id: 'rise', code: 'V', label: 'Leibhöhe vorne', how: 'Von der Bundnaht vorne Mitte senkrecht bis auf Höhe des Schrittpunkts', tol: 8 },
+  { id: 'legOpening', code: 'W', label: '½ Beinöffnung', how: 'Flach liegend an der Beinkante (bei Bündchen: am Bündchen, ungedehnt)', tol: 5 },
+  { id: 'waistbandH', code: 'X', label: 'Bundhöhe', how: 'Fertige Höhe des Bunds', tol: 3 },
 ];
 
 export interface SizeColumn {
@@ -70,6 +77,26 @@ const box = (p: BlockPiece | undefined) => {
 
 /** Messpunkte aus einem Grundschnitt (Knotenreihenfolge siehe pattern/blocks). */
 export function blockPoms(r: BlockResult): Record<string, number | null> {
+  const band = r.pieces.find((p) => p.key === 'waistband');
+  if (band) {
+    // Unterteile (Knotenreihenfolge siehe pattern/blocks: Rockbahn bzw. Vorder-/Hinterhose)
+    const sk = r.pieces.find((p) => p.key === 'skirtFront');
+    const lf = r.pieces.find((p) => p.key === 'legFront');
+    const lb = r.pieces.find((p) => p.key === 'legBack');
+    const cuff = r.pieces.find((p) => p.key === 'legCuff');
+    const bandH = box(band)!.h;
+    const out: Record<string, number | null> = { waist: box(band)!.w / 2, waistbandH: bandH };
+    if (sk) {
+      out.sideLen = -node(sk, 0)!.y + bandH;
+      out.hem = Math.abs(node(sk, 1)!.x - node(sk, 0)!.x);
+    } else if (lf && lb) {
+      out.sideLen = -node(lf, 0)!.y + bandH + (cuff ? box(cuff)!.h : 0);
+      out.hip = (node(lf, 2)!.ix ?? 0) - (node(lb, 4)!.ox ?? 0);
+      out.rise = -node(lf, 4)!.y;
+      out.legOpening = cuff ? box(cuff)!.w / 2 : (Math.abs(node(lf, 1)!.x - node(lf, 0)!.x) + Math.abs(node(lb, 1)!.x - node(lb, 0)!.x)) / 2;
+    }
+    return out;
+  }
   const f = r.pieces.find((p) => p.key === 'front');
   const b = r.pieces.find((p) => p.key === 'back');
   const s = r.pieces.find((p) => p.key === 'sleeve');

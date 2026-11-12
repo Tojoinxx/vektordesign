@@ -386,7 +386,25 @@ export interface Production {
 // ---------------------------------------------------------------------------
 
 /** Rolle eines Schnittteils – bestimmt, wo es in 3D um den Körper gelegt wird. */
-export type PieceRole = 'front' | 'back' | 'sleeve' | 'hood' | 'cuff' | 'hem' | 'neckband' | 'collar' | 'placket' | 'pocket' | 'other';
+export type PieceRole =
+  | 'front'
+  | 'back'
+  | 'sleeve'
+  | 'hood'
+  | 'cuff'
+  | 'hem'
+  | 'neckband'
+  | 'collar'
+  | 'placket'
+  | 'pocket'
+  /** Unterteile: Rockbahn vorne/hinten (um die Hüfte), Hosenbein vorne/hinten (um das Bein), Bund, Beinbündchen */
+  | 'skirtFront'
+  | 'skirtBack'
+  | 'legFront'
+  | 'legBack'
+  | 'waistband'
+  | 'legCuff'
+  | 'other';
 
 /** Körpermaße in mm (Umfänge als ganzer Umfang). */
 export interface BodyMeasures {
@@ -437,6 +455,8 @@ export interface PatternPiece {
   stripeShift?: number;
   /** Eigene Farbe für dieses Teil (sonst Farbe des Materials) */
   color?: string;
+  /** Anzahl Falten über die Breite des Teils (Faltenrock): die Bundkante wird eingelegt, in 3D fällt das Teil in Falten */
+  pleats?: number;
   /** Teil gehört zu einem Grundschnitt (wird beim Aktualisieren ersetzt) */
   block?: boolean;
 }
@@ -480,14 +500,14 @@ export interface PatternMaterial {
 
 /** Grundschnitt-Einstellungen, aus denen die Teile mit `block: true` erzeugt wurden. */
 export interface PatternBlock {
-  kind: 'tshirt' | 'polo' | 'longsleeve' | 'sweatshirt' | 'hoodie';
+  kind: 'tshirt' | 'polo' | 'longsleeve' | 'sweatshirt' | 'hoodie' | 'skirt' | 'pleated' | 'pants' | 'shorts';
   /** Größe aus der Maßtabelle oder 'custom' */
   size: string;
   /** Passform: Bewegungszugabe */
   fit: 'slim' | 'regular' | 'oversize';
-  /** Körperlänge des Kleidungsstücks (hintere Mitte, ab Halsansatz) */
+  /** Länge des Kleidungsstücks: Oberteile hintere Mitte ab Halsansatz; Rock und Hose Seitenlänge ab Bundoberkante */
   length: number;
-  /** Ärmellänge ab Schulterpunkt (T-Shirt kurz) */
+  /** Ärmellänge ab Schulterpunkt (T-Shirt kurz); bei Rock und Hose ohne Bedeutung */
   sleeve: number;
   /**
    * Fertigmaße eines vorhandenen Produkts (Messpunkte der Maßtabelle, z. B. chest = ½ Brustweite, mm).
