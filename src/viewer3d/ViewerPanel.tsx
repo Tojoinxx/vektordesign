@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, ExternalLink, Eye, EyeOff, Gauge, Loader2, Palette, PersonStanding, RotateCcw, Shirt, X } from 'lucide-react';
+import { Camera, ExternalLink, Eye, EyeOff, Gauge, Hand, Loader2, Palette, Pause, PersonStanding, Play, RotateCcw, Shirt, Wind, X } from 'lucide-react';
 import type { Id, PatternAvatar, PatternMaterial, SketchDoc } from '../model/types';
 import { HEIGHT_RANGE, avatarBody, buildLabel, defaultAvatar, genderOfSize, sizesFor } from '../sim3d/avatar';
 import { bodyForSize } from '../pattern/body';
 import { productionOf } from '../model/production';
 import { FABRICS } from '../store/patternOps';
 import { ColorButton } from '../ui/ColorPicker';
+import { MOTIONS, type Motion } from '../sim3d/rig';
 import { DEFAULT_SKIN, GarmentViewer, type CameraView, type ViewMode, type ViewerStatus } from './viewer';
 
 const SKINS = [
@@ -53,6 +54,9 @@ export default function ViewerPanel(p: ViewerPanelProps) {
   const [hoodUp, setHoodUp] = useState(false);
   const [glError, setGlError] = useState<string | null>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [live, setLive] = useState(false);
+  const [motion, setMotion] = useState<Motion>('stand');
+  const [wind, setWind] = useState(0);
   const onSelect = useRef(p.onSelect);
   onSelect.current = p.onSelect;
 
@@ -74,6 +78,7 @@ export default function ViewerPanel(p: ViewerPanelProps) {
   useEffect(() => viewer.current?.setDoc(p.doc), [p.doc]);
   useEffect(() => viewer.current?.select(p.selected), [p.selected]);
   useEffect(() => viewer.current?.setOptions({ mode, showBody: body, variantId: variant, quality, hoodUp }), [mode, body, variant, quality, hoodUp]);
+  useEffect(() => viewer.current?.setLive(live, motion, wind / 100), [live, motion, wind]);
 
   const pattern = p.doc.pattern;
   const variants = useMemo(() => productionOf(p.doc).variants, [p.doc]);
@@ -86,6 +91,7 @@ export default function ViewerPanel(p: ViewerPanelProps) {
   else if (!status || status.state === 'empty') line = status?.message ?? 'Lädt …';
   else if (status.state === 'error') line = `Fehler: ${status.message}`;
   else if (status.state === 'simulating') line = `Stoff fällt … ${fmt(status.stats?.time ?? 0)} s`;
+  else if (status.stats?.live) line = 'Live · Stoff anfassen und ziehen';
   else {
     const gap = status.stats?.seamGap ?? 0;
     line = `Fertig · ${status.parts} Teile · Nähte ${gap < 8 ? 'geschlossen' : `bis ${fmt(gap, 0)} mm offen`}`;
@@ -127,6 +133,16 @@ export default function ViewerPanel(p: ViewerPanelProps) {
         </button>
         <button className={`icon-btn ${body ? '' : 'on'}`} onClick={() => setBody((b) => !b)} title={body ? 'Puppe ausblenden' : 'Puppe einblenden'} aria-label="Puppe ein/aus" data-testid="v3-body">
           {body ? <Eye size={16} /> : <EyeOff size={16} />}
+        </button>
+        <button
+          className={`icon-btn ${live ? 'on' : ''}`}
+          onClick={() => setLive((l) => !l)}
+          title={live ? 'Live-Physik anhalten' : 'Live-Physik: Stoff schwingt in Echtzeit, Puppe bewegt sich, Stoff lässt sich anfassen'}
+          aria-label="Live-Physik"
+          aria-pressed={live}
+          data-testid="v3-live"
+        >
+          {live ? <Pause size={16} /> : <Play size={16} />}
         </button>
         <button className="icon-btn" onClick={() => viewer.current?.resimulate()} title="Neu drapieren" aria-label="Neu drapieren" data-testid="v3-resim">
           <RotateCcw size={16} />
@@ -186,6 +202,29 @@ export default function ViewerPanel(p: ViewerPanelProps) {
               </option>
             ))}
           </select>
+        )}
+        {live && (
+          <div className="v3-live" data-testid="v3-live-panel" onKeyDown={(e) => e.stopPropagation()}>
+            <label className="v3-field">
+              <span>Bewegung</span>
+              <select value={motion} onChange={(e) => setMotion(e.target.value as Motion)} aria-label="Bewegung der Puppe" data-testid="v3-motion">
+                {MOTIONS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="v3-field">
+              <span>
+                <Wind size={13} /> Wind <b>{wind === 0 ? 'aus' : `${wind} %`}</b>
+              </span>
+              <input type="range" min={0} max={100} step={5} value={wind} onChange={(e) => setWind(Number(e.target.value))} aria-label="Wind" data-testid="v3-wind" />
+            </label>
+            <span className="muted small v3-live-hint">
+              <Hand size={13} /> Stoff antippen und ziehen
+            </span>
+          </div>
         )}
         {avatarOpen && <AvatarControls doc={p.doc} onAvatar={p.onAvatar} onClose={() => setAvatarOpen(false)} />}
         <div className="v3-toggles">

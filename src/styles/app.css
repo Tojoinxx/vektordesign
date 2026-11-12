@@ -3823,3 +3823,29 @@ body {
   width: 100%;
   box-sizing: border-box;
 }
+
+/* 3D: Live-Physik (Bewegung, Wind) – unten links über der Statuszeile */
+.v3-live {
+  position: absolute;
+  left: 8px;
+  bottom: 40px;
+  width: min(190px, calc(100% - 16px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--chrome);
+  box-shadow: var(--shadow);
+  z-index: 1;
+}
+.v3-live .v3-field > span,
+.v3-live-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.v3-live select {
+  width: 100%;
+}

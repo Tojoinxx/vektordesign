@@ -2009,6 +2009,29 @@ await step('3D: Hoodie auf der Puppe drapieren, Teil anklicken und Stoff wechsel
   assert(pieces === 7, `Teile in Vektordesign 3D: ${pieces}`);
   await p3.close();
   await page.bringToFront();
+  // Live-Physik: Stoff rechnet weiter, Puppe geht, Stoff anfassen und ziehen, danach wieder Ruhe
+  await page.click('[data-testid="v3-live"]');
+  await page.waitForFunction(() => /Live/.test(document.querySelector('[data-testid="v3-status"]')?.textContent ?? ''), { timeout: 60000 });
+  await page.select('[data-testid="v3-motion"]', 'walk');
+  await sleep(1500);
+  assert(await app(() => window.vektordesign3d.stats?.live === true), 'Live-Physik läuft nicht');
+  await shot('18b-3d-live-gehen');
+  await page.select('[data-testid="v3-motion"]', 'stand');
+  await sleep(800);
+  const grabAt = await app(() => {
+    const d = window.vektordesign.store.getState().doc;
+    return window.vektordesign3d.screenPointOf(d.pattern.pieces.find((p) => p.role === 'front').id);
+  });
+  await page.mouse.move(grabAt.x, grabAt.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) {
+    await page.mouse.move(grabAt.x + i * 10, grabAt.y - i * 4);
+    await sleep(50);
+  }
+  await shot('18c-3d-live-anfassen');
+  await page.mouse.up();
+  await page.click('[data-testid="v3-live"]');
+  await page.waitForFunction(() => /Fertig/.test(document.querySelector('[data-testid="v3-status"]')?.textContent ?? ''), { timeout: 60000 });
   await page.click('[data-testid="v3-close"]');
 });
 

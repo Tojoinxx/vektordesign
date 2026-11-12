@@ -16,6 +16,7 @@ import { buildHuman, humanMannequin, type HumanData, type HumanMesh } from '../s
 import { loadHumanData } from '../sim3d/humanLoader';
 import type { FromWorker, LayoutPart, ToWorker } from '../sim3d/protocol';
 import { SimRunner } from '../sim3d/runner';
+import { buildRig, skinPositions, skinWeights, type Motion, type Skin } from '../sim3d/rig';
 import { avatarBody, genderOfSize } from '../sim3d/avatar';
 import { bodyForSize } from '../pattern/body';
 import { fabricLook, fabricNormalMap, fabricTileMm } from './textures';
@@ -86,11 +87,19 @@ class Driver {
     }
   }
   private lastStart: ToWorker | null = null;
+  private lastLive: ToWorker | null = null;
   private fallback(): void {
     this.worker?.terminate();
     this.worker = null;
     if (!this.local) this.local = new SimRunner((m) => this.onMessage(m), 14);
+    if (this.lastLive) this.local.handle(this.lastLive);
     if (this.lastStart?.type === 'start') this.local.start(this.lastStart.id, this.lastStart.ex, this.lastStart.opts);
+  }
+  /** Live-Physik, Anfassen, Ziehen, Loslassen */
+  send(m: ToWorker): void {
+    if (m.type === 'live') this.lastLive = m;
+    if (this.worker) this.worker.postMessage(m);
+    else this.local?.handle(m);
   }
   start(id: number, ex: PatternExchange, opts: SimOptions): void {
     this.lastStart = { type: 'start', id, ex, opts };
@@ -146,6 +155,13 @@ export class GarmentViewer {
   private human: HumanMesh | null = null;
   private bodyKey = '';
   private eyesMesh: THREE.Mesh | null = null;
+  /** Live-Physik: Stoff rechnet in Echtzeit weiter, Puppe bewegt sich, Stoff lässt sich anfassen */
+  private live: { on: boolean; motion: Motion; wind: number } = { on: false, motion: 'stand', wind: 0 };
+  /** Haut der Puppe: Ruhelage (gezeichnet, nach innen versetzt), Augen und Zuordnung zu den Knochen */
+  private skin: { body: Skin; rest: Float32Array; eyesRest: Float32Array } | null = null;
+  /** Haltung zum nächsten Bild: Matrizen, null = Ruhehaltung, undefined = unverändert */
+  private pendingBones: Float32Array | null | undefined = undefined;
+  private bodyPosed = false;
   opts: ViewerOptions = { mode: 'look', showBody: true, variantId: null, quality: 'preview', dark: false };
 
   constructor(
@@ -239,6 +255,7 @@ export class GarmentViewer {
     this.ro.observe(container);
     this.resize();
     this.bindPicking();
+    this.bindGrab();
     const loop = () => {
       this.frame = requestAnimationFrame(loop);
       this.tick();
@@ -390,11 +407,13 @@ export class GarmentViewer {
       return;
     }
     this.pending = m.pos;
+    this.pendingBones = m.bones ?? null;
     this.stats = m.stats;
     if (m.gap) this.gap = m.gap;
     if (m.strain) this.strain = m.strain;
     this.status({ state: m.stats.settled ? 'ready' : 'simulating', stats: m.stats, parts: this.parts.length, vertices: this.n });
-    if (m.stats.settled) {
+    if (m.stats.live) this.aoOn = false;
+    else if (m.stats.settled) {
       // Nähte erkennen (Randpartikel verschiedener Teile, die aufeinander liegen): Normalen mitteln, Nahtschatten
       this.seams = seamPairs(
         m.pos,
@@ -404,7 +423,33 @@ export class GarmentViewer {
       this.aoOn = true;
       this.updateLookColors();
     }
-    if (m.stats.settled && this.opts.mode === 'fit') this.updateFitColors();
+    if (m.stats.settled && !m.stats.live && this.opts.mode === 'fit') this.updateFitColors();
+  }
+
+  /** Live-Physik ein/aus, Bewegung der Puppe und Wind (0 … 1). */
+  setLive(on: boolean, motion: Motion = this.live.motion, wind = this.live.wind): void {
+    this.live = { on, motion, wind };
+    this.driver.send({ type: 'live', on, motion, wind });
+    this.renderer.domElement.style.cursor = on ? 'grab' : '';
+  }
+
+  /** Puppe in die Haltung der Simulation bringen (oder zurück in die Ruhehaltung). */
+  private applyBones(bones: Float32Array | null): void {
+    const sk = this.skin;
+    if (!sk || !this.bodyMesh || (!bones && !this.bodyPosed)) return;
+    const pa = this.bodyMesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    if (bones) skinPositions(sk.body, bones, sk.rest, pa.array as Float32Array);
+    else (pa.array as Float32Array).set(sk.rest);
+    pa.needsUpdate = true;
+    this.bodyMesh.geometry.computeVertexNormals();
+    if (this.eyesMesh) {
+      const ea = this.eyesMesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+      if (bones) skinPositions(sk.body, bones, sk.eyesRest, ea.array as Float32Array);
+      else (ea.array as Float32Array).set(sk.eyesRest);
+      ea.needsUpdate = true;
+      this.eyesMesh.geometry.computeVertexNormals();
+    }
+    this.bodyPosed = !!bones;
   }
 
   private setBody(body: PatternExchange['body'] | null, gender: 'male' | 'female' = 'male', build = 0, skin = DEFAULT_SKIN): void {
@@ -418,6 +463,8 @@ export class GarmentViewer {
       (m.material as THREE.Material).dispose();
     }
     this.bodyMesh = this.eyesMesh = null;
+    this.skin = null;
+    this.bodyPosed = false;
     this.human = null;
     this.mq = null;
     if (!body) return;
@@ -486,13 +533,15 @@ export class GarmentViewer {
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.computeVertexNormals();
+    // Bewegung: Zuordnung der Haut zu den Knochen (aus der unversetzten Ruhelage)
+    this.skin = { body: skinWeights(buildRig(h.joints, m), h.positions), rest: Float32Array.from(pos), eyesRest: Float32Array.from(h.positions) };
     this.bodyMesh = new THREE.Mesh(
       g,
       new THREE.MeshPhysicalMaterial({ color: skin, vertexColors: true, roughness: 0.58, metalness: 0, sheen: 0.35, sheenRoughness: 0.6, sheenColor: new THREE.Color(skin), clearcoat: 0.04 }),
     );
     // Augen: weiß mit dunkler Iris nach vorne
     const eg = new THREE.BufferGeometry();
-    eg.setAttribute('position', new THREE.BufferAttribute(h.positions, 3));
+    eg.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(h.positions), 3));
     eg.setIndex(new THREE.BufferAttribute(h.eyes, 1));
     const ec = new Float32Array(h.positions.length).fill(0.92);
     const ids = new Set(h.eyes);
@@ -809,6 +858,8 @@ export class GarmentViewer {
     const pos = this.pending;
     if (pos && pos.length >= this.n * 3) {
       this.pending = null;
+      if (this.pendingBones !== undefined) this.applyBones(this.pendingBones);
+      this.pendingBones = undefined;
       const N = this.normals;
       for (const part of this.parts)
         vertexNormals(pos.subarray(part.offset * 3, (part.offset + part.count) * 3), part.topo.tris.length ? localTris(part) : [], part.count, N.subarray(part.offset * 3));
@@ -925,6 +976,75 @@ export class GarmentViewer {
     const v = new THREE.Vector3(pos.getX(best), pos.getY(best), pos.getZ(best)).project(this.camera);
     const r = this.renderer.domElement.getBoundingClientRect();
     return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+  }
+
+  /**
+   * Stoff anfassen (nur bei Live-Physik): auf dem Stoff drücken und ziehen. Der Griffpunkt bewegt sich in der
+   * Ebene quer zur Blickrichtung. Neben dem Stoff dreht dieselbe Geste wie gewohnt die Ansicht.
+   */
+  private bindGrab(): void {
+    const el = this.renderer.domElement;
+    const ray = new THREE.Raycaster();
+    const plane = new THREE.Plane();
+    const dir = new THREE.Vector3();
+    const pt = new THREE.Vector3();
+    const off = new THREE.Vector3();
+    let active: number | null = null;
+    const aim = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
+    };
+    const end = (e: PointerEvent) => {
+      if (active !== e.pointerId) return;
+      active = null;
+      this.driver.send({ type: 'release' });
+      this.controls.enabled = true;
+      el.style.cursor = this.live.on ? 'grab' : '';
+    };
+    el.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!this.live.on || !this.stats?.live || active !== null || e.button !== 0 || !e.isPrimary) return;
+        aim(e);
+        const hit = ray.intersectObjects(
+          [...this.meshes.values()].filter((m) => m.visible),
+          false,
+        )[0];
+        const part = hit && this.parts.find((p) => p.key === hit.object.userData.key);
+        if (!hit || !part) return;
+        // nächster Partikel des Teils (die ersten `count` Punkte des feinen Netzes sind die Partikel)
+        const pa = (hit.object as THREE.Mesh).geometry.getAttribute('position') as THREE.BufferAttribute;
+        let best = 0;
+        let bd = Infinity;
+        for (let i = 0; i < part.count; i++) {
+          const d = (pa.getX(i) - hit.point.x) ** 2 + (pa.getY(i) - hit.point.y) ** 2 + (pa.getZ(i) - hit.point.z) ** 2;
+          if (d < bd) {
+            bd = d;
+            best = i;
+          }
+        }
+        off.set(pa.getX(best), pa.getY(best), pa.getZ(best)).sub(hit.point);
+        plane.setFromNormalAndCoplanarPoint(this.camera.getWorldDirection(dir).negate(), hit.point);
+        active = e.pointerId;
+        this.controls.enabled = false;
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* künstliche Zeigerereignisse (Tests) haben keine Erfassung */
+        }
+        el.style.cursor = 'grabbing';
+        this.driver.send({ type: 'grab', index: part.offset + best, x: hit.point.x + off.x, y: hit.point.y + off.y, z: hit.point.z + off.z });
+      },
+      { capture: true },
+    );
+    el.addEventListener('pointermove', (e) => {
+      if (active !== e.pointerId) return;
+      aim(e);
+      if (!ray.ray.intersectPlane(plane, pt)) return;
+      this.driver.send({ type: 'drag', x: pt.x + off.x, y: pt.y + off.y, z: pt.z + off.z });
+    });
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
   }
 
   private bindPicking(): void {

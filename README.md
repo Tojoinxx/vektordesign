@@ -215,6 +215,7 @@ Der Knopf **3D** oben (`Strg+3`) oder „In 3D ansehen“ im Tab „Schnitt“ �
 - **Aussehen:** Teil in 3D anklicken → eigene Farbe oder anderer Stoff. Stoffarten mit eigener Oberfläche (Jersey-Maschen, Sweat, Fleece, Rippe, Webware, Denim-Köper, Nylon mit leichtem Glanz, Mesh). Motive aus dem Tab „Produktion“ erscheinen an ihrer Druckposition (Abstand zur Kragennaht), Farbvarianten lassen sich umschalten.
 - **Realistischer Fall:** Der Stoff stößt an sich selbst – Lagen liegen aufeinander statt durcheinander (Kapuze auf dem Rücken, Falten, Achseln). Die Kapuze liegt wie auf Produktfotos abgelegt auf dem Rücken; **Kapuze auf** setzt sie auf.
 - **Darstellung:** glatte, gekrümmte Stoffflächen ohne Kanten an den Nähten, Licht wie im Fotostudio mit weichen Reflexen, Schatten in Falten (sobald der Stoff liegt), leichter Nahtschatten und dunklere Stoffinnenseite.
+- **Live-Physik** (Play-Knopf in der 3D-Leiste): Der Stoff rechnet in Echtzeit weiter und schwingt nach. **Bewegung** der Puppe wählen – Stehen, Gehen, Drehen, Arme heben, Hüpfen –, **Wind** per Regler, und den **Stoff anfassen**: auf den Stoff drücken (Maus, Finger oder Pencil) und ziehen; neben dem Stoff dreht dieselbe Geste die Ansicht. Zieht man zu weit, rutscht der Stoff aus der Hand. Pause bringt die Puppe zurück in die Ruhehaltung, danach gelten wieder Passform-Karte und Nahtprüfung. Bewegung braucht die realistische Puppe.
 - **Passform-Karte:** rot = spannt, gelb = leicht gedehnt, grün = liegt an, blau = locker.
 - Ansichten vorne, hinten, seitlich, schräg; Puppe ein-/ausblenden; „Fein“ für ein feineres Netz; **Bild speichern** als PNG.
 - Freie Teile, die an keinem Körperteil hängen (z. B. zwei verbundene Vierecke), hängen wie auf einer Stange vor der Puppe.
@@ -382,6 +383,8 @@ Der Workflow „Release“ übernimmt die Version, testet, baut den Installer un
 6. ✅ Schnitt: Projektart wählen, Grundschnitt aus Körpermaßen, eigene Schnittteile, Nähte verbinden und prüfen, Stoffe, Schnitt-DXF
 7. ✅ Vektordesign 3D: Puppe aus Maßen, Stoffsimulation, Passform-Karte, Teile einfärben, Stoffarten, Motive auf dem 3D-Modell, Live-Vorschau und eigenes Fenster
 8. ✅ Tech-Pack als Ergänzung zu LabwearOS: Maßtabelle mit Größenstaffel, Stückliste, Verarbeitung, Artwork, Referenzen per Drag & Drop, 3D-Ansichten, PDF und CSV
+9. ✅ Live-Physik in 3D: Stoff in Echtzeit, bewegte Puppe (Gehen, Drehen, Arme heben, Hüpfen), Wind, Stoff anfassen und ziehen
+10. ⏳ Weitere Kleidungsarten: Rock und Faltenrock, Hose, Shorts, danach Kleid, Jacke, Tanktop
 
 ## Lizenz
 
