@@ -4,6 +4,7 @@ import { bodyContact, buildMannequin, sectionAt, type Contact, type Mannequin } 
 import { meshPiece, type PieceMesh } from './mesh';
 import { humanMannequin, type HumanMesh } from './human';
 import { buildSdf, type Sdf } from './sdf';
+import { BONE_COUNT, boneWeights, buildRig, identityBones, invertBones, poseBones, posedSegments, type Motion, type Rig } from './rig';
 
 /** Abstandsfelder zwischenspeichern: dieselbe Puppe wird bei jeder Schnittänderung wiederverwendet. */
 const sdfCache: { key: Float32Array | null; sdf: Sdf | null; sum: number } = { key: null, sdf: null, sum: 0 };
@@ -94,9 +95,12 @@ export interface SimStats {
   /** Stellen, an denen Stofflagen ineinander stecken (nur bei Eigenkollision gezählt) */
   overlaps?: number;
   settled: boolean;
+  /** Live-Physik läuft: der Stoff liegt, wird aber in Echtzeit weitergerechnet */
+  live?: boolean;
 }
 
 const G = 9810;
+const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]);
 /** Bezugsgewicht (g/m²), auf das die Stoffwerte abgestimmt sind */
 const REF_GSM = 200;
 
@@ -140,6 +144,44 @@ export class GarmentSim {
   private exList: Uint32Array = new Uint32Array(0);
   stats: SimStats = { time: 0, seamGap: Infinity, speed: 0, inside: 0, settled: false };
 
+  // --- Live-Physik: Stoff rechnet in Echtzeit weiter, Puppe bewegt sich, Stoff lässt sich anfassen ---
+  /** Live-Physik gewünscht (beginnt, sobald der Stoff zum ersten Mal liegt) */
+  live = false;
+  /** Skelett der realistischen Puppe; null bei der einfachen Schneiderpuppe (keine Bewegung möglich) */
+  readonly rig: Rig | null;
+  motion: Motion = 'stand';
+  private motionFrom: Motion = 'stand';
+  private motionBlend = 1;
+  private motionT = 0;
+  /** Knochenmatrizen der aktuellen Haltung (Ruhehaltung → Haltung) */
+  bones = identityBones();
+  /** Puppe steht nicht in Ruhehaltung: Kollision rechnet Partikel über das Skelett zurück */
+  posed = false;
+  private invBones = new Float32Array(BONE_COUNT * 12);
+  private segs = new Float32Array(BONE_COUNT * 6);
+  private boneW = new Float32Array(BONE_COUNT);
+  /** je Partikel: Abbildung Haltung → Ruhehaltung am Anfang und am Ende des Bildschritts */
+  private inv0 = new Float32Array(0);
+  private inv1 = new Float32Array(0);
+  private liveNow = false;
+  private subIndex = 0;
+  private subCount = 0;
+  /** ab wann nach dem Fallen stärker gedämpft wird / frühestens Ruhe gilt / spätestens Ruhe gilt */
+  private lateFrom: number;
+  private calmFrom: number;
+  private forceAt = 8;
+  /** Wind (0 … 1) und seine Beschleunigung je Partikel in x für diesen Bildschritt (mm/s²) */
+  wind = 0;
+  private windAcc = new Float32Array(0);
+  private windGain = new Float32Array(0);
+  /** Angefasste Partikel mit Gewicht und Versatz zum Griffpunkt */
+  private grabIdx: number[] = [];
+  private grabW: number[] = [];
+  private grabOff: number[] = [];
+  private grabTarget: [number, number, number] = [0, 0, 0];
+  private adjStart: Uint32Array | null = null;
+  private adjList = new Uint32Array(0);
+
   constructor(
     readonly ex: PatternExchange,
     opts: SimOptions = {},
@@ -152,6 +194,7 @@ export class GarmentSim {
     this.hood = opts.hood ?? 'down';
     this.mq = opts.human ? humanMannequin(ex.body, ex.gender ?? 'male', opts.human) : buildMannequin(ex.body, ex.gender ?? 'male');
     if (opts.human) this.mq.sdf = sdfFor(opts.human);
+    this.rig = opts.human ? buildRig(opts.human.joints, ex.body) : null;
     // Teile vernetzen
     let total = 0;
     for (const piece of ex.pieces) {
@@ -193,6 +236,8 @@ export class GarmentSim {
     this.friction = new Float32Array(total);
     this.drag = new Float32Array(total);
     this.thick = new Float32Array(total);
+    this.windAcc = new Float32Array(total);
+    this.windGain = new Float32Array(total);
     this.place();
     // Massen aus Flächengewicht
     const mass = new Float32Array(total);
@@ -214,6 +259,8 @@ export class GarmentSim {
         this.friction[p.offset + v] = phys.friction;
         this.drag[p.offset + v] = drag;
         this.thick[p.offset + v] = th;
+        // leichter Stoff fängt mehr Wind
+        this.windGain[p.offset + v] = Math.min(2.4, Math.max(0.45, REF_GSM / gsm));
       }
     }
     for (let i = 0; i < total; i++) this.invMass[i] = mass[i] > 0 ? 1 / mass[i] : 0;
@@ -297,6 +344,166 @@ export class GarmentSim {
     this.selfR = new Float32Array(total);
     if (this.selfCollision) this.buildSelfExclusion();
     this.prev.set(this.pos);
+    const calm = this.hasHoodPull() ? this.hoodPull[1] + 0.6 : this.sewTime + 0.8;
+    this.lateFrom = this.sewTime + 1.2;
+    this.calmFrom = calm;
+  }
+
+  // -------------------------------------------------------------------------
+  // Live-Physik: Bewegung, Wind, Anfassen
+  // -------------------------------------------------------------------------
+
+  /** Live-Physik ein/aus. Aus: Puppe geht in die Ruhehaltung zurück, der Stoff kommt wieder zur Ruhe. */
+  setLive(on: boolean): void {
+    if (on === this.live) return;
+    this.live = on;
+    if (!on) {
+      this.release();
+      this.wind = 0;
+      this.setMotion('stand');
+      if (this.stats.settled) {
+        this.stats = { ...this.stats, settled: false, live: false };
+        this.settledFor = 0;
+        this.lateFrom = this.t + 0.3;
+        this.calmFrom = this.t + 0.7;
+        this.forceAt = this.t + 6;
+      }
+    }
+  }
+
+  /** Bewegung der Puppe (weich übergeblendet). Ohne realistische Puppe wirkungslos. */
+  setMotion(m: Motion): void {
+    if (m === this.motion || !this.rig) return;
+    // Mitten in einer Überblendung: von der Bewegung aus weiter, die gerade überwiegt
+    this.motionFrom = this.motionBlend >= 0.5 ? this.motion : this.motionFrom;
+    this.motion = m;
+    this.motionBlend = 0;
+  }
+
+  private buildAdjacency(): void {
+    const N = this.n;
+    const deg = new Uint32Array(N + 1);
+    for (let e = 0; e < this.edges.length; e++) deg[this.edges[e] + 1]++;
+    for (let i = 0; i < N; i++) deg[i + 1] += deg[i];
+    const list = new Uint32Array(this.edges.length);
+    const fill = deg.slice(0, N);
+    for (let e = 0; e < this.edges.length; e += 2) {
+      const a = this.edges[e];
+      const b = this.edges[e + 1];
+      list[fill[a]++] = b;
+      list[fill[b]++] = a;
+    }
+    this.adjStart = deg;
+    this.adjList = list;
+  }
+
+  /** Nächster Partikel zu einem Punkt (für Tests und das Anfassen ohne Treffer-Index). */
+  nearest(x: number, y: number, z: number): number {
+    let best = 0;
+    let bd = Infinity;
+    for (let i = 0; i < this.n; i++) {
+      const d = (this.pos[3 * i] - x) ** 2 + (this.pos[3 * i + 1] - y) ** 2 + (this.pos[3 * i + 2] - z) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Stoff anfassen: Partikel `index` und seine Nachbarn (zwei Ringe, nach außen schwächer) folgen dem Griffpunkt.
+   * Der Zug ist begrenzt – zieht man zu weit, rutscht der Stoff aus der Hand statt zu reißen.
+   */
+  grab(index: number, x: number, y: number, z: number): void {
+    this.release();
+    if (index < 0 || index >= this.n || this.invMass[index] === 0) return;
+    if (!this.adjStart) this.buildAdjacency();
+    const A = this.adjStart!;
+    const ring = new Map<number, number>([[index, 1]]);
+    let frontier = [index];
+    for (const w of [0.7, 0.4]) {
+      const next: number[] = [];
+      for (const v of frontier)
+        for (let q = A[v]; q < A[v + 1]; q++) {
+          const u = this.adjList[q];
+          if (ring.has(u) || this.invMass[u] === 0) continue;
+          ring.set(u, w);
+          next.push(u);
+        }
+      frontier = next;
+    }
+    for (const [j, w] of ring) {
+      this.grabIdx.push(j);
+      this.grabW.push(w);
+      this.grabOff.push(this.pos[3 * j] - this.pos[3 * index], this.pos[3 * j + 1] - this.pos[3 * index + 1], this.pos[3 * j + 2] - this.pos[3 * index + 2]);
+    }
+    this.grabTarget = [x, y, z];
+  }
+
+  dragTo(x: number, y: number, z: number): void {
+    this.grabTarget = [x, y, z];
+  }
+
+  release(): void {
+    this.grabIdx = [];
+    this.grabW = [];
+    this.grabOff = [];
+  }
+
+  get grabbing(): boolean {
+    return this.grabIdx.length > 0;
+  }
+
+  /** Haltung der Puppe für diesen Bildschritt und je Partikel die Rückrechnung in die Ruhehaltung. */
+  private updatePose(dt: number): void {
+    const rig = this.rig;
+    if (!rig) return;
+    this.motionT += dt;
+    this.motionBlend = Math.min(1, this.motionBlend + dt / 0.45);
+    const moving = this.motion !== 'stand' || (this.motionBlend < 1 && this.motionFrom !== 'stand');
+    if (!moving && !this.posed) return;
+    const N = this.n;
+    if (this.inv1.length !== N * 12) {
+      this.inv0 = new Float32Array(N * 12);
+      this.inv1 = new Float32Array(N * 12);
+    }
+    if (!this.posed) for (let i = 0; i < N; i++) this.inv1.set(IDENT, 12 * i);
+    const sw = this.inv0;
+    this.inv0 = this.inv1;
+    this.inv1 = sw;
+    if (moving) poseBones(rig, this.motion, this.motionT, this.bones, this.motionFrom, this.motionBlend);
+    else identityBones(this.bones);
+    invertBones(this.bones, this.invBones);
+    posedSegments(rig, this.bones, this.segs);
+    const { pos, invBones, boneW } = this;
+    const out = this.inv1;
+    for (let i = 0; i < N; i++) {
+      boneWeights(rig, this.segs, pos[3 * i], pos[3 * i + 1], pos[3 * i + 2], boneW);
+      const o = 12 * i;
+      for (let c = 0; c < 12; c++) out[o + c] = 0;
+      for (let b = 0; b < BONE_COUNT; b++) {
+        const w = boneW[b];
+        if (w === 0) continue;
+        const s = 12 * b;
+        for (let c = 0; c < 12; c++) out[o + c] += w * invBones[s + c];
+      }
+    }
+    // steht die Puppe wieder, gilt ab dem nächsten Schritt die schnelle Kollision ohne Skelett
+    this.posedNext = moving;
+    this.posed = true;
+  }
+  private posedNext = false;
+
+  /** Wind: Böen über die Zeit, dazu eine Welle, die durch den Stoff läuft. */
+  private updateWind(): void {
+    const W = this.wind;
+    if (W <= 0) return;
+    const t = this.t;
+    const gust = 0.55 + 0.45 * Math.sin(1.3 * t) * Math.sin(0.37 * t + 1);
+    const base = W * 14000 * gust;
+    const { pos, windAcc, windGain } = this;
+    for (let i = 0; i < this.n; i++) windAcc[i] = base * windGain[i] * (1 + 0.5 * Math.sin(0.011 * pos[3 * i + 1] + 0.02 * pos[3 * i + 2] - 5 * t));
   }
 
   // -------------------------------------------------------------------------
@@ -812,9 +1019,13 @@ export class GarmentSim {
 
   /** Simuliert `dt` Sekunden (in `substeps` kleinen Schritten). */
   step(dt = 1 / 60): void {
-    if (this.stats.settled) return;
+    if (this.stats.settled && !this.live) return;
+    const liveNow = this.live && this.stats.settled;
+    this.liveNow = liveNow;
     const n = this.substeps;
     const h = dt / n;
+    this.updatePose(dt);
+    if (liveNow) this.updateWind();
     const sew = Math.min(1, this.t / this.sewTime);
     // Schwerkraft erst, wenn die Nähte fast geschlossen sind
     const gFactor =
@@ -822,7 +1033,7 @@ export class GarmentSim {
         ? 0
         : Math.min(1, (this.t - this.sewTime * 0.7) / (this.sewTime * 0.6)) * (this.looseGroups.length && !this.pinnedDone && this.looseGroups.length === this.groupCount ? 0 : 1);
     // Nach dem Fallen zunehmend dämpfen (Luftwiderstand), damit der Stoff zur Ruhe kommt
-    const late = Math.min(1, Math.max(0, (this.t - this.sewTime - 1.2) / 2));
+    const late = Math.min(1, Math.max(0, (this.t - this.lateFrom) / 2));
     const damp = this.t < this.sewTime ? -1 : late * 0.12;
     if (sew >= 1 && !this.pinnedDone) this.pinNow();
     if (!this.frameStart || this.frameStart.length !== this.pos.length) this.frameStart = new Float32Array(this.pos.length);
@@ -831,7 +1042,11 @@ export class GarmentSim {
     const [p0, p1] = this.hoodPull;
     const pull = this.hasHoodPull() && this.t >= p0 && this.t < p1 ? Math.sin(((this.t - p0) / (p1 - p0)) * Math.PI) : 0;
     this.pull = pull;
-    for (let s = 0; s < n; s++) this.substep(h, sew, gFactor, damp);
+    for (let s = 0; s < n; s++) {
+      this.subIndex = s;
+      this.substep(h, sew, gFactor, damp);
+    }
+    this.posed = this.posedNext;
     this.t += dt;
     this.updateStats(dt);
   }
@@ -844,11 +1059,15 @@ export class GarmentSim {
     const gdy = -G * gFactor * h * h;
     const pk = this.pull * h * h;
     const acc = this.pullAcc;
+    const live = this.liveNow;
+    const wind = live && this.wind > 0 ? h * h : 0;
+    const windAcc = this.windAcc;
     for (let i = 0; i < N; i++) {
       if (invMass[i] === 0) continue;
       const k = 3 * i;
-      // Während des Nähens kräftig gedämpft, danach Luftwiderstand je Stoff
-      const f = 1 - (damp < 0 ? 0.12 : Math.min(0.3, drag[i] + damp));
+      // Während des Nähens kräftig gedämpft, danach Luftwiderstand je Stoff; live nur der echte Luftwiderstand,
+      // damit der Stoff nachschwingt
+      const f = 1 - (live ? (2.2 + 55 * drag[i]) * h : damp < 0 ? 0.12 : Math.min(0.3, drag[i] + damp));
       const vx = (pos[k] - prev[k]) * f;
       const vy = (pos[k + 1] - prev[k + 1]) * f;
       const vz = (pos[k + 2] - prev[k + 2]) * f;
@@ -863,6 +1082,26 @@ export class GarmentSim {
         pos[k + 1] += acc[k + 1] * pk;
         pos[k + 2] += acc[k + 2] * pk;
       }
+      if (wind) {
+        pos[k] += windAcc[i] * wind;
+        pos[k + 2] += windAcc[i] * wind * 0.3;
+      }
+    }
+    // Angefasster Stoff folgt dem Griffpunkt (begrenzter Zug)
+    if (this.grabIdx.length) {
+      const [gx, gy, gz] = this.grabTarget;
+      for (let q = 0; q < this.grabIdx.length; q++) {
+        const k = 3 * this.grabIdx[q];
+        const dx = gx + this.grabOff[3 * q] - pos[k];
+        const dy = gy + this.grabOff[3 * q + 1] - pos[k + 1];
+        const dz = gz + this.grabOff[3 * q + 2] - pos[k + 2];
+        const L = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (L < 1e-6) continue;
+        const m = (Math.min(Math.min(L, 90) * 0.08, 3.2) * this.grabW[q]) / L;
+        pos[k] += dx * m;
+        pos[k + 1] += dy * m;
+        pos[k + 2] += dz * m;
+      }
     }
     // Dehnung
     this.solveDistance(this.edges, this.edgeRest, this.edgeComp, 0.15);
@@ -874,7 +1113,8 @@ export class GarmentSim {
     this.solveDistance(this.bends, this.bendRest, soft ? this.bendCompSoft : this.bendComp, 1);
     if (sew >= 1) this.solveSeams(sew);
     // Stoff gegen Stoff – erst wenn er fällt (beim Nähen liegen die Kanten absichtlich übereinander)
-    if (this.selfCollision && gFactor > 0) {
+    // (live nur in jedem dritten Teilschritt: hält die Echtzeit, die Lagen liegen bereits geordnet)
+    if (this.selfCollision && gFactor > 0 && (!live || this.subCount++ % 3 === 0)) {
       this.buildHash();
       this.solveSelf();
     }
@@ -962,6 +1202,7 @@ export class GarmentSim {
   private collide(): void {
     const { pos, prev, invMass, gap } = this;
     const c = this.contact;
+    if (this.posed) return this.collidePosed();
     for (let i = 0; i < this.n; i++) {
       if (invMass[i] === 0) continue;
       const th = this.thick[i];
@@ -991,6 +1232,66 @@ export class GarmentSim {
     }
   }
 
+  /**
+   * Kollision mit der bewegten Puppe: jeder Partikel wird über „seine“ Knochen in die Ruhehaltung zurückgerechnet
+   * (zwischen Anfang und Ende des Bildschritts interpoliert), dort gegen das Abstandsfeld geprüft und die Korrektur
+   * zurückgedreht. Die Reibung wirkt relativ zur Bewegung des Körpers – der Stoff wird mitgenommen.
+   */
+  private collidePosed(): void {
+    const { pos, prev, invMass, gap, inv0, inv1 } = this;
+    const c = this.contact;
+    const al = (this.subIndex + 1) / this.substeps;
+    const inv = 1 / this.substeps;
+    for (let i = 0; i < this.n; i++) {
+      if (invMass[i] === 0) continue;
+      const th = this.thick[i];
+      const k = 3 * i;
+      const o = 12 * i;
+      const x = pos[k];
+      const y = pos[k + 1];
+      const z = pos[k + 2];
+      const ax = inv0[o] * x + inv0[o + 1] * y + inv0[o + 2] * z + inv0[o + 3];
+      const ay = inv0[o + 4] * x + inv0[o + 5] * y + inv0[o + 6] * z + inv0[o + 7];
+      const az = inv0[o + 8] * x + inv0[o + 9] * y + inv0[o + 10] * z + inv0[o + 11];
+      const bx = inv1[o] * x + inv1[o + 1] * y + inv1[o + 2] * z + inv1[o + 3];
+      const by = inv1[o + 4] * x + inv1[o + 5] * y + inv1[o + 6] * z + inv1[o + 7];
+      const bz = inv1[o + 8] * x + inv1[o + 9] * y + inv1[o + 10] * z + inv1[o + 11];
+      const hit = bodyContact(this.mq, ax + (bx - ax) * al, ay + (by - ay) * al, az + (bz - az) * al, 40, c);
+      gap[i] = hit ? c.d : 40;
+      if (hit && c.d < th) {
+        // Normale zurück in die Haltung drehen (Transponierte des Drehanteils)
+        let nx = inv1[o] * c.nx + inv1[o + 4] * c.ny + inv1[o + 8] * c.nz;
+        let ny = inv1[o + 1] * c.nx + inv1[o + 5] * c.ny + inv1[o + 9] * c.nz;
+        let nz = inv1[o + 2] * c.nx + inv1[o + 6] * c.ny + inv1[o + 10] * c.nz;
+        const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        nx /= nl;
+        ny /= nl;
+        nz /= nl;
+        const push = th - c.d;
+        pos[k] += nx * push;
+        pos[k + 1] += ny * push;
+        pos[k + 2] += nz * push;
+        // Bewegung des Körpers an dieser Stelle in diesem Teilschritt
+        const rx = (ax - bx) * inv;
+        const ry = (ay - by) * inv;
+        const rz = (az - bz) * inv;
+        const mx = inv1[o] * rx + inv1[o + 4] * ry + inv1[o + 8] * rz;
+        const my = inv1[o + 1] * rx + inv1[o + 5] * ry + inv1[o + 9] * rz;
+        const mz = inv1[o + 2] * rx + inv1[o + 6] * ry + inv1[o + 10] * rz;
+        const mu = this.friction[i];
+        const vx = pos[k] - prev[k] - mx;
+        const vy = pos[k + 1] - prev[k + 1] - my;
+        const vz = pos[k + 2] - prev[k + 2] - mz;
+        const vn = vx * nx + vy * ny + vz * nz;
+        prev[k] += (vx - vn * nx) * mu;
+        prev[k + 1] += (vy - vn * ny) * mu;
+        prev[k + 2] += (vz - vn * nz) * mu;
+        gap[i] = th;
+      }
+      if (pos[k + 1] < th) pos[k + 1] = th;
+    }
+  }
+
   private updateStats(dt: number): void {
     let maxGap = 0;
     if (this.t >= this.sewTime) for (const l of this.links) maxGap = Math.max(maxGap, this.linkDist(l));
@@ -1005,10 +1306,13 @@ export class GarmentSim {
       if (this.gap[i] < -2) inside++;
     }
     const speed = this.n ? v / this.n / dt : 0;
-    const calmAfter = this.hasHoodPull() ? this.hoodPull[1] + 0.6 : this.sewTime + 0.8;
-    if (this.t > calmAfter && speed < 6) this.settledFor += dt;
+    if (this.liveNow) {
+      this.stats = { time: this.t, seamGap: maxGap, speed, inside, settled: true, live: true, overlaps: this.stats.overlaps };
+      return;
+    }
+    if (this.t > this.calmFrom && speed < 6 && !this.posed) this.settledFor += dt;
     else this.settledFor = 0;
-    const settled = this.settledFor > 0.4 || this.t > 8;
+    const settled = this.settledFor > 0.4 || this.t > this.forceAt;
     this.stats = { time: this.t, seamGap: maxGap, speed, inside, settled };
     if (settled) {
       this.computeStrain();
