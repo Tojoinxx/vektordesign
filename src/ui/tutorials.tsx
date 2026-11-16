@@ -119,7 +119,7 @@ function Tag({ x, y, text, show, dur = DUR }: { x: number; y: number; text: stri
     <g opacity="0">
       <animate attributeName="opacity" values={show} dur={dur} repeatCount="indefinite" calcMode="discrete" />
       <rect x={x - 18} y={y - 9} width="36" height="18" rx="3" fill={K.tape} stroke={K.tapeDark} />
-      <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill={K.onTape} fontFamily="IBM Plex Sans, sans-serif">
+      <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill={K.onTape} fontFamily="Archivo Variable, sans-serif">
         {text}
       </text>
     </g>
@@ -151,7 +151,7 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
         <g opacity="0">
           <animate attributeName="opacity" values="0;0;0;1" keyTimes="0;0.5;0.62;1" dur={DUR} repeatCount="indefinite" calcMode="discrete" />
           <rect x="70" y="8" width="100" height="18" rx="9" fill={K.okSoft} stroke={K.ok} />
-          <text x="120" y="21" textAnchor="middle" fontSize="10" fill={K.ok} fontWeight="600" fontFamily="IBM Plex Sans, sans-serif">
+          <text x="120" y="21" textAnchor="middle" fontSize="10" fill={K.ok} fontWeight="600" fontFamily="Archivo Variable, sans-serif">
             Vollständig bestimmt
           </text>
         </g>
@@ -437,7 +437,7 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
     anim: () => (
       <Frame>
         <rect x="20" y="18" width="120" height="26" rx="13" fill={K.freeSoft} stroke={K.free} />
-        <text x="32" y="35" fontSize="10" fill={K.ink} fontFamily="IBM Plex Sans, sans-serif">
+        <text x="32" y="35" fontSize="10" fill={K.ink} fontFamily="Archivo Variable, sans-serif">
           Kreis Ø40 in die Mitte
         </text>
         <rect x="70" y="58" width="130" height="66" fill="#fde2e2" stroke={K.ink} strokeWidth="1.5" />
@@ -487,7 +487,7 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
         <circle cx="70" cy="65" r="9" fill="#fff" />
         <path d="M120 65 h30 m-8 -8 l8 8 l-8 8" stroke={K.ink} strokeWidth="2" fill="none" />
         <path d="M165 30 h35 l12 12 v66 h-47 Z" fill={K.card} stroke={K.ink} strokeWidth="1.5" />
-        <text x="188" y="78" textAnchor="middle" fontSize="11" fontWeight="600" fill={K.ink} fontFamily="IBM Plex Sans, sans-serif">
+        <text x="188" y="78" textAnchor="middle" fontSize="11" fontWeight="600" fill={K.ink} fontFamily="Archivo Variable, sans-serif">
           SVG
         </text>
         <Tag x={188} y={124} text="80×40" show="0;1;1" />

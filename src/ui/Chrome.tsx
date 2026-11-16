@@ -830,7 +830,7 @@ export function AboutDialog() {
         <strong>Vektordesign {APP_VERSION}</strong> – maßgenaue Vektorgrafik für Textil-Designs. Bedienung wie im Inventor-Skizzenmodus: grob zeichnen, dann über Bemaßungen und Abhängigkeiten exakt
         festlegen.
       </p>
-      <p className="muted small">Constraint-Solver: planegcs (FreeCAD, LGPL-2.1), React, Tauri. Schrift: IBM Plex Sans (OFL). Lizenz: MIT.</p>
+      <p className="muted small">Constraint-Solver: planegcs (FreeCAD, LGPL-2.1), React, Tauri. Schriften: Archivo (Oberfläche) und IBM Plex Sans (Ersatz für Texte), beide OFL. Lizenz: MIT.</p>
     </Modal>
   );
 }

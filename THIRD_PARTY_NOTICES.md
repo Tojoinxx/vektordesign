@@ -18,7 +18,8 @@ Vektordesign selbst steht unter der MIT-Lizenz (siehe [LICENSE](LICENSE)). In de
 | [three.js](https://threejs.org) | 3D-Ansicht (Puppe, Kleidungsstück, Licht, Kamera) | MIT |
 | [Delaunator](https://github.com/mapbox/delaunator), robust-predicates | Vernetzung der Schnittteile für die Stoffsimulation | ISC, Unlicense (gemeinfrei) |
 | [MakeHuman](https://github.com/makehumancommunity/makehuman) – Grundnetz und Ziele (Geschlecht, Gewicht, Muskeln) | Realistische Puppe in der 3D-Ansicht (aufbereitet mit `scripts/build-avatar.mjs`) | CC0 1.0 (gemeinfrei) |
-| [IBM Plex Sans](https://github.com/IBM/plex) über Fontsource | Schrift der Oberfläche; Ersatzschrift für „Text in Pfade“, wenn eine Schrift nicht verfügbar ist | SIL Open Font License 1.1 |
+| [Archivo](https://github.com/Omnibus-Type/Archivo) über Fontsource | Schrift der Oberfläche (variable Breite und Stärke) | SIL Open Font License 1.1 |
+| [IBM Plex Sans](https://github.com/IBM/plex) über Fontsource | Schrift für Texte im Motiv; Ersatzschrift für „Text in Pfade“, wenn eine Schrift nicht verfügbar ist | SIL Open Font License 1.1 |
 | [Tauri](https://tauri.app), tauri-plugin-dialog | Desktop-App, Datei-Dialoge | MIT oder Apache-2.0 |
 | [fontdb](https://github.com/RazrFalcon/fontdb) | Liste der installierten Schriftarten | MIT |
 | serde, serde_json, percent-encoding | Datenaustausch zwischen Oberfläche und Rust | MIT oder Apache-2.0 |

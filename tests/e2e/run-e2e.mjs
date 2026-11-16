@@ -195,7 +195,7 @@ await step('Dunkles Design ist Standard; Design und Zeichenfläche getrennt umsc
   await sleep(80);
   assert((await attrs()) === 'light/light', `Helles Design: ${await attrs()}`);
   const bg = await app(() => getComputedStyle(document.querySelector('.topbar')).backgroundColor);
-  assert(bg === 'rgb(255, 255, 255)', `Kopfzeile ${bg}`);
+  assert(bg === 'rgb(251, 252, 250)', `Kopfzeile ${bg}`);
   const stored = await app(() => localStorage.getItem('vd.appearance'));
   assert(stored.includes('"theme":"light"') && stored.includes('"canvas":"light"'), `gespeichert: ${stored}`);
   await page.click('[data-testid="theme-dark"]');

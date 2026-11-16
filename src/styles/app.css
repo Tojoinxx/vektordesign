@@ -1,29 +1,31 @@
 /*
  * Vektordesign – Gestaltung
- * Werkbank mit Maßband: ruhige Graphit- bzw. Grautöne, eine laute Farbe – Maßband-Gelb
- * (Lineale, aktives Werkzeug, Maßeingabe). Schrift: IBM Plex Sans.
+ * Schnittmuster-Atelier mit Maßband: kühles Schnittpapier, Garn-Schwarz als Schrift, eine laute
+ * Farbe – Maßband-Gelb (Lineale, aktives Werkzeug, aktive Reiter, Maßeingabe).
+ * Schrift: Archivo mit Breitenachse – schmal für Beschriftungen wie der Aufdruck auf dem Maßband,
+ * breit für den Schriftzug, Ziffern immer gleich breit. Status- und Auswahlfarben bleiben unverändert.
  *
  * Zwei Designs über data-theme am <html>-Element: hell und dunkel („Werkbank bei Nacht“).
  * Die Zeichenfläche hat ein eigenes Attribut data-canvas, weil sie unabhängig vom Design
  * hell bleiben kann (dunkle Motive). Farben stehen nur hier als Tokens.
  */
 :root {
-  --bench: #e9ecef;
-  --chrome: #ffffff;
-  --panel: #f6f7f8;
+  --bench: #e6e9e3;
+  --chrome: #fbfcfa;
+  --panel: #f3f5f1;
   --paper: #ffffff;
-  --hover: #f6f7f8;
-  --line: #d3d9df;
-  --line-2: #e4e8ec;
-  --ink: #1e2328;
-  --ink-2: #48525d;
-  --muted: #6b7480;
+  --hover: #eef1ec;
+  --line: #d2d7cd;
+  --line-2: #e3e7df;
+  --ink: #1b2030;
+  --ink-2: #434b45;
+  --muted: #6a7266;
   --tape: #f5c518;
   --tape-dark: #d9a900;
   --tape-hover: #ffd23a;
-  --tape-soft: #fff4c7;
+  --tape-soft: #fbf0c8;
   /* Schrift auf Maßband-Gelb (in beiden Designs dunkel) */
-  --on-tape: #1e2328;
+  --on-tape: #1b2030;
   --on-tape-field: #ffffff;
   --on-tape-bad: #8f1d1d;
   --free: #2f6fd6;
@@ -40,20 +42,20 @@
   --sel: #e8590c;
   --focus: rgba(47, 111, 214, 0.45);
   --glass: rgba(255, 255, 255, 0.94);
-  --toast-bg: #1e2328;
+  --toast-bg: #1b2030;
   --toast-fg: #ffffff;
   --toast-ok: #4cd18a;
   --backdrop: rgba(30, 35, 40, 0.28);
-  --check-a: #e4e8ec;
+  --check-a: #e3e7df;
   --check-b: #ffffff;
   --shadow: 0 6px 24px rgba(30, 35, 40, 0.14), 0 1px 3px rgba(30, 35, 40, 0.12);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
 
   /* Zeichenfläche (für Tutorials und Vorschaubilder; die Fläche selbst: src/render/theme.ts) */
-  --cv-bg: #ffffff;
-  --cv-grid: #eef1f4;
-  --cv-grid-2: #dbe1e7;
-  --cv-ink: #1e2328;
+  --cv-bg: #fcfdfb;
+  --cv-grid: #edf0ea;
+  --cv-grid-2: #d9ded4;
+  --cv-ink: #1b2030;
   --cv-free: #2f6fd6;
   --cv-free-fill: rgba(47, 111, 214, 0.1);
   --cv-free-soft: #eef3fd;
@@ -65,25 +67,28 @@
   --cv-check: #f1f3f5;
   --cv-label: rgba(255, 255, 255, 0.85);
 
-  --font: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font: 'Archivo Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* Breiten der Archivo: schmal für Beschriftungen, breit für den Schriftzug */
+  --narrow: 82%;
+  --wide: 116%;
   --r: 6px;
   color-scheme: light;
 }
 
 /* Werkbank bei Nacht: Graphit statt Grau, das Maßband wird schwarz mit gelben Markierungen */
 :root[data-theme='dark'] {
-  --bench: #17191d;
-  --chrome: #24292f;
-  --panel: #1d2126;
-  --paper: #24292f;
-  --hover: #2e343b;
-  --line: #383f47;
-  --line-2: #2d3339;
-  --ink: #e6e9ed;
-  --ink-2: #b2bac4;
-  --muted: #8c96a2;
+  --bench: #101211;
+  --chrome: #1b1f1c;
+  --panel: #161917;
+  --paper: #1f2420;
+  --hover: #2a302b;
+  --line: #343a35;
+  --line-2: #282d29;
+  --ink: #e8ebe6;
+  --ink-2: #b6bdb4;
+  --muted: #8b9489;
   --tape-dark: #b8961e;
-  --tape-soft: #3a3421;
+  --tape-soft: #3a3320;
   --free: #6aa1ff;
   --free-soft: #1c2a3e;
   --free-line: #345283;
@@ -98,20 +103,20 @@
   --sel: #ff8c42;
   --focus: rgba(106, 161, 255, 0.6);
   --glass: rgba(36, 41, 47, 0.94);
-  --toast-bg: #353c45;
+  --toast-bg: #2f3530;
   --toast-fg: #f1f3f5;
   --backdrop: rgba(0, 0, 0, 0.5);
-  --check-a: #2d3339;
-  --check-b: #3a414a;
+  --check-a: #282d29;
+  --check-b: #353b36;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.5);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
 
 :root[data-canvas='dark'] {
-  --cv-bg: #181b1f;
-  --cv-grid: #202429;
-  --cv-grid-2: #2b3036;
+  --cv-bg: #161917;
+  --cv-grid: #1e221f;
+  --cv-grid-2: #2a2f2b;
   --cv-ink: #e6e9ed;
   --cv-free: #6aa1ff;
   --cv-free-fill: rgba(106, 161, 255, 0.14);
@@ -3848,4 +3853,204 @@ body {
 }
 .v3-live select {
   width: 100%;
+}
+
+/* ==================================================================== Atelier
+ * Eine laute Stelle: das Maßband. Es läuft vom Schriftzug über die aktiven Reiter bis in die
+ * Lineale. Alles andere bleibt ruhig – Papierflächen, feine Kanten, klare Schriftstufen.
+ * Radien nach Rang: 4 px für Knöpfe und Felder, 8 px für Werkzeugflächen, 12 px für Dialoge.
+ */
+:root {
+  --r: 4px;
+  --r-tool: 8px;
+  --r-pop: 12px;
+  /* Maßband-Kante: gelber Streifen mit Teilstrichen (1 Strich je 4 px, jeder fünfte länger) */
+  --tape-edge:
+    repeating-linear-gradient(90deg, var(--on-tape) 0 1px, transparent 1px 20px) left bottom / 100% 3px no-repeat,
+    repeating-linear-gradient(90deg, var(--on-tape) 0 1px, transparent 1px 4px) left bottom / 100% 1.5px no-repeat,
+    var(--tape);
+}
+
+body {
+  font-stretch: 100%;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: 0.005em;
+}
+
+/* Schriftzug: breit und kräftig, das Maßband davor wird länger */
+.brand {
+  gap: 12px;
+  align-items: center;
+}
+.brand-mark {
+  width: 30px;
+  height: 12px;
+  border-radius: 2px 2px 2px 6px;
+  background: var(--tape-edge);
+  box-shadow: inset 0 0 0 1px var(--tape-dark);
+}
+.brand-name {
+  font-stretch: var(--wide);
+  font-weight: 720;
+  font-size: 14px;
+  letter-spacing: -0.015em;
+}
+.doc-name {
+  font-stretch: var(--narrow);
+  font-size: 13px;
+}
+.topbar {
+  background: var(--chrome);
+}
+
+/* Reiter über dem Band: kein Kasten mehr, der aktive liegt auf dem Maßband */
+.ribbon-tabs {
+  gap: 4px;
+  padding: 4px 12px 0;
+  background: var(--chrome);
+}
+.ribbon-tabs button,
+.ribbon-tabs button.on {
+  position: relative;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 560;
+}
+.ribbon-tabs button.on {
+  color: var(--ink);
+  font-weight: 680;
+}
+.ribbon-tabs button.on::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 0;
+  height: 6px;
+  border-radius: 1px 1px 0 0;
+  background: var(--tape-edge);
+}
+.ribbon-wrap .ribbon {
+  background: var(--chrome);
+}
+
+/* Werkzeugband */
+.rb-group {
+  padding: 0 10px;
+}
+.rb-title {
+  font-stretch: var(--narrow);
+  font-size: 11.5px;
+  font-weight: 560;
+  letter-spacing: 0.01em;
+}
+.rb-big {
+  border-radius: var(--r-tool);
+  font-size: 12px;
+  font-weight: 500;
+}
+.rb-big.on {
+  font-weight: 650;
+  box-shadow: inset 0 -3px 0 var(--tape-dark);
+}
+.rb-small {
+  border-radius: var(--r);
+}
+
+/* Seitenleiste: Reiter wie oben, Abschnitte mit klarer Stufe */
+.side {
+  background: var(--paper);
+}
+.side-tabs {
+  gap: 2px;
+  padding: 4px 8px 0;
+  background: var(--chrome);
+}
+.side-tabs button,
+.side-tabs button.on {
+  position: relative;
+  height: 36px;
+  border: 0;
+  border-radius: 0;
+  margin-bottom: 0;
+  background: transparent;
+}
+.side-tabs button:hover:not(.on) {
+  color: var(--ink);
+  background: var(--hover);
+  border-radius: var(--r) var(--r) 0 0;
+}
+.side-tabs button.on {
+  color: var(--ink);
+  font-weight: 650;
+}
+.side-tabs button.on::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 6px;
+  border-radius: 1px 1px 0 0;
+  background: var(--tape-edge);
+}
+.props-section {
+  padding: 16px 16px 18px;
+}
+.props-section h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+.props-section h4 {
+  margin: 16px 0 8px;
+  font-stretch: var(--narrow);
+  font-size: 12.5px;
+  font-weight: 620;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+}
+.props-section p {
+  color: var(--ink-2);
+}
+
+/* Knöpfe: Hauptaktion auf Maßband-Gelb, Rest als Papier mit feiner Kante */
+.btn {
+  font-weight: 520;
+}
+.btn.accent {
+  font-weight: 650;
+  box-shadow: inset 0 -2px 0 var(--tape-dark);
+}
+
+/* Statusleiste: schmale Schrift, Werte gleich breit */
+.statusbar {
+  font-stretch: var(--narrow);
+  font-size: 12.5px;
+  background: var(--chrome);
+}
+
+/* Dialoge und schwebende Fenster: eine Stufe runder als Werkzeuge */
+.tutorial,
+.toast,
+.appearance-menu,
+.marking {
+  border-radius: var(--r-pop);
+}
+
+:focus-visible {
+  outline: 2px solid var(--free);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }

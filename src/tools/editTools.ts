@@ -335,7 +335,7 @@ export class CalibrateImageTool implements Tool {
       ctx.arc(q.x, q.y, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.font = '600 12px "IBM Plex Sans", sans-serif';
+    ctx.font = `600 12px ${THEME.uiFont}`;
     ctx.fillText(mm(Math.hypot(this.cursor.x - this.a.x, this.cursor.y - this.a.y)), b.x + 8, b.y - 8);
   }
 }

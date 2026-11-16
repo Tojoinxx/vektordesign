@@ -1,6 +1,7 @@
 import '@fontsource/ibm-plex-sans/400.css';
 import '@fontsource/ibm-plex-sans/500.css';
 import '@fontsource/ibm-plex-sans/600.css';
+import '@fontsource-variable/archivo/wdth.css';
 import './styles/app.css';
 import { createRoot } from 'react-dom/client';
 import wasmUrl from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';

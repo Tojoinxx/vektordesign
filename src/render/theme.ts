@@ -65,12 +65,12 @@ export interface CanvasPalette {
 }
 
 export const LIGHT_CANVAS: CanvasPalette = {
-  paper: '#ffffff',
-  gridMinor: '#eef1f4',
-  gridMajor: '#dbe1e7',
+  paper: '#fcfdfb',
+  gridMinor: '#edf0ea',
+  gridMajor: '#d9ded4',
   axisX: '#d9534f',
   axisY: '#2f9e5b',
-  ink: '#1e2328',
+  ink: '#1b2030',
   free: '#2f6fd6',
   construction: '#8a94a6',
   constructionFree: '#7fa3e0',
@@ -79,8 +79,8 @@ export const LIGHT_CANVAS: CanvasPalette = {
   conflict: '#d64545',
   selectedFill: 'rgba(232,89,12,0.10)',
   hoverFill: 'rgba(245,159,0,0.10)',
-  dim: '#1e2328',
-  dimDriven: '#6b7480',
+  dim: '#1b2030',
+  dimDriven: '#6a7266',
   dimHalo: 'rgba(255,255,255,0.92)',
   dimSelectedBg: '#fff1e6',
   glyphBg: '#ffffff',
@@ -93,9 +93,9 @@ export const LIGHT_CANVAS: CanvasPalette = {
   originRing: '#ffffff',
   tape: '#f5c518',
   tapeEdge: '#d9a900',
-  tapeInk: '#1e2328',
-  tapeCorner: '#d9a900',
-  tapeCornerInk: '#1e2328',
+  tapeInk: '#1b2030',
+  tapeCorner: '#1b2030',
+  tapeCornerInk: '#f5c518',
   snap: '#0f9d76',
   preview: '#2f6fd6',
   labelBg: '#ffffff',
@@ -110,9 +110,9 @@ export const LIGHT_CANVAS: CanvasPalette = {
 };
 
 export const DARK_CANVAS: CanvasPalette = {
-  paper: '#181b1f',
-  gridMinor: '#202429',
-  gridMajor: '#2b3036',
+  paper: '#161917',
+  gridMinor: '#1e221f',
+  gridMajor: '#2a2f2b',
   axisX: '#e8676c',
   axisY: '#4cc47e',
   ink: '#e6e9ed',
@@ -135,9 +135,9 @@ export const DARK_CANVAS: CanvasPalette = {
   glyphHoverBg: '#3a3320',
   glyphDot: '#3a3421',
   glyphDotEdge: '#b8961e',
-  originRing: '#181b1f',
-  tape: '#24292f',
-  tapeEdge: '#3a414a',
+  originRing: '#161917',
+  tape: '#1f2320',
+  tapeEdge: '#373d38',
   tapeInk: '#f5c518',
   tapeCorner: '#f5c518',
   tapeCornerInk: '#1e2328',
@@ -159,7 +159,7 @@ export type CanvasMode = 'light' | 'dark';
 /** Aktuelle Farben der Zeichenfläche (wird beim Umschalten überschrieben). */
 export const THEME: CanvasPalette & { uiFont: string } = {
   ...LIGHT_CANVAS,
-  uiFont: '"IBM Plex Sans", "Segoe UI", system-ui, sans-serif',
+  uiFont: '"Archivo Variable", "Segoe UI", system-ui, sans-serif',
 };
 
 let mode: CanvasMode = 'light';

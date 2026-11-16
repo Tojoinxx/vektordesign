@@ -731,7 +731,9 @@ function drawRulers(ctx: Ctx, vp: Viewport, cursor: Vec2 | null): void {
   ctx.strokeStyle = THEME.tapeInk;
   ctx.fillStyle = THEME.tapeInk;
   ctx.lineWidth = 1;
-  ctx.font = `500 10px ${THEME.uiFont}`;
+  ctx.font = `600 10px ${THEME.uiFont}`;
+  // schmale Ziffern wie der Aufdruck auf einem Maßband
+  if ('fontStretch' in ctx) (ctx as CanvasRenderingContext2D & { fontStretch: string }).fontStretch = 'condensed';
   const labelEvery = major * (major * vp.zoom < 40 ? 5 : 1);
 
   // oben (X)
